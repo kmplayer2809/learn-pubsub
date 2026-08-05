@@ -1,3 +1,4 @@
+import { deadLetter, effectiveTtl } from './dlx'
 import { createRng } from './rng'
 import { resolveDestinations } from './routing'
 import type {
@@ -214,13 +215,43 @@ export function applyEnqueue(state: EngineState, event: SimEvent): ApplyResult {
   const entry: QueuedMessage = { message, enqueuedAt: state.now }
 
   next = { ...next, queues: { ...next.queues, [queueId]: [...existing, entry] } }
+
+  const events: SimEvent[] = []
+
+  // drop-head overflow: the oldest message leaves to make room for the new one
+  const spec = state.topology.queues.find((q) => q.id === queueId)
+  if (spec?.maxLength !== undefined) {
+    const current = next.queues[queueId] ?? []
+    if (current.length > spec.maxLength) {
+      const oldest = current[0]!
+      next = { ...next, queues: { ...next.queues, [queueId]: current.slice(1) } }
+      const overflow = deadLetter(next, oldest.message, queueId, 'maxlen')
+      next = overflow.state
+      events.push(...overflow.newEvents)
+    }
+  }
+
+  if (spec) {
+    const ttl = effectiveTtl(spec, message)
+    if (ttl !== undefined) {
+      const [expireEvent, afterTtl] = scheduleEvent(next, state.now + ttl, 'ttlExpire', {
+        messageId: message.id,
+        queueId,
+      })
+      next = afterTtl
+      events.push(expireEvent)
+    }
+  }
+
   next = log(next, {
     at: state.now,
     type: 'enqueue',
-    text: `${message.id} enqueued in ${queueId} (depth ${existing.length + 1})`,
+    text: `${message.id} enqueued in ${queueId} (depth ${(next.queues[queueId] ?? []).length})`,
     nodeId: queueId,
     messageId: message.id,
   })
+
   const [dispatchEvent, afterSchedule] = scheduleEvent(next, state.now, 'dispatch', { queueId })
-  return { state: afterSchedule, newEvents: [dispatchEvent] }
+  events.push(dispatchEvent)
+  return { state: afterSchedule, newEvents: events }
 }

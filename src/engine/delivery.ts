@@ -1,4 +1,5 @@
 import { addInFlight, clearInFlight, edgeId, log, scheduleEvent, TRAVEL_MS } from './broker'
+import { deadLetter } from './dlx'
 import { nextFloat } from './rng'
 import type { ApplyResult, ConsumerSpec, EngineState, Message, NodeId, SimEvent } from './types'
 
@@ -174,6 +175,12 @@ export function applyNack(state: EngineState, event: SimEvent): ApplyResult {
       nodeId: consumerId,
       messageId,
     })
+    if (message) {
+      const dead = deadLetter(next, message, queueId, 'rejected')
+      next = dead.state
+      const [dispatchAfterDeath, afterSchedule] = scheduleEvent(next, state.now, 'dispatch', { queueId })
+      return { state: afterSchedule, newEvents: [...dead.newEvents, dispatchAfterDeath] }
+    }
   }
 
   const [dispatchEvent, afterSchedule] = scheduleEvent(next, state.now, 'dispatch', { queueId })
