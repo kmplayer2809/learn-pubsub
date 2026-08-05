@@ -62,6 +62,16 @@ describe('matchBinding', () => {
     expect(matchBinding('headers', b, msg('', { format: 'pdf' }))).toBe(true)
     expect(matchBinding('headers', b, msg('', { format: 'csv' }))).toBe(false)
   })
+
+  it('empty criteria with x-match all matches any message (vacuous AND)', () => {
+    const b = bind({ headers: {}, xMatch: 'all' })
+    expect(matchBinding('headers', b, msg('', { foo: 'bar' }))).toBe(true)
+  })
+
+  it('empty criteria with x-match any matches nothing (vacuous OR)', () => {
+    const b = bind({ headers: {}, xMatch: 'any' })
+    expect(matchBinding('headers', b, msg('', { foo: 'bar' }))).toBe(false)
+  })
 })
 
 describe('resolveDestinations', () => {
