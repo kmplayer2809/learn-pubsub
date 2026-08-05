@@ -75,9 +75,11 @@ export function applyTtlExpire(state: EngineState, event: SimEvent): ApplyResult
   const messageId = event.payload.messageId as string
   const queueId = event.payload.queueId as NodeId
   const queue = state.queues[queueId] ?? []
-  // A message held unacked by a consumer is no longer in the queue array at
-  // all, so presence here is sufficient — there is no unacked flag to check.
-  const entry = queue.find((q) => q.message.id === messageId)
+  // Match the exact enqueue this event was scheduled for. Ids survive
+  // dead-lettering, so a message that cycles back into this queue would be
+  // killed early by the stale TTL event from its previous stay.
+  const enqueuedAt = event.payload.enqueuedAt as number
+  const entry = queue.find((q) => q.message.id === messageId && q.enqueuedAt === enqueuedAt)
 
   // The message was consumed before its TTL fired; nothing to expire.
   if (!entry) return { state, newEvents: [] }

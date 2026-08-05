@@ -231,12 +231,19 @@ export function applyEnqueue(state: EngineState, event: SimEvent): ApplyResult {
     }
   }
 
-  if (spec) {
+  // Only schedule a TTL if the message actually survived the overflow check —
+  // with maxLength 0 the message we just enqueued is already gone.
+  const survived = (next.queues[queueId] ?? []).some((q) => q.message.id === message.id)
+  if (spec && survived) {
     const ttl = effectiveTtl(spec, message)
     if (ttl !== undefined) {
       const [expireEvent, afterTtl] = scheduleEvent(next, state.now + ttl, 'ttlExpire', {
         messageId: message.id,
         queueId,
+        // Identifies THIS enqueue. A dead-lettered message keeps its id, so a
+        // message that cycles back into the same queue would otherwise be killed
+        // by the stale TTL event left over from its previous stay.
+        enqueuedAt: state.now,
       })
       next = afterTtl
       events.push(expireEvent)

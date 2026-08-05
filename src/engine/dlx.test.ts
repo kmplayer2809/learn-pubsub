@@ -102,12 +102,12 @@ describe('applyTtlExpire', () => {
   it('dead-letters a message still sitting in the queue', () => {
     let state = createEngineState(topology, 1)
     state = publishInto(state, 'a')
-    const target = state.queues.q1![0]!.message
+    const entry = state.queues.q1![0]!
     const { state: next } = applyTtlExpire({ ...state, now: 2000 }, {
       at: 2000,
       seq: 0,
       type: 'ttlExpire',
-      payload: { messageId: target.id, queueId: 'q1' },
+      payload: { messageId: entry.message.id, queueId: 'q1', enqueuedAt: entry.enqueuedAt },
     })
     expect(next.queues.q1).toHaveLength(0)
     expect(next.metrics.expired).toBe(1)
@@ -119,9 +119,39 @@ describe('applyTtlExpire', () => {
       at: 2000,
       seq: 0,
       type: 'ttlExpire',
-      payload: { messageId: 'gone', queueId: 'q1' },
+      payload: { messageId: 'gone', queueId: 'q1', enqueuedAt: 0 },
     })
     expect(newEvents).toEqual([])
     expect(next.metrics.expired).toBe(0)
+  })
+
+  it('ignores a stale TTL from a previous stay after the message cycles back', () => {
+    let state = createEngineState(topology, 1)
+    state = publishInto(state, 'a')
+    const firstEntry = state.queues.q1![0]!
+
+    // The message leaves and re-enters the queue later, keeping its id but
+    // taking a new enqueuedAt. The TTL scheduled for the first stay must not
+    // touch this second one.
+    const requeued = {
+      message: firstEntry.message,
+      enqueuedAt: firstEntry.enqueuedAt + 5000,
+    }
+    const cycled: EngineState = { ...state, queues: { ...state.queues, q1: [requeued] } }
+
+    const { state: next, newEvents } = applyTtlExpire({ ...cycled, now: 7000 }, {
+      at: 7000,
+      seq: 0,
+      type: 'ttlExpire',
+      payload: {
+        messageId: firstEntry.message.id,
+        queueId: 'q1',
+        enqueuedAt: firstEntry.enqueuedAt,
+      },
+    })
+
+    expect(next.queues.q1).toHaveLength(1)
+    expect(next.metrics.expired).toBe(0)
+    expect(newEvents).toEqual([])
   })
 })
