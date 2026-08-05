@@ -23,6 +23,8 @@ export function createEngineState(topology: Topology, seed: number): EngineState
   for (const q of topology.queues) queues[q.id] = []
   const unacked: Record<NodeId, string[]> = {}
   for (const c of topology.consumers) unacked[c.id] = []
+  const roundRobin: Record<NodeId, number> = {}
+  for (const q of topology.queues) roundRobin[q.id] = 0
 
   return {
     now: 0,
@@ -31,6 +33,7 @@ export function createEngineState(topology: Topology, seed: number): EngineState
     topology,
     queues,
     unacked,
+    roundRobin,
     inFlight: [],
     metrics: {
       published: 0,

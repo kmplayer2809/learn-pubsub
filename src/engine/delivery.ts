@@ -27,10 +27,16 @@ export function applyDispatch(state: EngineState, event: SimEvent): ApplyResult 
   const [message, afterTake] = takeHead(state, queueId)
   if (!message) return { state, newEvents: [] }
 
-  // Rotating by a monotonic counter gives round-robin without storing a cursor.
-  const consumer = candidates[state.metrics.delivered % candidates.length]!
+  // The cursor advances per dispatch, not per delivery. Deliveries land
+  // TRAVEL_MS later, so a burst of dispatches would otherwise all read the same
+  // stale count and hand every message to the same consumer.
+  const cursor = state.roundRobin[queueId] ?? 0
+  const consumer = candidates[cursor % candidates.length]!
 
-  let next = afterTake
+  let next: EngineState = {
+    ...afterTake,
+    roundRobin: { ...afterTake.roundRobin, [queueId]: cursor + 1 },
+  }
   if (!consumer.autoAck) {
     next = {
       ...next,
@@ -89,7 +95,9 @@ export function applyConsumeDone(state: EngineState, event: SimEvent): ApplyResu
 
   let next = state
   let reject = false
-  if (consumer.nackRate > 0) {
+  // An auto-acked message is already gone from the broker; it cannot be
+  // rejected or requeued, so no draw is made and no RNG state is consumed.
+  if (!consumer.autoAck && consumer.nackRate > 0) {
     const [f, rng] = nextFloat(next.rng)
     reject = f < consumer.nackRate
     next = { ...next, rng }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
-import { applyAck, applyDeliver, applyDispatch, applyNack, eligibleConsumers } from './delivery'
+import { applyAck, applyConsumeDone, applyDeliver, applyDispatch, applyNack, eligibleConsumers } from './delivery'
 import type { ApplyResult, ConsumerSpec, EngineState, SimEvent, Topology } from './types'
 
 const consumer = (over: Partial<ConsumerSpec> & { id: string }): ConsumerSpec => ({
@@ -89,19 +89,41 @@ describe('applyDispatch', () => {
     expect(newEvents).toEqual([])
   })
 
-  it('alternates between two idle consumers on successive dispatches', () => {
+  it('rotates across idle consumers on back-to-back dispatches, before any delivery lands', () => {
+    // prefetch 0 means nobody ever becomes ineligible, so only the cursor can
+    // spread the load. No deliver event is applied between dispatches here —
+    // that is the real event order, and the bug this guards against.
     const state = seedQueue(
-      createEngineState(topo([consumer({ id: 'c1', prefetch: 0 }), consumer({ id: 'c2', prefetch: 0 })]), 1),
-      2,
+      createEngineState(
+        topo([
+          consumer({ id: 'c1', prefetch: 0 }),
+          consumer({ id: 'c2', prefetch: 0 }),
+          consumer({ id: 'c3', prefetch: 0 }),
+        ]),
+        1,
+      ),
+      6,
     )
     const dispatch: SimEvent = { at: 0, seq: 0, type: 'dispatch', payload: { queueId: 'q1' } }
-    const first = applyDispatch(state, dispatch)
-    const second = applyDispatch(
-      { ...first.state, metrics: { ...first.state.metrics, delivered: 1 } },
-      dispatch,
-    )
-    expect(second.state.unacked.c1).toHaveLength(1)
-    expect(second.state.unacked.c2).toHaveLength(1)
+    let current = state
+    for (let i = 0; i < 6; i++) {
+      current = applyDispatch(current, dispatch).state
+    }
+    expect(current.unacked.c1).toHaveLength(2)
+    expect(current.unacked.c2).toHaveLength(2)
+    expect(current.unacked.c3).toHaveLength(2)
+  })
+
+  it('never advances the cursor when no consumer is eligible', () => {
+    const state = seedQueue(createEngineState(topo([consumer({ id: 'c1', prefetch: 1 })]), 1), 2)
+    const busy: EngineState = { ...state, unacked: { c1: ['m0'] } }
+    const { state: next } = applyDispatch(busy, {
+      at: 0,
+      seq: 0,
+      type: 'dispatch',
+      payload: { queueId: 'q1' },
+    })
+    expect(next.roundRobin.q1).toBe(busy.roundRobin.q1)
   })
 })
 
@@ -148,5 +170,20 @@ describe('applyNack', () => {
     expect(next.queues.q1![0]!.message.id).toBe('m1')
     expect(next.queues.q1![0]!.message.redeliveryCount).toBe(1)
     expect(next.metrics.nacked).toBe(1)
+  })
+})
+
+describe('applyConsumeDone', () => {
+  it('never produces a nack for an auto-ack consumer, even at nackRate 1', () => {
+    const state = seedQueue(
+      createEngineState(topo([consumer({ id: 'c1', autoAck: true, nackRate: 1 })]), 1),
+      1,
+    )
+    const dispatched = applyDispatch(state, { at: 0, seq: 0, type: 'dispatch', payload: { queueId: 'q1' } })
+    const deliverEvent = dispatched.newEvents[0]!
+    const delivered = applyDeliver({ ...dispatched.state, now: deliverEvent.at }, deliverEvent)
+    const doneEvent = delivered.newEvents[0]!
+    const { newEvents } = applyConsumeDone({ ...delivered.state, now: doneEvent.at }, doneEvent)
+    expect(newEvents.map((e) => e.type)).toEqual(['ack'])
   })
 })

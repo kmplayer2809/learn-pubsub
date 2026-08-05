@@ -128,8 +128,6 @@ export interface InFlight {
 export interface QueuedMessage {
   message: Message
   enqueuedAt: number
-  /** Set while a consumer holds the message unacked. */
-  unackedBy?: NodeId
 }
 
 export interface Metrics {
@@ -161,6 +159,13 @@ export interface EngineState {
   queues: Record<NodeId, QueuedMessage[]>
   /** Consumer id to the message ids it currently holds unacked. */
   unacked: Record<NodeId, string[]>
+  /**
+   * Per-queue round-robin cursor, advanced on every dispatch. It must not be
+   * derived from delivery counts: a delivery lands TRAVEL_MS after its dispatch,
+   * so a burst of dispatches would all read the same stale count and hand every
+   * message to the same consumer.
+   */
+  roundRobin: Record<NodeId, number>
   inFlight: InFlight[]
   metrics: Metrics
   journal: JournalEntry[]
