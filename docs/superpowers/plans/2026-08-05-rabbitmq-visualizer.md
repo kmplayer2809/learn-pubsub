@@ -415,8 +415,6 @@ export interface InFlight {
 export interface QueuedMessage {
   message: Message
   enqueuedAt: number
-  /** Set while a consumer holds the message unacked. */
-  unackedBy?: NodeId
 }
 
 export interface Metrics {
@@ -448,6 +446,13 @@ export interface EngineState {
   queues: Record<NodeId, QueuedMessage[]>
   /** Consumer id to the message ids it currently holds unacked. */
   unacked: Record<NodeId, string[]>
+  /**
+   * Per-queue round-robin cursor, advanced on every dispatch. It must not be
+   * derived from delivery counts: a delivery lands TRAVEL_MS after its dispatch,
+   * so a burst of dispatches would all read the same stale count and hand every
+   * message to the same consumer.
+   */
+  roundRobin: Record<NodeId, number>
   inFlight: InFlight[]
   metrics: Metrics
   journal: JournalEntry[]
@@ -1092,6 +1097,8 @@ export function createEngineState(topology: Topology, seed: number): EngineState
   for (const q of topology.queues) queues[q.id] = []
   const unacked: Record<NodeId, string[]> = {}
   for (const c of topology.consumers) unacked[c.id] = []
+  const roundRobin: Record<NodeId, number> = {}
+  for (const q of topology.queues) roundRobin[q.id] = 0
 
   return {
     now: 0,
@@ -1100,6 +1107,7 @@ export function createEngineState(topology: Topology, seed: number): EngineState
     topology,
     queues,
     unacked,
+    roundRobin,
     inFlight: [],
     metrics: {
       published: 0,
@@ -1426,19 +1434,41 @@ describe('applyDispatch', () => {
     expect(newEvents).toEqual([])
   })
 
-  it('alternates between two idle consumers on successive dispatches', () => {
+  it('rotates across idle consumers on back-to-back dispatches, before any delivery lands', () => {
+    // prefetch 0 means nobody ever becomes ineligible, so only the cursor can
+    // spread the load. No deliver event is applied between dispatches here —
+    // that is the real event order, and the bug this guards against.
     const state = seedQueue(
-      createEngineState(topo([consumer({ id: 'c1', prefetch: 0 }), consumer({ id: 'c2', prefetch: 0 })]), 1),
-      2,
+      createEngineState(
+        topo([
+          consumer({ id: 'c1', prefetch: 0 }),
+          consumer({ id: 'c2', prefetch: 0 }),
+          consumer({ id: 'c3', prefetch: 0 }),
+        ]),
+        1,
+      ),
+      6,
     )
     const dispatch: SimEvent = { at: 0, seq: 0, type: 'dispatch', payload: { queueId: 'q1' } }
-    const first = applyDispatch(state, dispatch)
-    const second = applyDispatch(
-      { ...first.state, metrics: { ...first.state.metrics, delivered: 1 } },
-      dispatch,
-    )
-    expect(second.state.unacked.c1).toHaveLength(1)
-    expect(second.state.unacked.c2).toHaveLength(1)
+    let current = state
+    for (let i = 0; i < 6; i++) {
+      current = applyDispatch(current, dispatch).state
+    }
+    expect(current.unacked.c1).toHaveLength(2)
+    expect(current.unacked.c2).toHaveLength(2)
+    expect(current.unacked.c3).toHaveLength(2)
+  })
+
+  it('never advances the cursor when no consumer is eligible', () => {
+    const state = seedQueue(createEngineState(topo([consumer({ id: 'c1', prefetch: 1 })]), 1), 2)
+    const busy: EngineState = { ...state, unacked: { c1: ['m0'] } }
+    const { state: next } = applyDispatch(busy, {
+      at: 0,
+      seq: 0,
+      type: 'dispatch',
+      payload: { queueId: 'q1' },
+    })
+    expect(next.roundRobin.q1).toBe(busy.roundRobin.q1)
   })
 })
 
@@ -1528,10 +1558,16 @@ export function applyDispatch(state: EngineState, event: SimEvent): ApplyResult 
   const [message, afterTake] = takeHead(state, queueId)
   if (!message) return { state, newEvents: [] }
 
-  // Rotating by a monotonic counter gives round-robin without storing a cursor.
-  const consumer = candidates[state.metrics.delivered % candidates.length]!
+  // The cursor advances per dispatch, not per delivery. Deliveries land
+  // TRAVEL_MS later, so a burst of dispatches would otherwise all read the same
+  // stale count and hand every message to the same consumer.
+  const cursor = state.roundRobin[queueId] ?? 0
+  const consumer = candidates[cursor % candidates.length]!
 
-  let next = afterTake
+  let next: EngineState = {
+    ...afterTake,
+    roundRobin: { ...afterTake.roundRobin, [queueId]: cursor + 1 },
+  }
   if (!consumer.autoAck) {
     next = {
       ...next,
@@ -1590,7 +1626,9 @@ export function applyConsumeDone(state: EngineState, event: SimEvent): ApplyResu
 
   let next = state
   let reject = false
-  if (consumer.nackRate > 0) {
+  // An auto-acked message is already gone from the broker; it cannot be
+  // rejected or requeued, so no draw is made and no RNG state is consumed.
+  if (!consumer.autoAck && consumer.nackRate > 0) {
     const [f, rng] = nextFloat(next.rng)
     reject = f < consumer.nackRate
     next = { ...next, rng }
@@ -1949,7 +1987,9 @@ export function applyTtlExpire(state: EngineState, event: SimEvent): ApplyResult
   const messageId = event.payload.messageId as string
   const queueId = event.payload.queueId as NodeId
   const queue = state.queues[queueId] ?? []
-  const entry = queue.find((q) => q.message.id === messageId && q.unackedBy === undefined)
+  // A message held unacked by a consumer is no longer in the queue array at
+  // all, so presence here is sufficient — there is no unacked flag to check.
+  const entry = queue.find((q) => q.message.id === messageId)
 
   // The message was consumed before its TTL fired; nothing to expire.
   if (!entry) return { state, newEvents: [] }
