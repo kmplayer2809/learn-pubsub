@@ -1465,13 +1465,13 @@ describe('applyNack', () => {
   it('requeues at the head with an incremented redelivery count', () => {
     const state = seedQueue(createEngineState(topo([consumer({ id: 'c1' })]), 1), 2)
     const dispatched = applyDispatch(state, { at: 0, seq: 0, type: 'dispatch', payload: { queueId: 'q1' } })
-    const message = dispatched.state.topology // placeholder to keep types honest
-    expect(message).toBeDefined()
+    const inFlightMessage = (dispatched.newEvents[0]!.payload as { message: { id: string } }).message
+    expect(inFlightMessage.id).toBe('m1')
     const { state: next } = applyNack(dispatched.state, {
       at: 0,
       seq: 0,
       type: 'nack',
-      payload: { consumerId: 'c1', messageId: 'm1', queueId: 'q1', requeue: true },
+      payload: { message: inFlightMessage, consumerId: 'c1', messageId: 'm1', queueId: 'q1', requeue: true },
     })
     expect(next.queues.q1[0]!.message.id).toBe('m1')
     expect(next.queues.q1[0]!.message.redeliveryCount).toBe(1)
@@ -1630,10 +1630,9 @@ export function applyNack(state: EngineState, event: SimEvent): ApplyResult {
   let next = releaseUnacked(state, consumerId, messageId)
   next = { ...next, metrics: { ...next.metrics, nacked: next.metrics.nacked + 1 } }
 
-  if (requeue) {
-    const redelivered: Message = message
-      ? { ...message, redeliveryCount: message.redeliveryCount + 1 }
-      : { ...(next.queues[queueId]?.[0]?.message as Message) }
+  // applyConsumeDone always carries the message; a nack without one cannot be requeued.
+  if (requeue && message) {
+    const redelivered: Message = { ...message, redeliveryCount: message.redeliveryCount + 1 }
     next = {
       ...next,
       queues: {
@@ -2441,7 +2440,6 @@ describe('validateTopology', () => {
         { id: 'b1', exchangeId: 'ex', destinationId: 'q1', destinationKind: 'queue', routingKey: 'go' },
       ],
     }
-    expect(looping).toBeDefined()
     const issues = validateTopology(looping)
     expect(issues.some((i) => i.message.toLowerCase().includes('cycle'))).toBe(true)
   })
@@ -2719,8 +2717,6 @@ export interface ScriptedFailure {
   at: number
   consumerId: NodeId
   kind: 'crash' | 'recover'
-  /** Messages the consumer was holding, supplied by the lesson for determinism. */
-  heldMessages?: never
 }
 
 export interface SimulationOptions {
