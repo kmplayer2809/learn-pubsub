@@ -479,9 +479,15 @@ const FORBIDDEN = [
   /from ['"]react['"]/,
   /from ['"]zustand['"]/,
   /from ['"]@xyflow\/react['"]/,
+  /\bimport\s*\(/,      // dynamic import sidesteps the `from '...'` patterns above
+  /\brequire\s*\(/,
   /\bMath\.random\s*\(/,
   /\bDate\.now\s*\(/,
+  /\bnew Date\s*\(/,
+  /\bperformance\.now\s*\(/,
   /\bsetTimeout\s*\(/,
+  /\bsetInterval\s*\(/,
+  /\bprocess\./,        // engine is browser-only; no Node globals
   /\bdocument\./,
   /\bwindow\./,
 ]

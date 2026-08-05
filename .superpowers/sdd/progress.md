@@ -5,6 +5,8 @@ Branch: feat/rabbitmq-visualizer
 
 Task 1: complete (commits eaf3421..998cea1, review clean after fix pass)
 
+Task 2: complete (commits fbb7f2a..8606f77, review clean after fix pass — purity guard widened to 14 patterns, tsconfig.test.json isolates node types)
+
 ## Open notes (carry to final review)
 - Minor: two zustand versions installed — top-level zustand@5 plus zustand@4.5.7 nested under @xyflow/react@12. Two instances in one tree can cause state-sharing bugs. Watch during Task 11 (store) and Task 12 (canvas).
 - Root tsconfig.json is references-only. Bare `tsc --noEmit` is a silent no-op; use `npm run typecheck` (tsc -b).
