@@ -1,0 +1,178 @@
+import type { RngState } from './rng'
+
+export type ExchangeType = 'direct' | 'fanout' | 'topic' | 'headers'
+export type QueueKind = 'classic' | 'quorum'
+export type NodeId = string
+
+export interface PublisherSpec {
+  id: NodeId
+  label: string
+  position: { x: number; y: number }
+}
+
+export interface ExchangeSpec {
+  id: NodeId
+  label: string
+  type: ExchangeType
+  position: { x: number; y: number }
+}
+
+export interface QueueSpec {
+  id: NodeId
+  label: string
+  kind: QueueKind
+  /** Milliseconds before an unconsumed message is dead-lettered. */
+  messageTtlMs?: number
+  /** Queue length ceiling; overflow dead-letters the oldest message. */
+  maxLength?: number
+  /** Exchange id that receives dead-lettered messages. */
+  deadLetterExchange?: NodeId
+  /** Routing key override used when dead-lettering. */
+  deadLetterRoutingKey?: string
+  /** Enables priority ordering with values 0..maxPriority. */
+  maxPriority?: number
+  position: { x: number; y: number }
+}
+
+export interface ConsumerSpec {
+  id: NodeId
+  label: string
+  queueId: NodeId
+  /** Unacked message ceiling. 0 means unlimited. */
+  prefetch: number
+  autoAck: boolean
+  /** Virtual milliseconds of work per message. */
+  processingMs: number
+  /** Random jitter added to processingMs, drawn from the seeded PRNG. */
+  jitterMs: number
+  /** Probability in [0,1] that the consumer rejects a message. */
+  nackRate: number
+  /** Whether a rejected message is requeued or dead-lettered. */
+  requeueOnNack: boolean
+  position: { x: number; y: number }
+}
+
+export interface BindingSpec {
+  id: string
+  exchangeId: NodeId
+  /** Destination is a queue id, or an exchange id for exchange-to-exchange bindings. */
+  destinationId: NodeId
+  destinationKind: 'queue' | 'exchange'
+  routingKey?: string
+  headers?: Record<string, string>
+  /** Headers exchange match mode. */
+  xMatch?: 'all' | 'any'
+}
+
+export interface Topology {
+  publishers: PublisherSpec[]
+  exchanges: ExchangeSpec[]
+  queues: QueueSpec[]
+  consumers: ConsumerSpec[]
+  bindings: BindingSpec[]
+}
+
+export interface Message {
+  id: string
+  body: string
+  routingKey: string
+  headers: Record<string, string>
+  priority: number
+  /** Virtual time the message was first published. */
+  publishedAt: number
+  /** Incremented every time the message is redelivered. */
+  redeliveryCount: number
+  /** Queue ids the message has been dead-lettered from, oldest first. */
+  deathTrail: NodeId[]
+  correlationId?: string
+  replyTo?: NodeId
+  persistent: boolean
+  /** Per-message expiry, overriding the queue TTL when smaller. */
+  expirationMs?: number
+}
+
+export type SimEventType =
+  | 'publish'
+  | 'route'
+  | 'enqueue'
+  | 'dispatch'
+  | 'deliver'
+  | 'consumeDone'
+  | 'ack'
+  | 'nack'
+  | 'ttlExpire'
+  | 'deadLetter'
+  | 'retryBackoff'
+  | 'consumerCrash'
+  | 'consumerRecover'
+
+export interface SimEvent {
+  /** Virtual milliseconds at which this event fires. */
+  at: number
+  /** Tie-break so equal timestamps stay deterministic. */
+  seq: number
+  type: SimEventType
+  payload: Record<string, unknown>
+}
+
+/** A message currently animating along an edge. */
+export interface InFlight {
+  messageId: string
+  edgeId: string
+  fromT: number
+  toT: number
+  /** Colour class chosen by the lesson to distinguish streams. */
+  tone: string
+}
+
+export interface QueuedMessage {
+  message: Message
+  enqueuedAt: number
+  /** Set while a consumer holds the message unacked. */
+  unackedBy?: NodeId
+}
+
+export interface Metrics {
+  published: number
+  routed: number
+  dropped: number
+  delivered: number
+  acked: number
+  nacked: number
+  deadLettered: number
+  expired: number
+}
+
+export interface JournalEntry {
+  at: number
+  type: SimEventType | 'guard' | 'validation'
+  /** Human-readable line rendered in the inspector's event log. */
+  text: string
+  nodeId?: NodeId
+  messageId?: string
+}
+
+export interface EngineState {
+  now: number
+  seq: number
+  rng: RngState
+  topology: Topology
+  /** Queue id to its ordered messages. */
+  queues: Record<NodeId, QueuedMessage[]>
+  /** Consumer id to the message ids it currently holds unacked. */
+  unacked: Record<NodeId, string[]>
+  inFlight: InFlight[]
+  metrics: Metrics
+  journal: JournalEntry[]
+  /** Set when a runaway guard halts the run. */
+  halted?: { reason: string }
+  /** Consumer ids that are currently crashed and not consuming. */
+  crashed: NodeId[]
+  /** Monotonic counter used to mint message ids deterministically. */
+  messageCounter: number
+}
+
+export interface ApplyResult {
+  state: EngineState
+  newEvents: SimEvent[]
+}
