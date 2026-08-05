@@ -1,3 +1,4 @@
+import { buildReplyEvents } from './advanced'
 import { addInFlight, clearInFlight, edgeId, log, scheduleEvent, TRAVEL_MS } from './broker'
 import { deadLetter } from './dlx'
 import { nextFloat } from './rng'
@@ -133,8 +134,16 @@ export function applyAck(state: EngineState, event: SimEvent): ApplyResult {
     messageId,
   })
 
+  const message = event.payload.message as Message | undefined
+  let replyEvents: SimEvent[] = []
+  if (message) {
+    const [events, afterReply] = buildReplyEvents(next, message, consumerId)
+    replyEvents = events
+    next = afterReply
+  }
+
   const [dispatchEvent, afterSchedule] = scheduleEvent(next, state.now, 'dispatch', { queueId })
-  return { state: afterSchedule, newEvents: [dispatchEvent] }
+  return { state: afterSchedule, newEvents: [...replyEvents, dispatchEvent] }
 }
 
 export function applyNack(state: EngineState, event: SimEvent): ApplyResult {

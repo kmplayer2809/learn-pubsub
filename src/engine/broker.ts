@@ -1,3 +1,4 @@
+import { insertByPriority } from './advanced'
 import { deadLetter, effectiveTtl } from './dlx'
 import { createRng } from './rng'
 import { resolveDestinations } from './routing'
@@ -214,12 +215,15 @@ export function applyEnqueue(state: EngineState, event: SimEvent): ApplyResult {
   const existing = next.queues[queueId] ?? []
   const entry: QueuedMessage = { message, enqueuedAt: state.now }
 
-  next = { ...next, queues: { ...next.queues, [queueId]: [...existing, entry] } }
+  const spec = state.topology.queues.find((q) => q.id === queueId)
+  next = {
+    ...next,
+    queues: { ...next.queues, [queueId]: insertByPriority(existing, entry, spec?.maxPriority) },
+  }
 
   const events: SimEvent[] = []
 
   // drop-head overflow: the oldest message leaves to make room for the new one
-  const spec = state.topology.queues.find((q) => q.id === queueId)
   if (spec?.maxLength !== undefined) {
     const current = next.queues[queueId] ?? []
     if (current.length > spec.maxLength) {
