@@ -218,5 +218,6 @@ export function applyEnqueue(state: EngineState, event: SimEvent): ApplyResult {
     nodeId: queueId,
     messageId: message.id,
   })
-  return { state: next, newEvents: [] }
+  const [dispatchEvent, afterSchedule] = scheduleEvent(next, state.now, 'dispatch', { queueId })
+  return { state: afterSchedule, newEvents: [dispatchEvent] }
 }
