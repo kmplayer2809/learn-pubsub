@@ -12,13 +12,19 @@ const FORBIDDEN = [
   /\bsetTimeout\s*\(/,
   /\bdocument\./,
   /\bwindow\./,
+  /\bimport\s*\(/,
+  /\brequire\s*\(/,
+  /\bperformance\.now\s*\(/,
+  /\bnew Date\s*\(/,
+  /\bsetInterval\s*\(/,
+  /\bprocess\./,
 ]
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const full = join(dir, name)
     if (statSync(full).isDirectory()) return sourceFiles(full)
-    if (!name.endsWith('.ts') || name.endsWith('.test.ts')) return []
+    if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name)) return []
     return [full]
   })
 }
