@@ -5394,8 +5394,11 @@ Expected: PASS, every test across engine, lessons, sim, ui, and sandbox.
 
 - [ ] **Step 2: Type-check and build**
 
-Run: `npx tsc --noEmit && npm run build`
+Run: `npm run typecheck && npm run build`
 Expected: no errors, `dist/` produced.
+
+The root `tsconfig.json` is references-only, so a bare `npx tsc --noEmit` compiles zero files
+and exits 0 no matter what is broken. Always use the `typecheck` script, which runs `tsc -b`.
 
 - [ ] **Step 3: Walk every lesson**
 
