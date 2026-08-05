@@ -9,6 +9,8 @@ Task 2: complete (commits fbb7f2a..8606f77, review clean after fix pass — puri
 
 Task 3: complete (commit b7adf38, review clean, heap fuzzed at depth with ties)
 
+Task 4: complete (commits d57a53f..96aabee, review clean after fix pass — headers vacuous-match bug was a plan defect, corrected in plan too)
+
 ## Open notes (carry to final review)
 - Minor: two zustand versions installed — top-level zustand@5 plus zustand@4.5.7 nested under @xyflow/react@12. Two instances in one tree can cause state-sharing bugs. Watch during Task 11 (store) and Task 12 (canvas).
 - Root tsconfig.json is references-only. Bare `tsc --noEmit` is a silent no-op; use `npm run typecheck` (tsc -b).
