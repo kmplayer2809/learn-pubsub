@@ -15,9 +15,12 @@ Task 5: complete (commit 3dc337a, review clean — deep-freeze and seq-distinctn
 
 Task 6: complete (commits 9eb9664..cd00312, review found Critical round-robin starvation + Important autoAck reject; both were plan defects, fixed in code and plan)
 
+Task 7: complete (commits 3c6732b..00b1728, review found Important stale-TTL cross-instance kill; plan defect, fixed in code and plan)
+
 ## Open notes (carry to final review)
 - Minor: two zustand versions installed — top-level zustand@5 plus zustand@4.5.7 nested under @xyflow/react@12. Two instances in one tree can cause state-sharing bugs. Watch during Task 11 (store) and Task 12 (canvas).
 - Root tsconfig.json is references-only. Bare `tsc --noEmit` is a silent no-op; use `npm run typecheck` (tsc -b).
 - Reviewer flagged the implementer's "documented fallback" claim as false attribution. Adjudicated: NOT a defect — the temp-subdir fallback was in the controller's dispatch prompt, which the reviewer could not see.
 - Minor (Task 3, deferred): `pushAll` in src/engine/clock.ts has no dedicated unit test. Task 9 uses it heavily — fold a test into Task 9 rather than a separate fix cycle.
 - Minor (Task 5): applyEnqueue creates a phantom queue entry for a dangling binding destinationId instead of failing loudly. Task 9 validateTopology rejects dangling destinations pre-run, so this is covered defensively — confirm during Task 9 review.
+- OPEN (verify at Task 9): a dead-letter cycle with NON-zero TTL grows unbounded — reviewer ran 30 cycles, deathTrail and x-death-count grow linearly, nothing in Task 7 stops it. Task 9's validateTopology only catches the zero-TTL case. The real backstop is MAX_EVENTS_PER_RUN + MAX_JOURNAL in Task 9's facade. Must confirm empirically that those guards actually halt such a run, since Lesson 13 builds exactly this topology.
