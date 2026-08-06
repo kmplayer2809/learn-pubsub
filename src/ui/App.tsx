@@ -21,7 +21,7 @@ export default function App() {
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
-          <CanvasView topology={lesson.topology} state={state} />
+          <CanvasView topology={lesson.topology} state={state} script={lesson.script} />
         </div>
         <div className="border-t border-slate-800">
           <InFlightPanel state={state} />

@@ -1,13 +1,22 @@
 import { Background, Controls, ReactFlow, type Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useMemo } from 'react'
-import type { EngineState, Topology } from '../../engine'
+import type { EngineState, ScriptedAction, Topology } from '../../engine'
 import { useAppStore } from '../../sim/store'
 import { MessageLayer } from '../canvas/MessageLayer'
 import { nodeTypes } from './nodes'
 import { toFlowEdges, toFlowNodes } from './toFlow'
 
-export function CanvasView({ topology, state }: { topology: Topology; state: EngineState }) {
+export function CanvasView({
+  topology,
+  state,
+  script = [],
+}: {
+  topology: Topology
+  state: EngineState
+  /** Needed only to derive RPC reply edges, which the topology cannot express. */
+  script?: ScriptedAction[]
+}) {
   const selectNode = useAppStore((s) => s.selectNode)
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
 
@@ -15,7 +24,7 @@ export function CanvasView({ topology, state }: { topology: Topology; state: Eng
     () => toFlowNodes(topology, state).map((n) => ({ ...n, selected: n.id === selectedNodeId })),
     [topology, state, selectedNodeId],
   )
-  const edges = useMemo(() => toFlowEdges(topology), [topology])
+  const edges = useMemo(() => toFlowEdges(topology, script), [topology, script])
 
   return (
     <div className="relative h-full w-full" data-testid="canvas">

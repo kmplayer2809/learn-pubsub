@@ -1,5 +1,5 @@
 import type { Edge, Node } from '@xyflow/react'
-import type { EngineState, Topology } from '../../engine'
+import type { EngineState, ScriptedAction, Topology } from '../../engine'
 
 export function toFlowNodes(topology: Topology, state: EngineState): Node[] {
   const publishers = topology.publishers.map<Node>((p) => ({
@@ -59,7 +59,7 @@ function edge(source: string, target: string, label?: string, dashed = false): E
   }
 }
 
-export function toFlowEdges(topology: Topology): Edge[] {
+export function toFlowEdges(topology: Topology, script: ScriptedAction[] = []): Edge[] {
   const edges: Edge[] = []
 
   // Publishers connect to every exchange a script could target; the topology
@@ -71,14 +71,23 @@ export function toFlowEdges(topology: Topology): Edge[] {
     }
   }
 
-  // A consumer that acks a message carrying `replyTo` becomes an ad-hoc
-  // publisher too — the engine's RPC reply (advanced.ts buildReplyEvents)
-  // is published with the consumer's own node id as the source. The topology
-  // does not say which consumer will do this, so mirror the same heuristic
-  // used for real publishers above.
-  for (const c of topology.consumers) {
-    for (const e of topology.exchanges) {
-      if (topology.bindings.some((b) => b.exchangeId === e.id)) edges.push(edge(c.id, e.id, undefined, true))
+  // A consumer that acks a message carrying `replyTo` becomes an ad-hoc publisher:
+  // the engine's RPC reply (advanced.ts buildReplyEvents) is published with the
+  // consumer's own node id as the source, so the message layer needs an edge named
+  // `${consumerId}->${replyTo}` to animate over.
+  //
+  // Which consumer that is cannot be read off the topology, because the topology
+  // never says where a request came from — only the script does, via `replyTo`. An
+  // earlier version guessed with a consumer x exchange cross-product mirroring the
+  // publisher heuristic above; that drew fabricated edges on all sixteen lessons
+  // (four of eleven on 11-dlx alone) instead of the single real one on 14-rpc.
+  for (const action of script) {
+    if (!action.replyTo) continue
+    const requestQueues = topology.bindings
+      .filter((b) => b.exchangeId === action.exchangeId && b.destinationKind === 'queue')
+      .map((b) => b.destinationId)
+    for (const c of topology.consumers) {
+      if (requestQueues.includes(c.queueId)) edges.push(edge(c.id, action.replyTo))
     }
   }
 

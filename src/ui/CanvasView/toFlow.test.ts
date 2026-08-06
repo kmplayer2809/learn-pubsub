@@ -100,8 +100,47 @@ describe('canvas invariants that later tasks depend on', () => {
       }
       expect(travelled.size).toBeGreaterThan(0)
 
-      const drawn = new Set(toFlowEdges(currentLesson.topology).map((e) => e.id))
+      const drawn = new Set(toFlowEdges(currentLesson.topology, currentLesson.script).map((e) => e.id))
       expect([...travelled].filter((id) => !drawn.has(id))).toEqual([])
     },
   )
+
+  it.each(LESSONS.map((l) => [l.id, l] as const))(
+    '%s: draws no consumer->exchange edge the engine never travels',
+    (_id, currentLesson) => {
+      // The invariant above is one-directional: it catches edges that are travelled
+      // but not drawn, and stays green no matter how many edges are invented. A
+      // cross-product heuristic exploited exactly that, fabricating up to four of
+      // eleven edges on 11-dlx. A consumer only publishes when it answers an RPC, so
+      // every consumer->exchange edge must correspond to real traffic.
+      const sim = createSimulation({
+        topology: currentLesson.topology,
+        script: currentLesson.script,
+        failures: currentLesson.failures,
+        seed: currentLesson.seed,
+      })
+      const travelled = new Set<string>()
+      for (let t = 0; t <= currentLesson.durationMs + 20_000; t += 100) {
+        sim.advanceTo(t)
+        for (const flight of sim.snapshot().inFlight) travelled.add(flight.edgeId)
+      }
+
+      const consumerIds = new Set(currentLesson.topology.consumers.map((c) => c.id))
+      const exchangeIds = new Set(currentLesson.topology.exchanges.map((e) => e.id))
+      const drawn = toFlowEdges(currentLesson.topology, currentLesson.script)
+      const replyEdges = drawn.filter((e) => consumerIds.has(e.source) && exchangeIds.has(e.target))
+      expect(replyEdges.filter((e) => !travelled.has(e.id)).map((e) => e.id)).toEqual([])
+    },
+  )
+
+  it('draws the rpc reply edge for the consumer that actually answers', () => {
+    const rpc = LESSONS.find((l) => l.id === '14-rpc')!
+    const ids = toFlowEdges(rpc.topology, rpc.script).map((e) => e.id)
+    // `worker` consumes the request, so `worker` publishes the reply. `caller`
+    // consumes the reply and answers nothing, so it gets no outbound edge.
+    expect(ids).toContain('worker->replies')
+    expect(ids).not.toContain('caller->replies')
+    expect(ids).not.toContain('caller->rpc-ex')
+    expect(ids).not.toContain('worker->rpc-ex')
+  })
 })
