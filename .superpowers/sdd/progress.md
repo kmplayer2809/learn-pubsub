@@ -199,6 +199,34 @@ toFlow regression: FIXED (commit 0414e1d). 258 tests / 25 files, typecheck clean
   (every consumer->exchange edge drawn must be travelled) plus an explicit 14-rpc case.
   RED-PROBED both: restoring the cross-product turns the new test red on 16 of 16 lessons.
 
+Task 16c: complete (commits 43411eb..5edea33). 288 tests / 26 files, typecheck clean.
+  Lesson 10 now ships, so all 17 lessons exist. Engine gained QueueSpec.durable,
+  ScriptedAction.persistent, SimEventType 'confirm', Metrics.confirmed. Metrics needed no
+  UI work as predicted (Inspector renders Object.entries). Transient messages now draw
+  hollow on the canvas, so lesson 10's odd-one-out is visible at a glance.
+
+  CONTROLLER-FOUND BUG, fixed at 5edea33. The agent scoped confirms to "fromId is a
+  publisher id" to stop an exchange-to-exchange fan-out double-confirming. Measured
+  published vs confirmed across all 17 lessons and 14-rpc was the lone disagreement:
+  published 6 / confirmed 3. RPC replies are published by a CONSUMER (buildReplyEvents
+  uses the consumer's node id), so they were never confirmed — and the metrics panel
+  showed that contradiction right next to lesson 10, which teaches that a confirm answers
+  every publish.
+  MY FIRST FIX WAS WRONG and the new test caught it in one run: relaxing to "not an
+  exchange" let dead-letter republishes through, since those carry the QUEUE as fromId.
+  13-retry-backoff went to 56 confirms against 4 publishes. Correct predicate is publisher
+  OR consumer — those are the clients; exchanges and queues are the broker moving a
+  message it already owns.
+  Added `%s confirms every publish` over all LESSONS in lessons.test.ts. RED-PROBED:
+  restoring the publisher-only predicate turns 14-rpc red.
+  NOTE for the final review: the agent's e2e-binding concern is real but unexercised —
+  no shipped lesson uses `destinationKind: 'exchange'` (verified by grep), so the
+  double-confirm guard has no test. Worth one if a lesson ever adds an e2e binding.
+
+Task 17 review: the formal task reviewer was never dispatched (the pause landed on it).
+  The controller reviewed it directly instead and found the toFlow regression above. The
+  final whole-branch review still needs to cover 58cf9f9 properly.
+
 === PAUSED 2026-08-06 23:30 (+07) at the user's request; resumed 03:34 on 2026-08-07. ===
   ON RESUME, do NOT re-dispatch anything marked complete above. Order of remaining work:
   finish Task 17's review loop (read .superpowers/sdd/task-17-report.md and `git log` to
