@@ -31,9 +31,16 @@ Task 10: complete (commits 13fa291..570508a, 89 tests). Lesson schema, registry,
   Controller added schema guards (570508a) because Lessons 2-17 arrive from three separate subagents: duplicate ids, empty/out-of-order narratives, unknown groups, checkpoint answerIndex out of range. Probed: a duplicated lesson with reversed narrative fails both new guards.
   Schema note for Tasks 15-17: Lesson folds the design spec's separate `consumers` and `highlights` arrays into `topology.consumers` and `NarrativeStep.highlight`. Adds summary, seed, durationMs.
 
+Task 11: complete (commits 60ae95c..cef1e2b, 100 tests). Zustand store + rAF binding.
+  Implementer shipped useSimulation.ts (119 lines, all the app's impurity: rAF, performance.now, the rewind path) with ZERO tests, verified only by typecheck and code inspection. Controller rejected that and dispatched a dedicated test pass. Six behaviours now covered, each fail-checked by breaking its guard and confirming the test caught it: pause freezes, speed multiplier is numerically exact (100ms frame at 2x = 200ms virtual), halted stops the loop, end-of-lesson pauses, rewind replays to an identical journal, lesson switch resets clean.
+  The rewind test asserts the intermediate state actually moved backwards (shorter journal, now <= seek target) BEFORE comparing journals — without that, a seek that silently no-ops would pass, because advanceTo ignores a target at or before its current time.
+  No defects found in the hook itself.
+
 ## Open notes (carry to final review)
 - Minor: two zustand versions installed — top-level zustand@5 plus zustand@4.5.7 nested under @xyflow/react@12. Two instances in one tree can cause state-sharing bugs. Watch during Task 11 (store) and Task 12 (canvas).
 - Root tsconfig.json is references-only. Bare `tsc --noEmit` is a silent no-op; use `npm run typecheck` (tsc -b).
 - Reviewer flagged the implementer's "documented fallback" claim as false attribution. Adjudicated: NOT a defect — the temp-subdir fallback was in the controller's dispatch prompt, which the reviewer could not see.
 - Task 9 added SimulationOptions.maxEvents. The Sandbox (Task 18) should expose or preset it so a user-built runaway topology halts fast instead of grinding to 200_000 events.
 - 'retryBackoff' is wired to a no-op reducer in src/engine/index.ts REDUCERS. Nothing schedules it today (Lesson 13 uses TTL delay queues instead). If a later task schedules one it will vanish silently — make it throw, or delete the event type, at final review.
+- useSimulation has no seam to inject a runaway topology (no maxEvents passthrough), so the halted-stops-loop test mocks createSimulation. Task 18's Sandbox needs that seam anyway — add it there and consider retargeting the test at the real engine.
+- openSandbox() sets a `sandbox` flag but useSimulation only reads lessonId and ignores it, so opening the Sandbox would keep simulating the last lesson. Not a bug yet (no Sandbox UI until Task 18) — Task 18 must handle it.
