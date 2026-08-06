@@ -261,6 +261,44 @@ Task 18: code complete (commit 46c2d69). 295 tests / 27 files, typecheck clean.
   each routing hop costs a fixed 600ms of virtual time. Not a bug — it also means a
   hand-built loop cannot freeze the tab in reachable time — but worth a look at Task 20.
 
+Task 18 fix wave 1: complete (commit bf97364). 301 tests / 28 files, typecheck clean.
+  Both defects verified live by the controller, not taken on report:
+  - Vietnamese issue copy works. ValidationIssue gained a `code` + params; `message` stays
+    English for the engine's tests; `src/ui/Inspector/issueText.ts` renders Vietnamese via
+    an exhaustive switch, wired into the shared IssuesList used by BOTH Inspector and
+    SandboxPanel, so there is only one implementation. Measured: `cảnh báo: queue queue-3
+    chưa có binding nào, nên không message nào tới được`.
+  - Handle hit area measured 20x20 CSS px by elementFromPoint grid scan (400 of 625 probe
+    points reach the handle). Drag-to-connect confirmed working end to end: exchange-6
+    source -> queue-7 target created the edge and cleared the warning.
+  Answer to the open question from before: React Flow's Handle listens on onMouseDown, not
+  pointer events. That is why my synthetic PointerEvents did nothing. MouseEvents work.
+
+  FALSE ALARM I RAISED AND RETRACTED, recorded so nobody re-investigates it: I first
+  measured 5 of 6 handles as having ZERO grabbable pixels and traced the blocker to
+  another node's card painting over them. The cause was my own test method — I clicked all
+  four add-node buttons synchronously in one evaluate_script, React batched the updates, so
+  `nextPosition(topology)` read count=0 four times and stacked every node at
+  translate(80px,60px). With realistic delays between clicks the nodes lay out correctly at
+  80/260/440/620 and every handle is reachable. `nextPosition` in SandboxPanel.tsx is
+  correct. Do not "fix" it.
+
+Task 18 fix wave 2: DISPATCHED. Three defects found by using the Sandbox as a first-time
+  user would, all of which the passing suite and both prior agents missed:
+  1. CRITICAL — SandboxPanel replaces Inspector wholesale, and renders NEITHER the metrics
+     grid NOR the event log. The one mode built for experimenting is the only mode that
+     shows nothing about what the broker did. Fix must reuse Inspector's rendering, not
+     fork it.
+  2. CanvasView.handleConnect calls `addBinding(source, target, '')` and nothing can ever
+     edit that routing key — SandboxPanel's `routingKey` state belongs to the publish form,
+     there is no binding editor, and edges are not clickable. On a `direct` exchange the
+     only key that can match is the empty string.
+  3. Publishing while the virtual clock is already past the new action's `at` does nothing
+     and looks identical to success.
+  Compound effect, which is how I hit it: published with key `demo`, message was dropped at
+  the exchange for a key mismatch, and with no metrics and no log the entire UI stayed
+  silent. Nothing on screen could explain it.
+
 === PAUSED 2026-08-06 23:30 (+07) at the user's request; resumed 03:34 on 2026-08-07. ===
   ON RESUME, do NOT re-dispatch anything marked complete above. Order of remaining work:
   finish Task 17's review loop (read .superpowers/sdd/task-17-report.md and `git log` to
