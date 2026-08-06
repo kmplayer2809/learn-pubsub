@@ -92,7 +92,7 @@ export const fanoutExchange: Lesson = {
     {
       at: 1400,
       title: 'Một message trở thành ba bản copy',
-      body: 'Hãy quan sát particle rời khỏi `ex` rồi tách thành ba cùng lúc, một hướng về `email`, một hướng về `analytics`, một hướng về `audit`. Mỗi queue nhận một bản copy độc lập của cùng một message.',
+      body: 'Hãy quan sát các chấm message rời khỏi `ex` rồi tách thành ba cùng lúc, một hướng về `email`, một hướng về `analytics`, một hướng về `audit`. Mỗi queue nhận một bản copy độc lập của cùng một message.',
       highlight: ['email', 'analytics', 'audit'],
     },
     {

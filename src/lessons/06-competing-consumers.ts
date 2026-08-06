@@ -4,7 +4,7 @@ export const competingConsumers: Lesson = {
   id: '06-competing-consumers',
   group: 'basics',
   title: 'Competing consumers',
-  summary: 'Một queue, nhiều consumer: work được chia, không bị nhân bản.',
+  summary: 'Một queue, nhiều consumer: công việc được chia, không bị nhân bản.',
   seed: 6,
   durationMs: 14_000,
   topology: {

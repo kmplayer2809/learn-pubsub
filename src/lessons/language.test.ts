@@ -23,6 +23,15 @@ describe('reader-facing copy is Vietnamese', () => {
     const prose = lesson.narrative.map((s) => s.body).join('\n')
     expect(prose).toMatch(VIETNAMESE)
     expect(lesson.summary).toMatch(VIETNAMESE)
+    expect(stripCode(lesson.summary), `${lesson.id} summary`).not.toMatch(
+      ENGLISH_FUNCTION_WORDS,
+    )
+
+    // Each body individually, not just the joined blob: one Vietnamese word in step 1
+    // must not vouch for three untranslated steps after it.
+    for (const step of lesson.narrative) {
+      expect(step.body, `${lesson.id} @${step.at} body`).toMatch(VIETNAMESE)
+    }
 
     for (const step of lesson.narrative) {
       expect(stripCode(step.body), `${lesson.id} @${step.at} body`).not.toMatch(
@@ -36,9 +45,13 @@ describe('reader-facing copy is Vietnamese', () => {
     for (const cp of lesson.checkpoints ?? []) {
       expect(cp.question).toMatch(VIETNAMESE)
       expect(cp.explanation).toMatch(VIETNAMESE)
-      expect(stripCode(cp.explanation), `${lesson.id} checkpoint`).not.toMatch(
-        ENGLISH_FUNCTION_WORDS,
-      )
+      for (const text of [cp.question, cp.explanation, ...cp.options]) {
+        expect(stripCode(text), `${lesson.id} checkpoint: ${text}`).not.toMatch(
+          ENGLISH_FUNCTION_WORDS,
+        )
+      }
+      // Options are short and may legitimately be a bare term ("Fanout exchange"), so
+      // they are held to the forbidden-word rule but not to the diacritic rule.
     }
   })
 

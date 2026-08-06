@@ -4,7 +4,7 @@ export const topicExchange: Lesson = {
   id: '04-topic',
   group: 'basics',
   title: 'Topic exchange',
-  summary: 'Wildcard routing: `*` khớp một từ, `#` khớp không hoặc nhiều từ hơn.',
+  summary: 'Wildcard routing: `*` khớp một từ, `#` khớp không hoặc nhiều từ.',
   seed: 4,
   durationMs: 12_000,
   topology: {

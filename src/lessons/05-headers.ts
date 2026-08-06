@@ -4,7 +4,7 @@ export const headersExchange: Lesson = {
   id: '05-headers',
   group: 'basics',
   title: 'Headers exchange',
-  summary: 'Route dựa trên header value thay vì routing key, với kiểu khớp `all` so với `any`.',
+  summary: 'Route dựa trên giá trị header thay vì routing key, với kiểu khớp `all` so với `any`.',
   seed: 5,
   durationMs: 10_000,
   topology: {

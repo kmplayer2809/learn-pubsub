@@ -46,7 +46,7 @@ export const helloWorld: Lesson = {
     {
       at: 0,
       title: 'Publisher không bao giờ ghi thẳng vào queue',
-      body: 'Publisher luôn giao message cho một **exchange**, không có ngoại lệ. Ngay cả kiểu "gửi thẳng vào queue" bạn thường thấy trong tutorial cũng đi qua *default exchange*, exchange này có sẵn một binding ngầm định tới mọi queue, dùng tên queue làm routing key.',
+      body: 'Publisher luôn giao message cho một **exchange**, không có ngoại lệ. Ngay cả kiểu "gửi thẳng vào queue" bạn thường thấy trong các hướng dẫn cũng đi qua *default exchange*, exchange này có sẵn một binding ngầm định tới mọi queue, dùng tên queue làm routing key.',
       highlight: ['p1', 'default'],
     },
     {
@@ -64,7 +64,7 @@ export const helloWorld: Lesson = {
     {
       at: 4000,
       title: 'Consumer thực hiện ack',
-      body: 'Với `prefetch: 1` và manual ack, consumer chỉ giữ đúng một message chưa ack tại một thời điểm. Chỉ khi nó ack xong thì queue mới release message kế tiếp. Hãy quan sát queue drain từng message một theo chu kỳ thay vì giải phóng tất cả cùng lúc.',
+      body: 'Với `prefetch: 1` và manual ack, consumer chỉ giữ đúng một message chưa ack tại một thời điểm. Chỉ khi nó ack xong thì queue mới giải phóng message kế tiếp. Hãy quan sát queue drain từng message một theo chu kỳ thay vì giải phóng tất cả cùng lúc.',
       highlight: ['c1'],
     },
   ],
