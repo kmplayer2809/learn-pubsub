@@ -36,6 +36,12 @@ export interface SimulationOptions {
   script: ScriptedAction[]
   failures?: ScriptedFailure[]
   seed: number
+  /**
+   * Overrides MAX_EVENTS_PER_RUN. The Sandbox lowers it so a user-built runaway
+   * topology trips the guard in a fraction of a second instead of grinding, and
+   * the guard test uses it to prove the halt without processing 200_000 events.
+   */
+  maxEvents?: number
 }
 
 export interface Simulation {
@@ -108,6 +114,7 @@ export function createSimulation(options: SimulationOptions): Simulation {
   let state: EngineState = createEngineState(options.topology, options.seed)
   let scheduler: Scheduler = pushAll(createScheduler(), seedEvents(options))
   let processed = 0
+  const ceiling = options.maxEvents ?? MAX_EVENTS_PER_RUN
 
   // Crash events need the messages the consumer currently holds, which is only
   // knowable at apply time — so the reducer reads them from live state here.
@@ -141,10 +148,10 @@ export function createSimulation(options: SimulationOptions): Simulation {
         // must live inside the inner pop-and-apply loop: a cycle can regenerate
         // events within a single popDue batch, so checking only between advanceTo
         // calls would never catch it.
-        if (processed >= MAX_EVENTS_PER_RUN) {
+        if (processed >= ceiling) {
           state = {
             ...state,
-            halted: { reason: `event ceiling of ${MAX_EVENTS_PER_RUN} reached; the topology may loop` },
+            halted: { reason: `event ceiling of ${ceiling} reached; the topology may loop` },
           }
           return
         }

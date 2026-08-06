@@ -52,18 +52,19 @@ describe('createSimulation runaway guard', () => {
       topology: cycle,
       seed: 1,
       script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'loop' }],
+      maxEvents: 2000,
     })
-    // This cycle round-trips in 2*TRAVEL_MS (1200ms) + messageTtlMs (10ms) = 1210ms
-    // of virtual time and produces ~4 processed events per round trip, so one
-    // simulated hour (60*60*1000ms, ~11,900 events) is nowhere near enough virtual
-    // time to reach MAX_EVENTS_PER_RUN (200,000) — confirmed empirically. Advancing
-    // to 70,000,000ms virtual time (still cheap: the guard stops dispatching the
-    // instant the ceiling is hit, regardless of how far past it the target is)
-    // reliably crosses the ~60.5M ms threshold where the ceiling trips.
+    // The cycle round-trips in 2*TRAVEL_MS + messageTtlMs = 1210ms of virtual time
+    // at ~4 events per lap, so reaching the real 200_000 ceiling costs ~60.5M ms of
+    // virtual time and ~3 seconds of wall clock on every suite run. The property
+    // under test is that the guard halts a cycle that would otherwise never stop,
+    // not the specific value of the default constant, so the ceiling is lowered
+    // here and the target time raised far past it.
     sim.advanceTo(70_000_000)
     const snap = sim.snapshot()
     expect(snap.halted).toBeDefined()
     expect(snap.halted!.reason).toContain('event ceiling')
+    expect(snap.halted!.reason).toContain('2000')
     expect(snap.journal.length).toBeLessThanOrEqual(MAX_JOURNAL)
   })
 })
