@@ -32,10 +32,12 @@ export function LessonSidebar() {
       ))}
       <button
         onClick={openSandbox}
-        disabled
-        className="mt-auto cursor-not-allowed border-t border-slate-800 px-3 py-2 text-left text-xs text-slate-600"
+        className={`mt-auto border-t border-slate-800 px-3 py-2 text-left text-xs ${
+          sandbox ? 'bg-slate-800 text-sky-300' : 'text-slate-400 hover:bg-slate-900'
+        }`}
+        data-testid="open-sandbox"
       >
-        Sandbox (sắp có)
+        Sandbox
       </button>
     </nav>
   )

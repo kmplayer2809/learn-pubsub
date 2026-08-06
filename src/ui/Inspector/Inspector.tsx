@@ -54,6 +54,30 @@ function NodeConfig({ lesson, state, nodeId }: { lesson: Lesson; state: EngineSt
   return <p className="text-[11px] text-slate-500">Node này không có cấu hình.</p>
 }
 
+/** Shared with SandboxPanel so a topology's validation errors/warnings render identically in both places. */
+export function IssuesList({ issues }: { issues: ValidationIssue[] }) {
+  if (issues.length === 0) return null
+  return (
+    <section className="rounded border border-rose-700 bg-rose-950 p-2">
+      {issues.map((issue, i) => (
+        <p key={i} className="text-[11px] text-rose-200">
+          {issue.severity}: {issue.message}
+        </p>
+      ))}
+    </section>
+  )
+}
+
+/** Shared with SandboxPanel: a user-built topology can loop, so both surfaces need the same halted message. */
+export function HaltedBanner({ halted }: { halted?: { reason: string } }) {
+  if (!halted) return null
+  return (
+    <p className="rounded border border-amber-700 bg-amber-950 p-2 text-[11px] text-amber-200">
+      Đã dừng: {halted.reason}
+    </p>
+  )
+}
+
 export function Inspector({
   lesson,
   state,
@@ -75,21 +99,9 @@ export function Inspector({
         <Markdown text={step?.body ?? lesson.summary} />
       </section>
 
-      {issues.length > 0 && (
-        <section className="rounded border border-rose-700 bg-rose-950 p-2">
-          {issues.map((issue, i) => (
-            <p key={i} className="text-[11px] text-rose-200">
-              {issue.severity}: {issue.message}
-            </p>
-          ))}
-        </section>
-      )}
+      <IssuesList issues={issues} />
 
-      {state.halted && (
-        <p className="rounded border border-amber-700 bg-amber-950 p-2 text-[11px] text-amber-200">
-          Đã dừng: {state.halted.reason}
-        </p>
-      )}
+      <HaltedBanner halted={state.halted} />
 
       <section>
         <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">

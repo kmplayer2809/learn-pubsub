@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createSimulation, type EngineState, type Simulation, type ValidationIssue } from '../engine'
 import { getLesson } from '../lessons/registry'
+import { useSandboxStore } from '../sandbox/sandboxStore'
 import { useAppStore } from './store'
 
 export interface SimulationView {
@@ -11,7 +12,14 @@ export interface SimulationView {
 
 const EMPTY_TOPOLOGY = { publishers: [], exchanges: [], queues: [], consumers: [], bindings: [] }
 
+// A user-built topology can loop (a DLX pointing back into its own source
+// exchange is one keystroke away), and unlike a lesson script the sandbox has
+// no author vetting it. Lowering the ceiling here means a runaway trips and
+// surfaces state.halted well before it can bog down the tab.
+const SANDBOX_MAX_EVENTS = 20_000
+
 export function useSimulation(): SimulationView {
+  const sandbox = useAppStore((s) => s.sandbox)
   const lessonId = useAppStore((s) => s.lessonId)
   const replayToken = useAppStore((s) => s.replayToken)
   const playing = useAppStore((s) => s.playing)
@@ -20,25 +28,43 @@ export function useSimulation(): SimulationView {
   const tickTo = useAppStore((s) => s.tickTo)
   const pause = useAppStore((s) => s.pause)
 
+  const sandboxTopology = useSandboxStore((s) => s.topology)
+  const sandboxScript = useSandboxStore((s) => s.script)
+
   const simRef = useRef<Simulation | null>(null)
   const [view, setView] = useState<SimulationView | null>(null)
 
   // Build (or rebuild) the engine. replayToken changes on seek-backwards and
   // lesson switches, which is exactly when a replay from zero is required.
   // This is the entire rewind implementation: reset() then advanceTo(target).
+  //
+  // In sandbox mode there is no replayToken bump on every edit — the sandbox
+  // topology/script object identity changes on every store mutation instead
+  // (Zustand's `set` always produces a new object), so listing them as deps
+  // here is what makes "rebuild whenever either changes" happen.
   useEffect(() => {
-    const lesson = getLesson(lessonId)
-    if (!lesson) return
-    const sim = createSimulation({
-      topology: lesson.topology,
-      script: lesson.script,
-      failures: lesson.failures,
-      seed: lesson.seed,
-    })
+    const sim = sandbox
+      ? createSimulation({
+          topology: sandboxTopology,
+          script: sandboxScript,
+          seed: 1,
+          maxEvents: SANDBOX_MAX_EVENTS,
+        })
+      : (() => {
+          const lesson = getLesson(lessonId)
+          if (!lesson) return undefined
+          return createSimulation({
+            topology: lesson.topology,
+            script: lesson.script,
+            failures: lesson.failures,
+            seed: lesson.seed,
+          })
+        })()
+    if (!sim) return
     sim.advanceTo(useAppStore.getState().virtualTime)
     simRef.current = sim
     setView({ state: sim.snapshot(), issues: sim.issues, stepOnce: () => {} })
-  }, [lessonId, replayToken])
+  }, [sandbox, lessonId, replayToken, sandboxTopology, sandboxScript])
 
   // Advance on seek while paused, so scrubbing updates the canvas immediately.
   useEffect(() => {
@@ -57,8 +83,10 @@ export function useSimulation(): SimulationView {
     let last = performance.now()
     let stopped = false
 
+    // Sandbox runs are open-ended: nothing "finishes" a free-form topology,
+    // so there is no duration past which the loop should auto-pause.
     const lesson = getLesson(lessonId)
-    const durationMs = lesson?.durationMs ?? Infinity
+    const durationMs = sandbox ? Infinity : (lesson?.durationMs ?? Infinity)
 
     const loop = (now: number) => {
       if (stopped) return
@@ -97,7 +125,7 @@ export function useSimulation(): SimulationView {
       stopped = true
       cancelAnimationFrame(frame)
     }
-  }, [playing, speed, lessonId, tickTo, pause])
+  }, [playing, speed, lessonId, sandbox, tickTo, pause])
 
   const stepOnce = () => {
     const sim = simRef.current
@@ -110,10 +138,17 @@ export function useSimulation(): SimulationView {
   if (view) return { ...view, stepOnce }
 
   const lesson = getLesson(lessonId)
-  const fallback = createSimulation({
-    topology: lesson?.topology ?? EMPTY_TOPOLOGY,
-    script: [],
-    seed: 0,
-  })
+  const fallback = sandbox
+    ? createSimulation({
+        topology: sandboxTopology,
+        script: sandboxScript,
+        seed: 1,
+        maxEvents: SANDBOX_MAX_EVENTS,
+      })
+    : createSimulation({
+        topology: lesson?.topology ?? EMPTY_TOPOLOGY,
+        script: [],
+        seed: 0,
+      })
   return { state: fallback.snapshot(), issues: fallback.issues, stepOnce }
 }
