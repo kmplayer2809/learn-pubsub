@@ -316,6 +316,29 @@ Task 18 fix wave 2: complete (commit 4e87ed3). 309 tests / 29 files, typecheck c
   is chosen, and several of my earlier "publish does nothing" readings were that guard
   working. Check `btn.disabled` before concluding anything from a synthetic click.
 
+Task 19: complete (commit d4a3d04). 322 tests / 30 files, typecheck clean.
+  Code export ships (src/sandbox/export/: amqplib.ts, nestjs.ts, queueArguments.ts).
+  Controller verified the thing that actually matters — that no non-default topology field
+  is silently dropped — by generating for all 17 lessons and asserting every set
+  messageTtlMs / maxLength / deadLetterExchange / deadLetterRoutingKey / maxPriority /
+  quorum kind / durable appears with its value in the output. Zero misses. Read the
+  13-retry-backoff output directly: correct amqplib API (assertExchange, assertQueue with
+  an `arguments` object, bindQueue, prefetch, consume with noAck), TTL and both dead-letter
+  args present and correct.
+  Browser-checked: `Xuất code` button, amqplib/NestJS tabs, `Sao chép`, code legible at
+  panel width, no horizontal page scroll.
+  Agent extended scope deliberately and correctly: wired Export into Inspector (lesson
+  mode) as well as SandboxPanel, sharing one ExportDialog rather than forking, because the
+  task framing says "the topology the user is looking at".
+  IT ALSO FIXED FOUR REAL BUGS IN MY BRIEF'S SAMPLE CODE, which I had written and would
+  have shipped: hardcoded `durable: true` ignoring QueueSpec.durable; `channel.nack` called
+  on auto-ack messages, which throws at runtime; NestJS `queueOptions.arguments` left as a
+  dead placeholder; and `pascal()` emitting identifiers containing spaces for prose
+  consumer labels like "Parking-lot inspector".
+  Minor, not worth a wave: `arguments: {}` is emitted even for queues with no arguments.
+  Open: the agent could not get a clipboard readback in the automated browser session, so
+  the copy button's actual write is unconfirmed. Worth one manual click at Task 20.
+
 === PAUSED 2026-08-06 23:30 (+07) at the user's request; resumed 03:34 on 2026-08-07. ===
   ON RESUME, do NOT re-dispatch anything marked complete above. Order of remaining work:
   finish Task 17's review loop (read .superpowers/sdd/task-17-report.md and `git log` to
