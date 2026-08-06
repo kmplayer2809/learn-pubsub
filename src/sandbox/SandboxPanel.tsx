@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import type { EngineState, Topology, ValidationIssue } from '../engine'
 import { EventLog, HaltedBanner, IssuesList, MetricsGrid } from '../ui/Inspector/Inspector'
 import { useAppStore } from '../sim/store'
+import { ExportDialog } from './ExportDialog'
 import { type SandboxNodeKind, useSandboxStore } from './sandboxStore'
 
 const PALETTE: { kind: SandboxNodeKind; label: string }[] = [
@@ -221,6 +222,7 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
   const [routingKey, setRoutingKey] = useState('')
   const [body, setBody] = useState('')
   const [rate, setRate] = useState(generator?.ratePerSecond ?? 0)
+  const [exportOpen, setExportOpen] = useState(false)
 
   // Restore a previous session's build the first time the sandbox opens with
   // nothing in it yet. A topology already under construction this session
@@ -261,11 +263,22 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto" data-testid="sandbox-panel">
       <section>
-        <h2 className="mb-1 text-sm font-semibold text-slate-100">Sandbox</h2>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="mb-1 text-sm font-semibold text-slate-100">Sandbox</h2>
+          <button
+            onClick={() => setExportOpen(true)}
+            data-testid="export-button"
+            className="shrink-0 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+          >
+            Xuất code
+          </button>
+        </div>
         <p className="text-[11px] text-slate-500">
           Tự xây topology của riêng bạn: thêm node, kéo để connect, rồi publish message.
         </p>
       </section>
+
+      {exportOpen && <ExportDialog topology={topology} onClose={() => setExportOpen(false)} />}
 
       <IssuesList issues={issues} />
       <HaltedBanner halted={state.halted} />

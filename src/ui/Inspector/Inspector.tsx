@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import type { EngineState, JournalEntry, Metrics, ValidationIssue } from '../../engine'
 import type { Lesson } from '../../lessons/types'
+import { ExportDialog } from '../../sandbox/ExportDialog'
 import { useAppStore } from '../../sim/store'
 import { activeStepIndex } from './activeStep'
 import { vietnameseIssueMessage, vietnameseSeverityLabel } from './issueText'
@@ -125,15 +127,27 @@ export function Inspector({
 }) {
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
   const step = lesson.narrative[activeStepIndex(lesson.narrative, state.now)]
+  const [exportOpen, setExportOpen] = useState(false)
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto" data-testid="inspector">
       <section>
-        <h2 className="mb-1 text-sm font-semibold text-slate-100">
-          <MarkdownInline text={step?.title ?? lesson.title} />
-        </h2>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="mb-1 text-sm font-semibold text-slate-100">
+            <MarkdownInline text={step?.title ?? lesson.title} />
+          </h2>
+          <button
+            onClick={() => setExportOpen(true)}
+            data-testid="export-button"
+            className="shrink-0 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+          >
+            Xuất code
+          </button>
+        </div>
         <Markdown text={step?.body ?? lesson.summary} />
       </section>
+
+      {exportOpen && <ExportDialog topology={lesson.topology} onClose={() => setExportOpen(false)} />}
 
       <IssuesList issues={issues} />
 
