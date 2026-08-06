@@ -11,6 +11,10 @@ import { nackRequeue } from './09-nack-requeue'
 import { dlxBasics } from './11-dlx'
 import { ttlAndMaxLength } from './12-ttl-maxlen'
 import { retryWithBackoff } from './13-retry-backoff'
+import { rpcPattern } from './14-rpc'
+import { priorityQueue } from './15-priority'
+import { delayedMessage } from './16-delayed'
+import { quorumVsClassic } from './17-quorum'
 
 export const LESSON_GROUPS: { id: LessonGroup; label: string }[] = [
   { id: 'basics', label: 'Cơ bản' },
@@ -32,6 +36,10 @@ export const LESSONS: Lesson[] = [
   dlxBasics,
   ttlAndMaxLength,
   retryWithBackoff,
+  rpcPattern,
+  priorityQueue,
+  delayedMessage,
+  quorumVsClassic,
 ]
 
 export function getLesson(id: string): Lesson | undefined {

@@ -71,6 +71,17 @@ export function toFlowEdges(topology: Topology): Edge[] {
     }
   }
 
+  // A consumer that acks a message carrying `replyTo` becomes an ad-hoc
+  // publisher too — the engine's RPC reply (advanced.ts buildReplyEvents)
+  // is published with the consumer's own node id as the source. The topology
+  // does not say which consumer will do this, so mirror the same heuristic
+  // used for real publishers above.
+  for (const c of topology.consumers) {
+    for (const e of topology.exchanges) {
+      if (topology.bindings.some((b) => b.exchangeId === e.id)) edges.push(edge(c.id, e.id, undefined, true))
+    }
+  }
+
   for (const binding of topology.bindings) {
     edges.push(edge(binding.exchangeId, binding.destinationId, binding.routingKey))
   }
