@@ -53,6 +53,18 @@ describe('09 nack and requeue', () => {
   })
 })
 
+describe('10 durability and confirms', () => {
+  it('confirms every publish and marks exactly one message transient', () => {
+    const lesson = getLesson('10-confirms')!
+    const sim = createSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
+    sim.advanceTo(lesson.durationMs + 30_000)
+    const state = sim.snapshot()
+    expect(state.metrics.confirmed).toBe(4)
+    expect(state.metrics.acked).toBe(4)
+    expect(lesson.script.filter((a) => a.persistent !== true)).toHaveLength(1)
+  })
+})
+
 describe('11 dlx', () => {
   it('routes rejected messages to the dead-letter queue', () => {
     const state = run('11-dlx')

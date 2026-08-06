@@ -8,6 +8,7 @@ interface Particle {
   y: number
   tone: string
   label: string
+  persistent: boolean
 }
 
 /**
@@ -55,6 +56,7 @@ export function MessageLayer({ state }: { state: EngineState }) {
         y,
         tone: flight.tone,
         label: flight.message.id,
+        persistent: flight.message.persistent,
       })
     }
     setParticles(next)
@@ -69,7 +71,18 @@ export function MessageLayer({ state }: { state: EngineState }) {
         {particles.map((p) => (
           <g key={p.key}>
             <circle cx={p.x} cy={p.y} r={9} fill={TONE_FILL[p.tone] ?? '#94a3b8'} opacity={0.25} />
-            <circle cx={p.x} cy={p.y} r={5} fill={TONE_FILL[p.tone] ?? '#94a3b8'} />
+            {p.persistent ? (
+              <circle cx={p.x} cy={p.y} r={5} fill={TONE_FILL[p.tone] ?? '#94a3b8'} />
+            ) : (
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={5}
+                fill="none"
+                stroke={TONE_FILL[p.tone] ?? '#94a3b8'}
+                strokeWidth={2}
+              />
+            )}
             <text
               x={p.x}
               y={p.y - 13}

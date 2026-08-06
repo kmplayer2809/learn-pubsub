@@ -1,5 +1,5 @@
 import { applyConsumerCrash, applyConsumerRecover } from './advanced'
-import { applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
+import { applyConfirm, applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
 import { createScheduler, peekTime, popDue, pushAll, type Scheduler } from './clock'
 import { applyAck, applyConsumeDone, applyDeliver, applyDispatch, applyNack } from './delivery'
 import { applyDeadLetter, applyTtlExpire } from './dlx'
@@ -23,6 +23,8 @@ export interface ScriptedAction {
   correlationId?: string
   replyTo?: NodeId
   tone?: string
+  /** Marks the message for disk persistence. Defaults to false, AMQP's own default. */
+  persistent?: boolean
 }
 
 export interface ScriptedFailure {
@@ -71,6 +73,7 @@ const REDUCERS: Record<SimEvent['type'], (s: EngineState, e: SimEvent) => ApplyR
   retryBackoff: (s) => ({ state: s, newEvents: [] }),
   consumerCrash: applyConsumerCrash,
   consumerRecover: applyConsumerRecover,
+  confirm: applyConfirm,
 }
 
 function seedEvents(options: SimulationOptions): SimEvent[] {
@@ -89,6 +92,7 @@ function seedEvents(options: SimulationOptions): SimEvent[] {
       correlationId: action.correlationId,
       replyTo: action.replyTo,
       tone: action.tone ?? 'sky',
+      persistent: action.persistent ?? false,
     },
   }))
 

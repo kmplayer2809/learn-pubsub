@@ -16,6 +16,15 @@ import type {
 /** Virtual milliseconds a message spends animating along one edge. */
 export const TRAVEL_MS = 600
 
+/** A confirm for a memory-only publish: the broker answers as soon as it has routed. */
+export const CONFIRM_MS = 200
+/**
+ * A persistent message into a durable queue is confirmed only after the broker has
+ * written it to disk. The gap between this and CONFIRM_MS is the cost of durability,
+ * and lesson 10 exists to make that gap visible on the timeline.
+ */
+export const CONFIRM_PERSISTENT_MS = 900
+
 export function edgeId(from: NodeId, to: NodeId): string {
   return `${from}->${to}`
 }
@@ -46,6 +55,7 @@ export function createEngineState(topology: Topology, seed: number): EngineState
       nacked: 0,
       deadLettered: 0,
       expired: 0,
+      confirmed: 0,
     },
     journal: [],
     crashed: [],
@@ -147,6 +157,23 @@ export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
 
   let next = clearInFlight(state, message.id, edgeId(fromId, exchangeId))
 
+  // A confirm answers the publish, not any single hop of routing: a publish that
+  // fans out through an exchange-to-exchange binding must still produce exactly
+  // one confirm, so only the route triggered directly by applyPublish schedules
+  // one. That first hop is always identifiable because applyPublish is the only
+  // caller that sets `fromId` to a publisher id; a route forwarded from one
+  // exchange to another sets `fromId` to the upstream exchange's id instead.
+  const isPublishHop = state.topology.publishers.some((p) => p.id === fromId)
+  function withConfirm(state: EngineState, hasDurablePair: boolean): [EngineState, SimEvent[]] {
+    if (!isPublishHop) return [state, []]
+    const delay = message.persistent && hasDurablePair ? CONFIRM_PERSISTENT_MS : CONFIRM_MS
+    const [confirmEvent, after] = scheduleEvent(state, state.now + delay, 'confirm', {
+      messageId: message.id,
+      publisherId: fromId,
+    })
+    return [after, [confirmEvent]]
+  }
+
   const exchange = state.topology.exchanges.find((e) => e.id === exchangeId)
   if (!exchange) {
     next = log(next, {
@@ -155,7 +182,9 @@ export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
       text: `exchange ${exchangeId} does not exist; ${message.id} discarded`,
       messageId: message.id,
     })
-    return { state: { ...next, metrics: { ...next.metrics, dropped: next.metrics.dropped + 1 } }, newEvents: [] }
+    next = { ...next, metrics: { ...next.metrics, dropped: next.metrics.dropped + 1 } }
+    const [afterConfirm, confirmEvents] = withConfirm(next, false)
+    return { state: afterConfirm, newEvents: confirmEvents }
   }
 
   const bindings = state.topology.bindings.filter((b) => b.exchangeId === exchangeId)
@@ -169,7 +198,9 @@ export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
       nodeId: exchangeId,
       messageId: message.id,
     })
-    return { state: { ...next, metrics: { ...next.metrics, dropped: next.metrics.dropped + 1 } }, newEvents: [] }
+    next = { ...next, metrics: { ...next.metrics, dropped: next.metrics.dropped + 1 } }
+    const [afterConfirm, confirmEvents] = withConfirm(next, false)
+    return { state: afterConfirm, newEvents: confirmEvents }
   }
 
   const events: SimEvent[] = []
@@ -204,7 +235,34 @@ export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
     messageId: message.id,
   })
   next = { ...next, metrics: { ...next.metrics, routed: next.metrics.routed + 1 } }
-  return { state: next, newEvents: events }
+
+  // Durability is per-pair: a persistent message only pays the disk-write cost
+  // when it actually lands in at least one durable queue among this hop's hits.
+  const hasDurablePair = hits.some((h) => {
+    if (h.destinationKind !== 'queue') return false
+    const spec = state.topology.queues.find((q) => q.id === h.destinationId)
+    return spec?.durable === true
+  })
+  const [afterConfirm, confirmEvents] = withConfirm(next, hasDurablePair)
+  events.push(...confirmEvents)
+  return { state: afterConfirm, newEvents: events }
+}
+
+export function applyConfirm(state: EngineState, event: SimEvent): ApplyResult {
+  const messageId = event.payload.messageId as string
+  const publisherId = event.payload.publisherId as NodeId
+
+  const next = log(state, {
+    at: state.now,
+    type: 'confirm',
+    text: `${publisherId} received a confirm for ${messageId}`,
+    nodeId: publisherId,
+    messageId,
+  })
+  return {
+    state: { ...next, metrics: { ...next.metrics, confirmed: next.metrics.confirmed + 1 } },
+    newEvents: [],
+  }
 }
 
 export function applyEnqueue(state: EngineState, event: SimEvent): ApplyResult {

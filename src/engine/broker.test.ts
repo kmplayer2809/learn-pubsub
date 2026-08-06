@@ -48,20 +48,20 @@ describe('applyPublish', () => {
 })
 
 describe('applyRoute', () => {
-  it('schedules one enqueue per matching binding', () => {
+  it('schedules one enqueue per matching binding, plus one confirm for the publish', () => {
     const state = createEngineState(topology, 1)
     const published = applyPublish(state, publishEvent('pay'))
     const routeEvent = published.newEvents[0]!
     const { newEvents } = applyRoute(published.state, routeEvent)
-    expect(newEvents.map((e) => e.type)).toEqual(['enqueue'])
+    expect(newEvents.map((e) => e.type)).toEqual(['enqueue', 'confirm'])
     expect(newEvents[0]!.payload.queueId).toBe('q1')
   })
 
-  it('drops an unroutable message and records it', () => {
+  it('drops an unroutable message, records it, and still confirms the publish', () => {
     const state = createEngineState(topology, 1)
     const published = applyPublish(state, publishEvent('nowhere'))
     const { state: next, newEvents } = applyRoute(published.state, published.newEvents[0]!)
-    expect(newEvents).toEqual([])
+    expect(newEvents.map((e) => e.type)).toEqual(['confirm'])
     expect(next.metrics.dropped).toBe(1)
     expect(next.journal.some((j) => j.text.includes('unroutable'))).toBe(true)
   })

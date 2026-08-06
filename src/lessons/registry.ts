@@ -8,6 +8,7 @@ import { competingConsumers } from './06-competing-consumers'
 import { ackModes } from './07-ack-modes'
 import { prefetchQos } from './08-prefetch'
 import { nackRequeue } from './09-nack-requeue'
+import { durabilityAndConfirms } from './10-confirms'
 import { dlxBasics } from './11-dlx'
 import { ttlAndMaxLength } from './12-ttl-maxlen'
 import { retryWithBackoff } from './13-retry-backoff'
@@ -33,6 +34,7 @@ export const LESSONS: Lesson[] = [
   ackModes,
   prefetchQos,
   nackRequeue,
+  durabilityAndConfirms,
   dlxBasics,
   ttlAndMaxLength,
   retryWithBackoff,

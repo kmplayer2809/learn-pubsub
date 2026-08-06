@@ -21,6 +21,15 @@ export interface QueueSpec {
   id: NodeId
   label: string
   kind: QueueKind
+  /**
+   * A durable queue survives a broker restart, but it only preserves the
+   * messages that were themselves `persistent` — a durable queue holding a
+   * transient message loses that message on restart just the same. Optional
+   * because AMQP's own default is non-durable, and making it required would
+   * force a meaningless declaration onto every queue in lessons that never
+   * touch durability.
+   */
+  durable?: boolean
   /** Milliseconds before an unconsumed message is dead-lettered. */
   messageTtlMs?: number
   /** Queue length ceiling; overflow dead-letters the oldest message. */
@@ -105,6 +114,7 @@ export type SimEventType =
   | 'retryBackoff'
   | 'consumerCrash'
   | 'consumerRecover'
+  | 'confirm'
 
 export interface SimEvent {
   /** Virtual milliseconds at which this event fires. */
@@ -146,6 +156,8 @@ export interface Metrics {
   nacked: number
   deadLettered: number
   expired: number
+  /** Publisher confirms received — one per publish, regardless of fan-out. */
+  confirmed: number
 }
 
 export interface JournalEntry {

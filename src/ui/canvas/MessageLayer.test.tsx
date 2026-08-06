@@ -34,6 +34,7 @@ function makeState(inFlight: EngineState['inFlight'], now: number): EngineState 
       nacked: 0,
       deadLettered: 0,
       expired: 0,
+      confirmed: 0,
     },
     journal: [],
     crashed: [],
@@ -111,6 +112,44 @@ describe('MessageLayer', () => {
     await waitFor(() => {
       expect(container.querySelector('g[style*="translate(200px, 75px) scale(2)"]')).not.toBeNull()
     })
+  })
+
+  it('draws a transient message hollow and a persistent one filled', async () => {
+    document.body.innerHTML = `
+      <div class="react-flow__viewport" style="transform: translate(0px, 0px) scale(1)">
+        <div class="react-flow__edge" data-id="a->b">
+          <path class="react-flow__edge-path" />
+        </div>
+        <div class="react-flow__edge" data-id="c->d">
+          <path class="react-flow__edge-path" />
+        </div>
+      </div>
+    `
+    stubPathGeometry('.react-flow__edge[data-id="a->b"] path.react-flow__edge-path')
+    stubPathGeometry('.react-flow__edge[data-id="c->d"] path.react-flow__edge-path')
+
+    const transient: Message = { ...message, id: 'm2', persistent: false }
+    const persistent: Message = { ...message, id: 'm3', persistent: true }
+    const state = makeState(
+      [
+        { message: transient, edgeId: 'a->b', fromT: 1000, toT: 1600, tone: 'sky' },
+        { message: persistent, edgeId: 'c->d', fromT: 1000, toT: 1600, tone: 'sky' },
+      ],
+      1300,
+    )
+
+    const { container } = render(<MessageLayer state={state} />)
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('circle')).not.toHaveLength(0)
+    })
+    const hollow = container.querySelector('circle[fill="none"]')
+    expect(hollow).not.toBeNull()
+    expect(hollow?.getAttribute('stroke')).not.toBeNull()
+
+    // The persistent particle's inner circle is filled, not hollow — only one
+    // `fill="none"` circle should exist across both particles.
+    expect(container.querySelectorAll('circle[fill="none"]')).toHaveLength(1)
   })
 
   it('skips a particle silently when its edge path is not yet painted', async () => {

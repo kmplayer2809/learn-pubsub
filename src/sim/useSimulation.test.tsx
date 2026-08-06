@@ -142,6 +142,7 @@ describe('useSimulation', () => {
             nacked: 0,
             deadLettered: 0,
             expired: 0,
+            confirmed: 0,
           },
           journal: [],
           halted: halted ? { reason: 'event ceiling of 5 reached; the topology may loop' } : undefined,
