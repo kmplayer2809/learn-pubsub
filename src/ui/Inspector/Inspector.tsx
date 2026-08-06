@@ -2,6 +2,7 @@ import type { EngineState, ValidationIssue } from '../../engine'
 import type { Lesson } from '../../lessons/types'
 import { useAppStore } from '../../sim/store'
 import { activeStepIndex } from './activeStep'
+import { vietnameseIssueMessage, vietnameseSeverityLabel } from './issueText'
 import { Markdown, MarkdownInline } from './Markdown'
 
 function NodeConfig({ lesson, state, nodeId }: { lesson: Lesson; state: EngineState; nodeId: string }) {
@@ -61,7 +62,7 @@ export function IssuesList({ issues }: { issues: ValidationIssue[] }) {
     <section className="rounded border border-rose-700 bg-rose-950 p-2">
       {issues.map((issue, i) => (
         <p key={i} className="text-[11px] text-rose-200">
-          {issue.severity}: {issue.message}
+          {vietnameseSeverityLabel(issue.severity)}: {vietnameseIssueMessage(issue)}
         </p>
       ))}
     </section>

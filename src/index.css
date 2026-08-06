@@ -61,3 +61,21 @@ html, body, #root { height: 100%; }
   background: #0f172a !important;
   border-color: #475569 !important;
 }
+
+/*
+ * The visible handle dot is only 6x6 CSS px (React Flow's default), which is
+ * too small a pointer target for drag-to-connect — the Sandbox's only way to
+ * create a binding. Keep the dot small but pad the actual hit area with a
+ * transparent `::after` box centered on the handle. `position: absolute` is
+ * enough with no extra `!important`: this selector doesn't exist in
+ * `@xyflow/react/dist/style.css`, so there's nothing in that later-loaded
+ * sheet to lose the cascade to. `pointer-events` is inherited, so the
+ * pseudo-element picks up the `all` that `.connectionindicator` (added by
+ * React Flow whenever a handle is connectable) sets on the real element,
+ * and drags starting anywhere in the padded box still hit the handle.
+ */
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}

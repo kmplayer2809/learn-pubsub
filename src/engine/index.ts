@@ -4,10 +4,10 @@ import { createScheduler, peekTime, popDue, pushAll, type Scheduler } from './cl
 import { applyAck, applyConsumeDone, applyDeliver, applyDispatch, applyNack } from './delivery'
 import { applyDeadLetter, applyTtlExpire } from './dlx'
 import type { ApplyResult, EngineState, NodeId, SimEvent, Topology } from './types'
-import { validateTopology, type ValidationIssue } from './validate'
+import { validateTopology, type ValidationIssue, type ValidationIssueCode } from './validate'
 
 export * from './types'
-export { validateTopology, type ValidationIssue }
+export { validateTopology, type ValidationIssue, type ValidationIssueCode }
 
 export const MAX_EVENTS_PER_RUN = 200_000
 export const MAX_JOURNAL = 5_000
