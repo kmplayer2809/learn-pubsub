@@ -45,7 +45,7 @@ export function applyDispatch(state: EngineState, event: SimEvent): ApplyResult 
       unacked: { ...next.unacked, [consumer.id]: [...(next.unacked[consumer.id] ?? []), message] },
     }
   }
-  next = addInFlight(next, message.id, queueId, consumer.id, 'emerald')
+  next = addInFlight(next, message, queueId, consumer.id, 'emerald')
 
   const [deliverEvent, afterSchedule] = scheduleEvent(next, state.now + TRAVEL_MS, 'deliver', {
     message,

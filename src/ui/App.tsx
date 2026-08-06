@@ -2,6 +2,7 @@ import { getLesson } from '../lessons/registry'
 import { useAppStore } from '../sim/store'
 import { useSimulation } from '../sim/useSimulation'
 import { CanvasView } from './CanvasView/CanvasView'
+import { InFlightPanel } from './canvas/InFlightPanel'
 import { Inspector } from './Inspector/Inspector'
 import { LessonSidebar } from './LessonSidebar/LessonSidebar'
 import { Transport } from './Transport/Transport'
@@ -21,6 +22,9 @@ export default function App() {
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
           <CanvasView topology={lesson.topology} state={state} />
+        </div>
+        <div className="border-t border-slate-800">
+          <InFlightPanel state={state} />
         </div>
         <div className="border-t border-slate-800">
           <Transport durationMs={lesson.durationMs} onStep={stepOnce} />

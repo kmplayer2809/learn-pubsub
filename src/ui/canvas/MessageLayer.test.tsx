@@ -1,7 +1,19 @@
 import { render, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { EngineState } from '../../engine'
+import type { EngineState, Message } from '../../engine'
 import { MessageLayer } from './MessageLayer'
+
+const message: Message = {
+  id: 'm1',
+  body: '',
+  routingKey: '',
+  headers: {},
+  priority: 0,
+  publishedAt: 0,
+  redeliveryCount: 0,
+  deathTrail: [],
+  persistent: false,
+}
 
 function makeState(inFlight: EngineState['inFlight'], now: number): EngineState {
   return {
@@ -59,7 +71,7 @@ describe('MessageLayer', () => {
     `
     stubPathGeometry('.react-flow__edge[data-id="a->b"] path.react-flow__edge-path')
 
-    const state = makeState([{ messageId: 'm1', edgeId: 'a->b', fromT: 1000, toT: 1600, tone: 'sky' }], 1300)
+    const state = makeState([{ message, edgeId: 'a->b', fromT: 1000, toT: 1600, tone: 'sky' }], 1300)
 
     const { container } = render(<MessageLayer state={state} />)
 
@@ -84,7 +96,7 @@ describe('MessageLayer', () => {
     // Same state object is reused below to prove the overlay reacts to the
     // viewport itself, not to a new EngineState (the app never produces one
     // while paused, which is exactly when a user pans/zooms to inspect).
-    const state = makeState([{ messageId: 'm1', edgeId: 'a->b', fromT: 1000, toT: 1600, tone: 'sky' }], 1300)
+    const state = makeState([{ message, edgeId: 'a->b', fromT: 1000, toT: 1600, tone: 'sky' }], 1300)
 
     const { container } = render(<MessageLayer state={state} />)
 
@@ -104,7 +116,7 @@ describe('MessageLayer', () => {
   it('skips a particle silently when its edge path is not yet painted', async () => {
     document.body.innerHTML = '' // React Flow has not rendered any edges yet
     const state = makeState(
-      [{ messageId: 'm1', edgeId: 'nowhere->else', fromT: 1000, toT: 1600, tone: 'sky' }],
+      [{ message, edgeId: 'nowhere->else', fromT: 1000, toT: 1600, tone: 'sky' }],
       1300,
     )
 

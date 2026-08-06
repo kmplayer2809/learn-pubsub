@@ -53,7 +53,7 @@ export function deadLetter(
     ...state,
     metrics: { ...state.metrics, deadLettered: state.metrics.deadLettered + 1 },
   }
-  next = addInFlight(next, message.id, fromQueueId, target, 'rose')
+  next = addInFlight(next, message, fromQueueId, target, 'rose')
   next = log(next, {
     at: state.now,
     type: 'deadLetter',

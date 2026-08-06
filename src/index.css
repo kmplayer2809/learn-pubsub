@@ -3,3 +3,35 @@
 @tailwind utilities;
 
 html, body, #root { height: 100%; }
+
+/*
+ * React Flow ships a light control strip. Match the slate-950 canvas instead.
+ * `!important` is required here, not decorative: `CanvasView.tsx` imports
+ * `@xyflow/react/dist/style.css` beneath `App`, which Vite emits into the
+ * document AFTER this file (imported at the top of `main.tsx`). Same
+ * specificity, later source order, so React Flow's own `background` rule
+ * would otherwise win the cascade and silently undo this override.
+ */
+.react-flow__controls {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+}
+
+.react-flow__controls-button {
+  background: #1e293b !important;
+  border-bottom: 1px solid #334155 !important;
+  fill: #cbd5e1 !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #334155 !important;
+  fill: #f1f5f9 !important;
+}
+
+.react-flow__controls-button:disabled {
+  fill: #475569 !important;
+}
+
+.react-flow__attribution {
+  background: transparent;
+  color: #475569;
+}

@@ -117,7 +117,14 @@ export interface SimEvent {
 
 /** A message currently animating along an edge. */
 export interface InFlight {
-  messageId: string
+  /**
+   * The whole message, not its id. An in-flight message has already been removed
+   * from its queue and has not yet landed in `unacked`, so this record is the ONLY
+   * copy — the same reason `unacked` stores messages. The in-flight panel reads the
+   * routing key, priority, and redelivery count from here; there is nowhere else in
+   * `EngineState` to look them up while the message is on the wire.
+   */
+  message: Message
   edgeId: string
   fromT: number
   toT: number

@@ -7,6 +7,7 @@ interface Particle {
   x: number
   y: number
   tone: string
+  label: string
 }
 
 /**
@@ -48,7 +49,13 @@ export function MessageLayer({ state }: { state: EngineState }) {
       const path = document.querySelector<SVGPathElement>(selector)
       if (!path) continue
       const { x, y } = pointOnPath(path, progressOf(flight, state.now))
-      next.push({ key: `${flight.messageId}@${flight.edgeId}`, x, y, tone: flight.tone })
+      next.push({
+        key: `${flight.message.id}@${flight.edgeId}`,
+        x,
+        y,
+        tone: flight.tone,
+        label: flight.message.id,
+      })
     }
     setParticles(next)
   }, [state])
@@ -63,6 +70,19 @@ export function MessageLayer({ state }: { state: EngineState }) {
           <g key={p.key}>
             <circle cx={p.x} cy={p.y} r={9} fill={TONE_FILL[p.tone] ?? '#94a3b8'} opacity={0.25} />
             <circle cx={p.x} cy={p.y} r={5} fill={TONE_FILL[p.tone] ?? '#94a3b8'} />
+            <text
+              x={p.x}
+              y={p.y - 13}
+              textAnchor="middle"
+              className="font-mono"
+              fontSize={10}
+              fill={TONE_FILL[p.tone] ?? '#94a3b8'}
+              stroke="#020617"
+              strokeWidth={3}
+              paintOrder="stroke"
+            >
+              {p.label}
+            </text>
           </g>
         ))}
       </g>

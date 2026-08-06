@@ -75,7 +75,7 @@ export function scheduleEvent(
 
 export function addInFlight(
   state: EngineState,
-  messageId: string,
+  message: Message,
   from: NodeId,
   to: NodeId,
   tone: string,
@@ -84,7 +84,7 @@ export function addInFlight(
     ...state,
     inFlight: [
       ...state.inFlight,
-      { messageId, edgeId: edgeId(from, to), fromT: state.now, toT: state.now + TRAVEL_MS, tone },
+      { message, edgeId: edgeId(from, to), fromT: state.now, toT: state.now + TRAVEL_MS, tone },
     ],
   }
 }
@@ -92,7 +92,7 @@ export function addInFlight(
 export function clearInFlight(state: EngineState, messageId: string, edge: string): EngineState {
   return {
     ...state,
-    inFlight: state.inFlight.filter((f) => !(f.messageId === messageId && f.edgeId === edge)),
+    inFlight: state.inFlight.filter((f) => !(f.message.id === messageId && f.edgeId === edge)),
   }
 }
 
@@ -121,7 +121,7 @@ export function applyPublish(state: EngineState, event: SimEvent): ApplyResult {
     messageCounter: counter,
     metrics: { ...state.metrics, published: state.metrics.published + 1 },
   }
-  next = addInFlight(next, message.id, publisherId, exchangeId, tone)
+  next = addInFlight(next, message, publisherId, exchangeId, tone)
   next = log(next, {
     at: state.now,
     type: 'publish',
@@ -174,7 +174,7 @@ export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
 
   const events: SimEvent[] = []
   for (const binding of hits) {
-    next = addInFlight(next, message.id, exchangeId, binding.destinationId, tone)
+    next = addInFlight(next, message, exchangeId, binding.destinationId, tone)
     if (binding.destinationKind === 'exchange') {
       const [routeEvent, after] = scheduleEvent(next, state.now + TRAVEL_MS, 'route', {
         message,

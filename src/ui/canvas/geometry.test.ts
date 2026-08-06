@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { progressOf } from './geometry'
-import type { InFlight } from '../../engine'
+import type { InFlight, Message } from '../../engine'
+
+const message: Message = {
+  id: 'm1',
+  body: '',
+  routingKey: '',
+  headers: {},
+  priority: 0,
+  publishedAt: 0,
+  redeliveryCount: 0,
+  deathTrail: [],
+  persistent: false,
+}
 
 const flight = (fromT: number, toT: number): InFlight => ({
-  messageId: 'm1',
+  message,
   edgeId: 'a->b',
   fromT,
   toT,
