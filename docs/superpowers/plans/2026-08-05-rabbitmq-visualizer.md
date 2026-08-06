@@ -5742,6 +5742,226 @@ git commit -m "feat: add reliability and dead-lettering lessons"
 
 ---
 
+## Task 16c: Persistence, publisher confirms, and lesson 10
+
+Task 16 reported Lesson 10 BLOCKED and skipped it. Three gaps: `ScriptedAction` has no
+`persistent` field, so `seedEvents` cannot thread one and every `Message` is born
+`persistent: false`; `QueueSpec` has no `durable` flag; and there is no publisher-confirm
+event, so the lesson's central claim — that the broker tells the publisher it took
+responsibility — has nothing to show. This task closes all three, then writes the lesson.
+
+**Language:** same rule as Tasks 16 and 17. Lesson-level `title` is `Durability and confirms`
+and stays English; all other reader-facing copy is Vietnamese with RabbitMQ terms untranslated.
+
+**Files:**
+- Modify: `src/engine/types.ts`, `src/engine/index.ts`, `src/engine/broker.ts`,
+  `src/ui/canvas/MessageLayer.tsx`
+- Create: `src/lessons/10-confirms.ts`
+- Modify: `src/lessons/registry.ts`
+- Test: `src/engine/confirms.test.ts`, and the existing `src/lessons/reliability.test.ts`
+
+**Interfaces:**
+- Consumes: `TRAVEL_MS` from `src/engine/broker.ts`; the existing `applyRoute` /
+  `applyEnqueue` reducer shape `(state, event) => { state, newEvents }`
+- Produces: `QueueSpec.durable?: boolean`, `ScriptedAction.persistent?: boolean`,
+  `SimEventType` member `'confirm'`, `Metrics.confirmed`
+
+### Model
+
+A publisher confirm is the broker saying "I have taken responsibility for this message."
+Schedule it from `applyRoute`, not from `applyEnqueue`: route is the single point that
+knows the full destination set, so a fanout to three queues still produces exactly one
+confirm, and an unroutable message still gets confirmed — both faithful to RabbitMQ.
+
+The delay carries the lesson. A message that is `persistent` landing in a queue that is
+`durable` must be written to disk before the broker can promise anything, so it confirms
+slowly; anything else is a memory write and confirms fast.
+
+```ts
+/** A confirm for a memory-only publish: the broker answers as soon as it has routed. */
+export const CONFIRM_MS = 200
+/**
+ * A persistent message into a durable queue is confirmed only after the broker has
+ * written it to disk. The gap between this and CONFIRM_MS is the cost of durability,
+ * and lesson 10 exists to make that gap visible on the timeline.
+ */
+export const CONFIRM_PERSISTENT_MS = 900
+```
+
+Durability is per-pair, not per-message: `persistent` on a transient queue and a durable
+queue holding a transient message are both lost on restart. Use the slow path only when
+the message is `persistent` AND at least one destination queue is `durable`.
+
+- [ ] **Step 1: Write the failing engine test**
+
+`src/engine/confirms.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { createSimulation } from './index'
+import type { Topology } from './types'
+
+const topology: Topology = {
+  publishers: [{ id: 'p1', label: 'p1', position: { x: 0, y: 0 } }],
+  exchanges: [{ id: 'ex', label: 'ex', type: 'direct', position: { x: 1, y: 0 } }],
+  queues: [
+    { id: 'durable-q', label: 'durable-q', kind: 'classic', durable: true, position: { x: 2, y: 0 } },
+    { id: 'transient-q', label: 'transient-q', kind: 'classic', position: { x: 2, y: 1 } },
+  ],
+  consumers: [],
+  bindings: [
+    { id: 'b1', exchangeId: 'ex', destinationId: 'durable-q', destinationKind: 'queue', routingKey: 'd' },
+    { id: 'b2', exchangeId: 'ex', destinationId: 'transient-q', destinationKind: 'queue', routingKey: 't' },
+  ],
+}
+
+function confirmAt(routingKey: string, persistent: boolean): number {
+  const sim = createSimulation({
+    topology,
+    script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey, body: 'x', persistent }],
+    seed: 1,
+  })
+  sim.advanceTo(10_000)
+  const entry = sim.snapshot().journal.find((j) => j.type === 'confirm')
+  if (!entry) throw new Error('no confirm was journalled')
+  return entry.at
+}
+
+describe('publisher confirms', () => {
+  it('confirms every published message exactly once, even fanned out', () => {
+    const sim = createSimulation({
+      topology: { ...topology, exchanges: [{ ...topology.exchanges[0], type: 'fanout' }] },
+      script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'd', body: 'x' }],
+      seed: 1,
+    })
+    sim.advanceTo(10_000)
+    const state = sim.snapshot()
+    // Fanout puts this message in both queues. RabbitMQ confirms the publish, not the
+    // copies, so two enqueues must still produce one confirm.
+    expect(state.journal.filter((j) => j.type === 'confirm')).toHaveLength(1)
+    expect(state.metrics.confirmed).toBe(1)
+  })
+
+  it('confirms an unroutable message', () => {
+    const sim = createSimulation({
+      topology,
+      script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'nobody', body: 'x' }],
+      seed: 1,
+    })
+    sim.advanceTo(10_000)
+    expect(sim.snapshot().metrics.confirmed).toBe(1)
+    expect(sim.snapshot().metrics.dropped).toBe(1)
+  })
+
+  it('takes longer to confirm a persistent message into a durable queue', () => {
+    // The whole point of the lesson: the disk write is visible on the clock.
+    expect(confirmAt('d', true)).toBeGreaterThan(confirmAt('d', false))
+  })
+
+  it('does not pay the disk cost when only one half of the pair is durable', () => {
+    // persistent message, transient queue: nothing is written, so nothing is slower.
+    expect(confirmAt('t', true)).toBe(confirmAt('t', false))
+  })
+})
+```
+
+- [ ] **Step 2: Run it to confirm failure**
+
+Run: `npm test -- src/engine/confirms.test.ts`
+Expected: FAIL — `durable` is not a property of `QueueSpec`, `persistent` is not a
+property of `ScriptedAction`, and no `confirm` entry is ever journalled.
+
+- [ ] **Step 3: Add the fields and the confirm event**
+
+In `src/engine/types.ts`: add `durable?: boolean` to `QueueSpec` with a comment noting a
+durable queue survives a broker restart but only preserves the messages that were
+themselves `persistent`; add `'confirm'` to `SimEventType`; add `confirmed: number` to
+`Metrics`. Leave `durable` optional — AMQP's own default is non-durable, and making it
+required would force a meaningless declaration onto every queue in the twelve shipped
+lessons.
+
+In `src/engine/index.ts`: add `persistent?: boolean` to `ScriptedAction` and thread it
+into the publish payload as `persistent: action.persistent ?? false`.
+
+In `src/engine/broker.ts`: read `persistent` off the payload when building the `Message`
+(it is currently hardcoded), and in `applyRoute` schedule one `confirm` event.
+
+`Metrics.confirmed` needs no UI work: `Inspector.tsx` renders metrics with
+`Object.entries(state.metrics)`, so the new counter appears by itself.
+
+- [ ] **Step 4: Run the engine test**
+
+Run: `npm test -- src/engine/confirms.test.ts`
+Expected: PASS, four tests.
+
+Also run `npm test -- src/engine/purity.test.ts` — the engine stays free of React,
+Zustand, DOM, `Math.random`, `Date.now`, and `setTimeout`.
+
+- [ ] **Step 5: Draw transient messages hollow**
+
+In `src/ui/canvas/MessageLayer.tsx`, `Particle` gains `persistent: boolean`, taken from
+`flight.message.persistent`. A persistent particle keeps the current filled dot; a
+transient one is drawn as an outline — `fill="none"` with `stroke` set to the same tone
+and `strokeWidth={2}` — so the reader can tell at a glance which messages would survive a
+restart. The outer glow circle and the id label are unchanged for both.
+
+Add to `src/ui/canvas/MessageLayer.test.tsx` a case asserting that a transient message
+renders a circle with `fill="none"` and a persistent one does not.
+
+- [ ] **Step 6: Write lesson 10**
+
+`src/lessons/10-confirms.ts`, `id: '10-confirms'`, group `reliability`, seed 10,
+`durationMs: 12000`, `title: 'Durability and confirms'`.
+
+- One queue `orders` with `durable: true`, one consumer `worker` (`prefetch: 1`,
+  `autoAck: false`, `processingMs: 900`), fed by a `direct` exchange `ex` on key `order`.
+- Script: four messages at 0, 1500, 3000, 4500. All `persistent: true` except the third,
+  which is transient — one hollow dot among filled ones is what makes the distinction
+  land visually.
+- Narrative beats: `persistent` marks a message for disk, and `durable` marks a queue to
+  survive a restart, and neither is sufficient alone; a publisher confirm is the broker
+  taking responsibility, and without it a publish is fire-and-forget even into a durable
+  queue; the third message is the odd one out, and a restart at that moment would lose
+  exactly it; the confirm for a persistent message arrives later than for a transient one,
+  and that gap is the price of the guarantee.
+- One checkpoint asking what survives a broker restart, with the correct answer being
+  that only a `persistent` message in a `durable` queue does.
+
+Register it in `src/lessons/registry.ts` between `09-nack-requeue` and `11-dlx`.
+
+- [ ] **Step 7: Assert the lesson's own behaviour**
+
+Append to `src/lessons/reliability.test.ts`:
+
+```ts
+describe('10 durability and confirms', () => {
+  it('confirms every publish and marks exactly one message transient', () => {
+    const lesson = getLesson('10-confirms')!
+    const sim = createSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
+    sim.advanceTo(lesson.durationMs + 30_000)
+    const state = sim.snapshot()
+    expect(state.metrics.confirmed).toBe(4)
+    expect(state.metrics.acked).toBe(4)
+    expect(lesson.script.filter((a) => a.persistent !== true)).toHaveLength(1)
+  })
+})
+```
+
+- [ ] **Step 8: Run the full suite and typecheck**
+
+Run: `npm test` then `npm run typecheck`
+Expected: both clean. `npm run typecheck` uses `tsc -b`; bare `tsc --noEmit` is a silent
+no-op in this repo because of TypeScript project references.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/engine src/lessons src/ui
+git commit -m "feat: publisher confirms, message persistence, and lesson 10"
+```
+
+---
+
 ## Task 17: Pattern lessons 14 through 17
 
 **Language:** same rule as Task 16 — every `title`, `summary`, narrative `title`/`body`,
