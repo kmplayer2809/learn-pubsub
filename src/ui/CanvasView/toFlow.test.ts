@@ -49,3 +49,59 @@ describe('toFlowEdges', () => {
     expect(dlxEdge.animated).toBe(false)
   })
 })
+
+describe('canvas invariants that later tasks depend on', () => {
+  it('keeps node position objects referentially stable across simulation ticks', () => {
+    // The engine emits a fresh EngineState every animation frame. React Flow
+    // re-runs layout when a node's position object changes, so rebuilding
+    // positions each tick would re-layout the canvas 60 times a second and make
+    // it visibly jitter. Task 13 also reads edge geometry from React Flow, so
+    // unstable geometry breaks message particles too.
+    const sim = createSimulation({
+      topology: lesson.topology,
+      script: lesson.script,
+      failures: lesson.failures,
+      seed: lesson.seed,
+    })
+    sim.advanceTo(1000)
+    const first = new Map(toFlowNodes(lesson.topology, sim.snapshot()).map((n) => [n.id, n.position]))
+
+    let ticks = 0
+    for (let t = 1100; t <= 8000; t += 100) {
+      sim.advanceTo(t)
+      for (const node of toFlowNodes(lesson.topology, sim.snapshot())) {
+        // Identity, not equality: a new object with the same x/y still re-layouts.
+        expect(first.get(node.id)).toBe(node.position)
+      }
+      ticks++
+    }
+    expect(ticks).toBeGreaterThan(50)
+  })
+
+  it.each(LESSONS.map((l) => [l.id, l] as const))(
+    '%s: every edge the engine animates over is drawn on the canvas',
+    (_id, currentLesson) => {
+      // Task 13 positions particles by looking up the React Flow edge named
+      // `${fromId}->${toId}`. toFlowEdges derives publisher edges heuristically
+      // (a publisher connects to each exchange that has at least one binding),
+      // so a lesson publishing to an unbound exchange would animate over an edge
+      // that was never drawn. Lessons 2-17 land across three later tasks; this
+      // catches that mismatch at the lesson that introduces it.
+      const sim = createSimulation({
+        topology: currentLesson.topology,
+        script: currentLesson.script,
+        failures: currentLesson.failures,
+        seed: currentLesson.seed,
+      })
+      const travelled = new Set<string>()
+      for (let t = 0; t <= currentLesson.durationMs + 20_000; t += 100) {
+        sim.advanceTo(t)
+        for (const flight of sim.snapshot().inFlight) travelled.add(flight.edgeId)
+      }
+      expect(travelled.size).toBeGreaterThan(0)
+
+      const drawn = new Set(toFlowEdges(currentLesson.topology).map((e) => e.id))
+      expect([...travelled].filter((id) => !drawn.has(id))).toEqual([])
+    },
+  )
+})
