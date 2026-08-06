@@ -35,3 +35,29 @@ html, body, #root { height: 100%; }
   background: transparent;
   color: #475569;
 }
+
+/*
+ * Binding routing keys are drawn as React Flow edge labels, whose default is a
+ * solid white chip with black text — the brightest thing on the canvas, and on
+ * every lesson that binds with a routing key. Same cascade problem as the
+ * controls above, hence `!important`.
+ */
+.react-flow__edge-textbg {
+  fill: #0f172a !important;
+}
+
+.react-flow__edge-text {
+  fill: #7dd3fc !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+/*
+ * Handles are the connection dots on each node. React Flow rings them in pure
+ * white, which reads as a stray highlight against slate-950 rather than as part
+ * of the node it belongs to.
+ */
+.react-flow__handle {
+  background: #0f172a !important;
+  border-color: #475569 !important;
+}
