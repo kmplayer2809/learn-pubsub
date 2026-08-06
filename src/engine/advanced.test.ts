@@ -104,7 +104,7 @@ describe('applyConsumerCrash', () => {
     const base = createEngineState(topology, 1)
     const state: EngineState = {
       ...base,
-      unacked: { c1: ['m1'] },
+      unacked: { c1: [message('m1')] },
       queues: { q1: [entry('m2', 0)] },
     }
     const held = new Map([['m1', message('m1')]])
@@ -126,7 +126,7 @@ describe('applyConsumerCrash', () => {
     const base = createEngineState(priorityTopology, 1)
     const state: EngineState = {
       ...base,
-      unacked: { c1: ['m-low'] },
+      unacked: { c1: [message('m-low', { priority: 0 })] },
       queues: { q1: [entry('m-high', 9)] },
     }
     const held = [message('m-low', { priority: 0 })]

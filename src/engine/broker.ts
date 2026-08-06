@@ -23,7 +23,7 @@ export function edgeId(from: NodeId, to: NodeId): string {
 export function createEngineState(topology: Topology, seed: number): EngineState {
   const queues: Record<NodeId, QueuedMessage[]> = {}
   for (const q of topology.queues) queues[q.id] = []
-  const unacked: Record<NodeId, string[]> = {}
+  const unacked: Record<NodeId, Message[]> = {}
   for (const c of topology.consumers) unacked[c.id] = []
   const roundRobin: Record<NodeId, number> = {}
   for (const q of topology.queues) roundRobin[q.id] = 0

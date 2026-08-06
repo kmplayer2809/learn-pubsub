@@ -157,8 +157,14 @@ export interface EngineState {
   topology: Topology
   /** Queue id to its ordered messages. */
   queues: Record<NodeId, QueuedMessage[]>
-  /** Consumer id to the message ids it currently holds unacked. */
-  unacked: Record<NodeId, string[]>
+  /**
+   * Consumer id to the messages it currently holds unacked. This stores whole
+   * messages, not ids: a dispatched message is removed from its queue, so the
+   * unacked table is the ONLY remaining copy. Storing ids alone would leave a
+   * consumer crash with nothing to requeue but a blank placeholder, and
+   * recovering the message is the entire point of Lesson 7.
+   */
+  unacked: Record<NodeId, Message[]>
   /**
    * Per-queue round-robin cursor, advanced on every dispatch. It must not be
    * derived from delivery counts: a delivery lands TRAVEL_MS after its dispatch,

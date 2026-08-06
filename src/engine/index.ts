@@ -114,23 +114,10 @@ export function createSimulation(options: SimulationOptions): Simulation {
   function enrich(event: SimEvent, current: EngineState): SimEvent {
     if (event.type !== 'consumerCrash') return event
     const consumerId = event.payload.consumerId as NodeId
-    const heldIds = current.unacked[consumerId] ?? []
-    const consumer = current.topology.consumers.find((c) => c.id === consumerId)
-    const queue = consumer ? (current.queues[consumer.queueId] ?? []) : []
-    const held = heldIds.map(
-      (id) =>
-        queue.find((q) => q.message.id === id)?.message ?? {
-          id,
-          body: '',
-          routingKey: '',
-          headers: {},
-          priority: 0,
-          publishedAt: current.now,
-          redeliveryCount: 0,
-          deathTrail: [],
-          persistent: false,
-        },
-    )
+    // state.unacked holds whole messages, so this is a straight read. Never
+    // synthesise a placeholder message here: a blank stand-in would silently
+    // "recover" an empty body and make Lesson 7 teach the opposite of the truth.
+    const held = current.unacked[consumerId] ?? []
     return { ...event, payload: { ...event.payload, heldMessages: held } }
   }
 
@@ -138,11 +125,16 @@ export function createSimulation(options: SimulationOptions): Simulation {
     // Fatal validation errors and a halted run are both terminal: never dispatch.
     if (fatal || state.halted) return
     for (;;) {
-      const [due, rest] = popDue(scheduler, upTo)
-      if (due.length === 0) {
-        scheduler = rest
-        return
-      }
+      // Drain exactly one timestamp per iteration. Events generated while
+      // applying "due" land in the scheduler at their own (possibly earlier
+      // or equal) time and carry a higher seq, so the next iteration's
+      // peekTime picks them up in the correct order instead of leaving them
+      // stranded until the whole batch up to `upTo` has been applied — which
+      // is what let a later-timestamped event apply before an earlier one
+      // generated mid-batch.
+      const nextTime = peekTime(scheduler)
+      if (nextTime === undefined || nextTime > upTo) return
+      const [due, rest] = popDue(scheduler, nextTime)
       scheduler = rest
       for (const event of due) {
         // The ceiling counts events processed across the whole run, and this check

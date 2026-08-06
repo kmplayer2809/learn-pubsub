@@ -42,7 +42,7 @@ export function applyDispatch(state: EngineState, event: SimEvent): ApplyResult 
   if (!consumer.autoAck) {
     next = {
       ...next,
-      unacked: { ...next.unacked, [consumer.id]: [...(next.unacked[consumer.id] ?? []), message.id] },
+      unacked: { ...next.unacked, [consumer.id]: [...(next.unacked[consumer.id] ?? []), message] },
     }
   }
   next = addInFlight(next, message.id, queueId, consumer.id, 'emerald')
@@ -116,7 +116,7 @@ export function applyConsumeDone(state: EngineState, event: SimEvent): ApplyResu
 
 function releaseUnacked(state: EngineState, consumerId: NodeId, messageId: string): EngineState {
   const held = state.unacked[consumerId] ?? []
-  return { ...state, unacked: { ...state.unacked, [consumerId]: held.filter((id) => id !== messageId) } }
+  return { ...state, unacked: { ...state.unacked, [consumerId]: held.filter((m) => m.id !== messageId) } }
 }
 
 export function applyAck(state: EngineState, event: SimEvent): ApplyResult {

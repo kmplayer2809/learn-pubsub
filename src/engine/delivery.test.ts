@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
 import { applyAck, applyConsumeDone, applyDeliver, applyDispatch, applyNack, eligibleConsumers } from './delivery'
-import type { ApplyResult, ConsumerSpec, EngineState, SimEvent, Topology } from './types'
+import type { ApplyResult, ConsumerSpec, EngineState, Message, SimEvent, Topology } from './types'
+
+const message = (id: string, over: Partial<Message> = {}): Message => ({
+  id,
+  body: 'x',
+  routingKey: 'go',
+  headers: {},
+  priority: 0,
+  publishedAt: 0,
+  redeliveryCount: 0,
+  deathTrail: [],
+  persistent: false,
+  ...over,
+})
 
 const consumer = (over: Partial<ConsumerSpec> & { id: string }): ConsumerSpec => ({
   label: over.id,
@@ -46,13 +59,13 @@ function seedQueue(state: EngineState, n: number): EngineState {
 describe('eligibleConsumers', () => {
   it('excludes consumers at their prefetch ceiling', () => {
     const state = createEngineState(topo([consumer({ id: 'c1', prefetch: 1 })]), 1)
-    const busy: EngineState = { ...state, unacked: { c1: ['m1'] } }
+    const busy: EngineState = { ...state, unacked: { c1: [message('m1')] } }
     expect(eligibleConsumers(busy, 'q1')).toEqual([])
   })
 
   it('treats prefetch 0 as unlimited', () => {
     const state = createEngineState(topo([consumer({ id: 'c1', prefetch: 0 })]), 1)
-    const busy: EngineState = { ...state, unacked: { c1: ['m1', 'm2', 'm3'] } }
+    const busy: EngineState = { ...state, unacked: { c1: ['m1', 'm2', 'm3'].map((id) => message(id)) } }
     expect(eligibleConsumers(busy, 'q1').map((c) => c.id)).toEqual(['c1'])
   })
 
@@ -72,13 +85,13 @@ describe('applyDispatch', () => {
       payload: { queueId: 'q1' },
     })
     expect(next.queues.q1).toHaveLength(0)
-    expect(next.unacked.c1).toEqual(['m1'])
+    expect((next.unacked.c1 ?? []).map((m) => m.id)).toEqual(['m1'])
     expect(newEvents.map((e) => e.type)).toEqual(['deliver'])
   })
 
   it('does nothing when every consumer is at its prefetch ceiling', () => {
     const state = seedQueue(createEngineState(topo([consumer({ id: 'c1', prefetch: 1 })]), 1), 2)
-    const busy: EngineState = { ...state, unacked: { c1: ['m0'] } }
+    const busy: EngineState = { ...state, unacked: { c1: [message('m0')] } }
     const { state: next, newEvents } = applyDispatch(busy, {
       at: 0,
       seq: 0,
@@ -116,7 +129,7 @@ describe('applyDispatch', () => {
 
   it('never advances the cursor when no consumer is eligible', () => {
     const state = seedQueue(createEngineState(topo([consumer({ id: 'c1', prefetch: 1 })]), 1), 2)
-    const busy: EngineState = { ...state, unacked: { c1: ['m0'] } }
+    const busy: EngineState = { ...state, unacked: { c1: [message('m0')] } }
     const { state: next } = applyDispatch(busy, {
       at: 0,
       seq: 0,
