@@ -36,6 +36,11 @@ Task 11: complete (commits 60ae95c..cef1e2b, 100 tests). Zustand store + rAF bin
   The rewind test asserts the intermediate state actually moved backwards (shorter journal, now <= seek target) BEFORE comparing journals — without that, a seek that silently no-ops would pass, because advanceTo ignores a target at or before its current time.
   No defects found in the hook itself.
 
+Task 12: complete (commits 4bed197..a9ba331, 106 tests). React Flow canvas + four node types.
+  No two-zustand-instance symptoms: only src/sim/store.ts imports bare 'zustand', all consumers import useAppStore from src/sim/store.
+  Implementer verified node-position referential stability with a throwaway test and DELETED it. Controller made it permanent, plus a second invariant: every edgeId the engine puts inFlight must exist in toFlowEdges output, run across every registered lesson. Both probed red by cloning the position object and by dropping the publisher-edge rule.
+  Why these matter: positions come from topology specs whose reference never changes within a Simulation, so stability holds today by construction — but nothing enforced it, and Task 13 reads edge geometry from React Flow. toFlowEdges derives publisher->exchange edges heuristically (publisher connects to each exchange having at least one binding), so a future lesson publishing to an unbound exchange would animate over an undrawn edge.
+
 ## Open notes (carry to final review)
 - Minor: two zustand versions installed — top-level zustand@5 plus zustand@4.5.7 nested under @xyflow/react@12. Two instances in one tree can cause state-sharing bugs. Watch during Task 11 (store) and Task 12 (canvas).
 - Root tsconfig.json is references-only. Bare `tsc --noEmit` is a silent no-op; use `npm run typecheck` (tsc -b).
@@ -44,3 +49,4 @@ Task 11: complete (commits 60ae95c..cef1e2b, 100 tests). Zustand store + rAF bin
 - 'retryBackoff' is wired to a no-op reducer in src/engine/index.ts REDUCERS. Nothing schedules it today (Lesson 13 uses TTL delay queues instead). If a later task schedules one it will vanish silently — make it throw, or delete the event type, at final review.
 - useSimulation has no seam to inject a runaway topology (no maxEvents passthrough), so the halted-stops-loop test mocks createSimulation. Task 18's Sandbox needs that seam anyway — add it there and consider retargeting the test at the real engine.
 - openSandbox() sets a `sandbox` flag but useSimulation only reads lessonId and ignores it, so opening the Sandbox would keep simulating the last lesson. Not a bug yet (no Sandbox UI until Task 18) — Task 18 must handle it.
+- Minor (Task 12): oxlint Fast Refresh warning on src/ui/CanvasView/nodes.tsx for exporting `nodeTypes` beside components. Inherent to the planned file structure; left as-is.
