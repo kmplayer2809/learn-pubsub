@@ -444,8 +444,14 @@ export interface EngineState {
   topology: Topology
   /** Queue id to its ordered messages. */
   queues: Record<NodeId, QueuedMessage[]>
-  /** Consumer id to the message ids it currently holds unacked. */
-  unacked: Record<NodeId, string[]>
+  /**
+   * Consumer id to the messages it currently holds unacked. This stores whole
+   * messages, not ids: a dispatched message is removed from its queue, so the
+   * unacked table is the ONLY remaining copy. Storing ids alone would leave a
+   * consumer crash with nothing to requeue but a blank placeholder, and
+   * recovering the message is the entire point of Lesson 7.
+   */
+  unacked: Record<NodeId, Message[]>
   /**
    * Per-queue round-robin cursor, advanced on every dispatch. It must not be
    * derived from delivery counts: a delivery lands TRAVEL_MS after its dispatch,
@@ -1095,7 +1101,7 @@ export function edgeId(from: NodeId, to: NodeId): string {
 export function createEngineState(topology: Topology, seed: number): EngineState {
   const queues: Record<NodeId, QueuedMessage[]> = {}
   for (const q of topology.queues) queues[q.id] = []
-  const unacked: Record<NodeId, string[]> = {}
+  const unacked: Record<NodeId, Message[]> = {}
   for (const c of topology.consumers) unacked[c.id] = []
   const roundRobin: Record<NodeId, number> = {}
   for (const q of topology.queues) roundRobin[q.id] = 0
@@ -1571,7 +1577,7 @@ export function applyDispatch(state: EngineState, event: SimEvent): ApplyResult 
   if (!consumer.autoAck) {
     next = {
       ...next,
-      unacked: { ...next.unacked, [consumer.id]: [...(next.unacked[consumer.id] ?? []), message.id] },
+      unacked: { ...next.unacked, [consumer.id]: [...(next.unacked[consumer.id] ?? []), message] },
     }
   }
   next = addInFlight(next, message.id, queueId, consumer.id, 'emerald')
@@ -1645,7 +1651,7 @@ export function applyConsumeDone(state: EngineState, event: SimEvent): ApplyResu
 
 function releaseUnacked(state: EngineState, consumerId: NodeId, messageId: string): EngineState {
   const held = state.unacked[consumerId] ?? []
-  return { ...state, unacked: { ...state.unacked, [consumerId]: held.filter((id) => id !== messageId) } }
+  return { ...state, unacked: { ...state.unacked, [consumerId]: held.filter((m) => m.id !== messageId) } }
 }
 
 export function applyAck(state: EngineState, event: SimEvent): ApplyResult {
@@ -2939,34 +2945,29 @@ export function createSimulation(options: SimulationOptions): Simulation {
   function enrich(event: SimEvent, current: EngineState): SimEvent {
     if (event.type !== 'consumerCrash') return event
     const consumerId = event.payload.consumerId as NodeId
-    const heldIds = current.unacked[consumerId] ?? []
-    const consumer = current.topology.consumers.find((c) => c.id === consumerId)
-    const queue = consumer ? (current.queues[consumer.queueId] ?? []) : []
-    const held = heldIds.map(
-      (id) =>
-        queue.find((q) => q.message.id === id)?.message ?? {
-          id,
-          body: '',
-          routingKey: '',
-          headers: {},
-          priority: 0,
-          publishedAt: current.now,
-          redeliveryCount: 0,
-          deathTrail: [],
-          persistent: false,
-        },
-    )
+    // state.unacked holds whole messages, so this is a straight read. Never
+    // synthesise a placeholder message here: a blank stand-in would silently
+    // "recover" an empty body and make Lesson 7 teach the opposite of the truth.
+    const held = current.unacked[consumerId] ?? []
     return { ...event, payload: { ...event.payload, heldMessages: held } }
   }
 
   function run(upTo: number): void {
-    if (fatal) return
+    // Fatal validation errors and a halted run are both terminal: never dispatch.
+    if (fatal || state.halted) return
     for (;;) {
-      const [due, rest] = popDue(scheduler, upTo)
-      if (due.length === 0) {
-        scheduler = rest
-        return
-      }
+      // Drain ONE timestamp per iteration, never the whole span up to `upTo`.
+      // Applying an event schedules follow-ups, and those follow-ups are usually
+      // earlier than events already sitting in the heap. Popping everything up to
+      // `upTo` at once would apply a scripted crash at t=2000 before the route at
+      // t=600 that its own publish generated — the journal then runs backwards in
+      // time and the message is never delivered at all. Because play advances a
+      // frame at a time while scrub does one big jump, that bug makes scrubbing
+      // produce a different simulation than playing, which defeats the whole
+      // rewind-by-replay design.
+      const next = peekTime(scheduler)
+      if (next === undefined || next > upTo) return
+      const [due, rest] = popDue(scheduler, next)
       scheduler = rest
       for (const event of due) {
         if (processed >= MAX_EVENTS_PER_RUN) {
@@ -3063,14 +3064,63 @@ it('halts a non-zero-TTL dead-letter cycle instead of running forever', () => {
 Run: `npx vitest run src/engine/clock.test.ts src/engine/index.test.ts`
 Expected: PASS. If this test hangs instead of halting, the guard is not wired into the dispatch loop — fix that, do not raise the ceiling.
 
-- [ ] **Step 8: Run the whole engine suite**
+- [ ] **Step 8: Prove one big jump equals many small jumps**
+
+Play advances the clock a frame at a time; scrub and rewind do a single large `advanceTo`. If those two paths disagree, scrubbing shows a different simulation than playing and the rewind-by-replay design collapses. This is the test that catches a `run()` loop draining a whole time span per iteration instead of one timestamp. Add to `src/engine/index.test.ts`:
+
+```ts
+it('produces the same journal whether advanced in one jump or many', () => {
+  const options: SimulationOptions = {
+    topology: crashTopology,
+    seed: 1,
+    script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'PAYLOAD' }],
+    failures: [{ at: 2000, consumerId: 'c1', kind: 'crash' }],
+  }
+  const oneJump = createSimulation(options)
+  oneJump.advanceTo(5000)
+
+  const manyJumps = createSimulation(options)
+  for (let t = 100; t <= 5000; t += 100) manyJumps.advanceTo(t)
+
+  const a = oneJump.snapshot().journal.map((e) => `${e.at}:${e.type}`)
+  expect(a).toEqual(manyJumps.snapshot().journal.map((e) => `${e.at}:${e.type}`))
+  // and the journal must never run backwards in virtual time
+  const times = oneJump.snapshot().journal.map((e) => e.at)
+  expect([...times].sort((x, y) => x - y)).toEqual(times)
+})
+
+it('requeues the real message on crash, not a blank placeholder', () => {
+  const sim = createSimulation({
+    topology: crashTopology,
+    seed: 1,
+    script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'IMPORTANT' }],
+    failures: [{ at: 2000, consumerId: 'c1', kind: 'crash' }],
+  })
+  sim.advanceTo(1999)
+  expect(sim.snapshot().unacked.c1).toHaveLength(1)
+
+  sim.advanceTo(5000)
+  const requeued = sim.snapshot().queues.q1 ?? []
+  expect(requeued).toHaveLength(1)
+  expect(requeued[0]!.message.body).toBe('IMPORTANT')
+  expect(requeued[0]!.message.routingKey).toBe('go')
+  expect(requeued[0]!.message.redeliveryCount).toBe(1)
+})
+```
+
+`crashTopology` is the base topology with one manual-ack consumer whose `ackDelayMs` is large enough (100_000) that it is still holding the message unacked when the crash fires.
+
+Run: `npx vitest run src/engine/index.test.ts`
+Expected: PASS.
+
+- [ ] **Step 9: Run the whole engine suite**
 
 Run: `npm test -- src/engine`
 Expected: PASS, including 6 validation tests and 7 simulation tests.
 
 If the replay test fails, the cause is almost always a reducer that read ambient state or mutated its input. Re-check that every reducer returns fresh objects.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add src/engine
