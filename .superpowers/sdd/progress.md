@@ -17,10 +17,13 @@ Task 6: complete (commits 9eb9664..cd00312, review found Critical round-robin st
 
 Task 7: complete (commits 3c6732b..00b1728, review found Important stale-TTL cross-instance kill; plan defect, fixed in code and plan)
 
+Task 8: complete (commits 8e5c141..5520f49, 62 tests). Controller ran the review directly (reviewer subagent was stopped). Found Important defect: both requeue paths (applyNack from Task 6, applyConsumerCrash from Task 8) prepended unconditionally, so a nacked priority-0 message jumped ahead of waiting priority-9 messages — one nack defeats a priority queue. Plan defect: Task 8 added insertByPriority but only wired it into applyEnqueue. Fixed via requeueByPriority in code and plan (d384bae).
+  Adjudicated NOT a defect: drop-head overflow on a priority queue discards the highest-priority message. RabbitMQ documents exactly this ("higher priority messages might be dropped to make way for lower priority ones") — https://www.rabbitmq.com/docs/priority. Plan now marks it intentional; Lesson 15 teaches the gotcha. Do not "fix" it in a later task.
+
 ## Open notes (carry to final review)
 - Minor: two zustand versions installed — top-level zustand@5 plus zustand@4.5.7 nested under @xyflow/react@12. Two instances in one tree can cause state-sharing bugs. Watch during Task 11 (store) and Task 12 (canvas).
 - Root tsconfig.json is references-only. Bare `tsc --noEmit` is a silent no-op; use `npm run typecheck` (tsc -b).
 - Reviewer flagged the implementer's "documented fallback" claim as false attribution. Adjudicated: NOT a defect — the temp-subdir fallback was in the controller's dispatch prompt, which the reviewer could not see.
-- Minor (Task 3, deferred): `pushAll` in src/engine/clock.ts has no dedicated unit test. Task 9 uses it heavily — fold a test into Task 9 rather than a separate fix cycle.
+- RESOLVED into Task 9 (commit 9e65f31): pushAll unit tests are now Task 9 Step 7.
 - Minor (Task 5): applyEnqueue creates a phantom queue entry for a dangling binding destinationId instead of failing loudly. Task 9 validateTopology rejects dangling destinations pre-run, so this is covered defensively — confirm during Task 9 review.
-- OPEN (verify at Task 9): a dead-letter cycle with NON-zero TTL grows unbounded — reviewer ran 30 cycles, deathTrail and x-death-count grow linearly, nothing in Task 7 stops it. Task 9's validateTopology only catches the zero-TTL case. The real backstop is MAX_EVENTS_PER_RUN + MAX_JOURNAL in Task 9's facade. Must confirm empirically that those guards actually halt such a run, since Lesson 13 builds exactly this topology.
+- RESOLVED into Task 9 (commit 9e65f31): the non-zero-TTL dead-letter cycle guard now has a mandatory empirical test in Task 9 Step 7 asserting state.halted contains "event ceiling". Confirm it actually fired at Task 9 review.
