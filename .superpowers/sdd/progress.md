@@ -51,6 +51,11 @@ Task 14: complete (commits d3c9f35..32954c2, 123 tests, build 400KB/127KB gzip).
   Found and fixed a visible defect the tests could not see: the Markdown component supported **bold** and `code` only, so lesson 01's "*default exchange*" rendered with literal asterisks in the inspector. Fixed the renderer (not the lesson copy) since sixteen more hand-written narratives arrive in Tasks 15-17, plus a guard that no lesson narrative leaves an unrendered * or ` in its output. Probed red against the old renderer, and confirmed live in the browser afterwards (em = "default exchange", no stray asterisk).
   Added src/test/setup.ts with ResizeObserver/DOMMatrixReadOnly stubs wired via vitest setupFiles, which is what finally allows tests to mount the real React Flow tree.
 
+Task 15: complete (commits 8d4b706..51ae1a8, 156 tests). Basics lessons 02-06 as pure data; no engine or component change was needed for the lessons themselves.
+  Controller found that the Task 14 marker guard had started distorting the product: it counted asterisks inside rendered <code> spans as unrendered markers, so lesson 04 - the lesson whose subject IS * versus # - had been reworded to say "the single-word wildcard" rather than write `order.eu.*`. Guard now exempts code spans and lesson 04 writes the real patterns again. A test that forces the product to work around it is a broken test, not a satisfied constraint.
+  Second defect found in the browser, not by tests: narrative step titles were dropped into an <h2> as raw text, so "`#` matches zero or more words" showed literal backticks. Added MarkdownInline (inline constructs, no <p> wrapper since an h2 cannot contain one) and extended the marker guard to cover titles as well as bodies. Verified live: h2 now renders * and # inside <code>.
+  Note for Tasks 16-17: narrative titles AND bodies both render markdown now, and both are guarded.
+
 ## Open notes (carry to final review)
 - Minor: two zustand versions installed — top-level zustand@5 plus zustand@4.5.7 nested under @xyflow/react@12. Two instances in one tree can cause state-sharing bugs. Watch during Task 11 (store) and Task 12 (canvas).
 - Root tsconfig.json is references-only. Bare `tsc --noEmit` is a silent no-op; use `npm run typecheck` (tsc -b).
