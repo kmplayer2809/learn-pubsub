@@ -299,6 +299,23 @@ Task 18 fix wave 2: DISPATCHED. Three defects found by using the Sandbox as a fi
   the exchange for a key mismatch, and with no metrics and no log the entire UI stayed
   silent. Nothing on screen could explain it.
 
+Task 18 fix wave 2: complete (commit 4e87ed3). 309 tests / 29 files, typecheck clean.
+  Controller re-walked the whole first-time-user path in the browser. Confirmed working:
+  metrics grid and event log now render in SandboxPanel (reusing Inspector's, not a fork);
+  an exchange's config panel lists its bindings with an editable routing key and a delete;
+  setting the key to `demo` immediately shows `demo` as the edge label on the canvas.
+  Measured end to end: published 1 / routed 1 / dropped 0 / delivered 1 / acked 1 /
+  confirmed 1, with the log reading publish -> route -> confirm -> enqueue -> receive ->
+  ack. Engine log text stays English by design; that is correct.
+  MY DEFECT 3 WAS NOT REAL and the agent was right to push back. The sandbox already
+  schedules a publish relative to current virtual time (measured: published at 46.7s while
+  the clock was already there) and rebuilds on every change, so nothing is ever dropped for
+  being late. The silence I originally hit was defect 2 plus defect 1: a routing-key
+  mismatch dropped the message and nothing on screen could say so. Do not revisit.
+  Note on automating this UI: the Publish button is correctly `disabled` until an exchange
+  is chosen, and several of my earlier "publish does nothing" readings were that guard
+  working. Check `btn.disabled` before concluding anything from a synthetic click.
+
 === PAUSED 2026-08-06 23:30 (+07) at the user's request; resumed 03:34 on 2026-08-07. ===
   ON RESUME, do NOT re-dispatch anything marked complete above. Order of remaining work:
   finish Task 17's review loop (read .superpowers/sdd/task-17-report.md and `git log` to
