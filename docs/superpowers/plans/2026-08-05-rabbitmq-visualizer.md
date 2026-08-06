@@ -4966,6 +4966,213 @@ git commit -m "feat: translate lesson and UI copy to Vietnamese"
 
 ---
 
+## Task 16b: A crash must cancel the work it interrupted
+
+**This is a correctness bug found while reviewing Task 16, confirmed by measurement.**
+
+`applyDeliver` schedules a `consumeDone` event `processingMs` into the future.
+`applyConsumerCrash` clears the consumer's `unacked` and requeues the held messages, but
+nothing cancels that pending `consumeDone`. It fires anyway, `applyConsumeDone` schedules
+an `ack`, and `applyAck` increments `metrics.acked` and writes an ack line to the journal —
+for work that was never finished.
+
+Measured on lesson 07 at commit `9881e26`:
+
+```
+auto:   [m1, m2, m3, m4]
+manual: [m1, m1, m2, m3, m4]     <- m1 acked twice
+metrics: published 4, delivered 9, acked 9
+```
+
+`m1` is requeued by the crash, redelivered after recovery, and acked a second time. Two
+consequences, both bad:
+
+1. **The lesson teaches the wrong thing.** The auto-ack lane acks all four messages despite
+   being crashed from t=2000 to t=6000, so the "auto-ack loses the message" claim in the
+   narrative is a log string with nothing behind it. The manual lane's recovery is
+   indistinguishable from a double-count.
+2. **Lesson 07's test passes because of the bug.** `reliability.test.ts` asserts
+   `manualAcks > autoAcks`, which today reads `5 > 4`. The extra ack IS the duplicate.
+
+**Files:**
+- Modify: `src/engine/types.ts` (add `crashEpoch` to `EngineState`), `src/engine/broker.ts` (initial state), `src/engine/delivery.ts` (`applyDeliver`, `applyConsumeDone`), `src/engine/advanced.ts` (`applyConsumerCrash`)
+- Modify: `src/lessons/reliability.test.ts` (strengthen the lesson 07 assertions)
+- Test: `src/engine/delivery.test.ts`
+
+**Interfaces:**
+- Produces: `EngineState.crashEpoch: Record<NodeId, number>`
+
+**Why an epoch and not a `crashed` check.** Reading `state.crashed` inside
+`applyConsumeDone` looks simpler, but it is wrong whenever a consumer crashes and recovers
+strictly inside one processing window — the consumer is no longer crashed when the stale
+event lands, so the stale ack goes through. The epoch is stamped at dispatch and compared
+on arrival, so it is exact regardless of recovery timing.
+
+- [ ] **Step 1: Write the failing engine test**
+
+Append to `src/engine/delivery.test.ts` (match the file's existing helpers for building a
+topology and running a simulation — read it first rather than inventing new ones):
+
+```ts
+describe('a crash cancels the work it interrupted', () => {
+  it('does not ack a message whose processing was interrupted by a crash', () => {
+    // One manual-ack consumer, processingMs long enough that the crash lands mid-work.
+    const sim = createSimulation({
+      topology: /* one publisher -> direct ex -> one queue -> one manual consumer,
+                   processingMs: 1000 */,
+      script: [{ at: 0, kind: 'publish', publisherId: 'p1', routingKey: 'k' }],
+      failures: [
+        { at: 500, consumerId: 'c1', kind: 'crash' },
+        { at: 3000, consumerId: 'c1', kind: 'recover' },
+      ],
+      seed: 1,
+    })
+    sim.advanceTo(20_000)
+    const state = sim.snapshot()
+
+    const acked = state.journal.filter((j) => j.type === 'ack').map((j) => j.messageId)
+    // Exactly one ack: the redelivery after recovery. The interrupted attempt must
+    // produce none, or the same message is confirmed twice.
+    expect(acked).toEqual(['m1'])
+    expect(state.metrics.acked).toBe(1)
+  })
+
+  it('does not ack an auto-ack consumer whose work the crash destroyed', () => {
+    const sim = createSimulation({
+      topology: /* same, but the consumer has autoAck: true */,
+      script: [{ at: 0, kind: 'publish', publisherId: 'p1', routingKey: 'k' }],
+      failures: [{ at: 500, consumerId: 'c1', kind: 'crash' }],
+      seed: 1,
+    })
+    sim.advanceTo(20_000)
+    const state = sim.snapshot()
+
+    // Auto-ack removes the message from the broker at dispatch, so nothing is requeued
+    // and nothing is redelivered: the work is simply gone. An ack here would claim the
+    // message was handled.
+    expect(state.metrics.acked).toBe(0)
+    expect(state.queues.q1).toHaveLength(0)
+  })
+})
+```
+
+- [ ] **Step 2: Run it to confirm failure**
+
+Run: `npm test -- src/engine/delivery.test.ts`
+Expected: FAIL. The first case reports `['m1', 'm1']`; the second reports `acked` 1, not 0.
+
+- [ ] **Step 3: Add the epoch to engine state**
+
+In `src/engine/types.ts`, inside `EngineState`:
+
+```ts
+  /**
+   * Per-consumer crash counter, incremented on every crash. A `consumeDone` event is
+   * stamped with the epoch that was current when the message was delivered, and is
+   * discarded on arrival if the epoch has moved: the work it represents was destroyed
+   * by a crash. Reading `crashed` instead would miss a consumer that crashed and
+   * recovered inside one processing window.
+   */
+  crashEpoch: Record<NodeId, number>
+```
+
+In `src/engine/broker.ts`'s initial state, beside `crashed: []`:
+
+```ts
+    crashEpoch: {},
+```
+
+- [ ] **Step 4: Stamp and check the epoch**
+
+In `src/engine/delivery.ts`, `applyDeliver` schedules `consumeDone` — add the epoch to the
+payload:
+
+```ts
+  const [doneEvent, afterSchedule] = scheduleEvent(
+    next,
+    state.now + consumer.processingMs + jitter,
+    'consumeDone',
+    { message, queueId, consumerId, epoch: state.crashEpoch[consumerId] ?? 0 },
+  )
+```
+
+At the top of `applyConsumeDone`, after resolving `consumer`:
+
+```ts
+  // The consumer crashed while this message was being processed. The crash already
+  // requeued it (manual ack) or destroyed it (auto ack); acking now would confirm work
+  // that never finished, and on the manual path would confirm the same message twice.
+  const epoch = (event.payload.epoch as number) ?? 0
+  if (epoch !== (state.crashEpoch[consumerId] ?? 0)) return { state, newEvents: [] }
+```
+
+In `src/engine/advanced.ts`, `applyConsumerCrash` bumps it in the same object literal that
+sets `crashed`:
+
+```ts
+    crashEpoch: { ...state.crashEpoch, [consumerId]: (state.crashEpoch[consumerId] ?? 0) + 1 },
+```
+
+Do NOT reset the epoch on recover — it must only ever increase, or a crash/recover pair
+would restore a stale event's validity.
+
+- [ ] **Step 5: Run the engine suite**
+
+Run: `npm test -- src/engine` and `npm run typecheck`
+Expected: PASS, including the two new cases.
+
+- [ ] **Step 6: Re-measure lesson 07 and strengthen its assertions**
+
+The old assertion `manualAcks > autoAcks` cannot stay as the only check — it passed on the
+duplicate. Replace the lesson 07 block in `src/lessons/reliability.test.ts`:
+
+```ts
+describe('07 ack modes', () => {
+  it('recovers the interrupted message on the manual lane and loses it on the auto lane', () => {
+    const state = run('07-ack-modes')
+    const acksBy = (id: string) =>
+      state.journal.filter((j) => j.type === 'ack' && j.nodeId === id).map((j) => j.messageId)
+
+    const manual = acksBy('manual')
+    const auto = acksBy('auto')
+
+    // The whole point of manual ack: every message is confirmed, and confirmed once.
+    // A duplicate here means a crash failed to cancel the work it interrupted.
+    expect(new Set(manual).size).toBe(manual.length)
+    expect(manual.length).toBeGreaterThan(auto.length)
+    // The auto lane was crashed for most of the run and cannot have confirmed
+    // everything the manual lane did.
+    expect(auto.length).toBeLessThan(state.script?.length ?? 4)
+  })
+})
+```
+
+If `state.script` is not on `EngineState`, drop that last line and hard-code `4` — read the
+type rather than guessing.
+
+- [ ] **Step 7: Re-read lesson 07's narrative against the new behaviour**
+
+`src/lessons/07-ack-modes.ts` was written against the buggy engine. Read every narrative
+body and confirm it now describes what actually happens — in particular any sentence
+claiming the auto lane confirmed or lost a specific number of messages. Fix the Vietnamese
+copy where it disagrees with the run. Do not change `at`, `highlight`, `seed`, `durationMs`,
+`topology`, or `script`.
+
+- [ ] **Step 8: Run the full suite**
+
+Run: `npm test` then `npm run typecheck`
+Expected: PASS. If another lesson's assertion moves, that lesson was also reading the
+duplicate — report which, do not loosen the assertion to make it pass.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/engine src/lessons
+git commit -m "fix: a consumer crash cancels the processing it interrupted"
+```
+
+---
+
 ## Task 15c: Dark toolbar, message labels, and the live in-flight panel
 
 Three gaps a reader hits immediately. React Flow's `<Controls />` ships with a white
