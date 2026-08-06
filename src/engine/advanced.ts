@@ -42,6 +42,7 @@ export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyRe
   let next: EngineState = {
     ...state,
     crashed: state.crashed.includes(consumerId) ? state.crashed : [...state.crashed, consumerId],
+    crashEpoch: { ...state.crashEpoch, [consumerId]: (state.crashEpoch[consumerId] ?? 0) + 1 },
     unacked: { ...state.unacked, [consumerId]: [] },
     inFlight: state.inFlight.filter((f) => !f.edgeId.endsWith(`->${consumerId}`)),
   }

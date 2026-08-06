@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
 import { applyAck, applyConsumeDone, applyDeliver, applyDispatch, applyNack, eligibleConsumers } from './delivery'
+import { createSimulation } from './index'
 import type { ApplyResult, ConsumerSpec, EngineState, Message, SimEvent, Topology } from './types'
 
 const message = (id: string, over: Partial<Message> = {}): Message => ({
@@ -231,5 +232,52 @@ describe('applyConsumeDone', () => {
     const doneEvent = delivered.newEvents[0]!
     const { newEvents } = applyConsumeDone({ ...delivered.state, now: doneEvent.at }, doneEvent)
     expect(newEvents.map((e) => e.type)).toEqual(['ack'])
+  })
+})
+
+describe('a crash cancels the work it interrupted', () => {
+  it('does not ack a message whose processing was interrupted by a crash', () => {
+    // One manual-ack consumer, processingMs long enough that the crash lands mid-work.
+    // Timings account for the full publish -> route -> enqueue -> dispatch -> deliver
+    // pipeline: with TRAVEL_MS = 600, a message published at t=0 dispatches at t=1200
+    // and is delivered (processing starts) at t=1800. processingMs=1000 means the
+    // uninterrupted consumeDone would fire at t=2800, so a crash at t=2000 genuinely
+    // lands mid-work rather than before delivery even happens.
+    const sim = createSimulation({
+      topology: topo([consumer({ id: 'c1', processingMs: 1000 })]),
+      script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'job' }],
+      failures: [
+        { at: 2000, consumerId: 'c1', kind: 'crash' },
+        { at: 3000, consumerId: 'c1', kind: 'recover' },
+      ],
+      seed: 1,
+    })
+    sim.advanceTo(20_000)
+    const state = sim.snapshot()
+
+    const acked = state.journal.filter((j) => j.type === 'ack').map((j) => j.messageId)
+    // Exactly one ack: the redelivery after recovery. The interrupted attempt must
+    // produce none, or the same message is confirmed twice.
+    expect(acked).toEqual(['m1'])
+    expect(state.metrics.acked).toBe(1)
+  })
+
+  it('does not ack an auto-ack consumer whose work the crash destroyed', () => {
+    // Same pipeline timing as above: delivery lands at t=1800, the stale consumeDone
+    // would fire at t=2800, so a crash at t=2000 lands mid-work.
+    const sim = createSimulation({
+      topology: topo([consumer({ id: 'c1', processingMs: 1000, autoAck: true })]),
+      script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'job' }],
+      failures: [{ at: 2000, consumerId: 'c1', kind: 'crash' }],
+      seed: 1,
+    })
+    sim.advanceTo(20_000)
+    const state = sim.snapshot()
+
+    // Auto-ack removes the message from the broker at dispatch, so nothing is requeued
+    // and nothing is redelivered: the work is simply gone. An ack here would claim the
+    // message was handled.
+    expect(state.metrics.acked).toBe(0)
+    expect(state.queues.q1).toHaveLength(0)
   })
 })

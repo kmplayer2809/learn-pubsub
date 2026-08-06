@@ -25,6 +25,7 @@ function makeState(inFlight: EngineState['inFlight'], now: number): EngineState 
     },
     journal: [],
     crashed: [],
+    crashEpoch: {},
     messageCounter: 0,
   }
 }

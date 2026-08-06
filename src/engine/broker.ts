@@ -49,6 +49,7 @@ export function createEngineState(topology: Topology, seed: number): EngineState
     },
     journal: [],
     crashed: [],
+    crashEpoch: {},
     messageCounter: 0,
   }
 }

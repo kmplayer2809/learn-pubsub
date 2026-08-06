@@ -179,6 +179,14 @@ export interface EngineState {
   halted?: { reason: string }
   /** Consumer ids that are currently crashed and not consuming. */
   crashed: NodeId[]
+  /**
+   * Per-consumer crash counter, incremented on every crash. A `consumeDone` event is
+   * stamped with the epoch that was current when the message was delivered, and is
+   * discarded on arrival if the epoch has moved: the work it represents was destroyed
+   * by a crash. Reading `crashed` instead would miss a consumer that crashed and
+   * recovered inside a single processing interval.
+   */
+  crashEpoch: Record<NodeId, number>
   /** Monotonic counter used to mint message ids deterministically. */
   messageCounter: number
 }

@@ -15,11 +15,21 @@ function run(id: string) {
 }
 
 describe('07 ack modes', () => {
-  it('loses work on the auto-ack lane and recovers it on the manual lane', () => {
+  it('recovers the interrupted message on the manual lane and loses it on the auto lane', () => {
     const state = run('07-ack-modes')
-    const autoAcks = state.journal.filter((j) => j.type === 'ack' && j.nodeId === 'auto').length
-    const manualAcks = state.journal.filter((j) => j.type === 'ack' && j.nodeId === 'manual').length
-    expect(manualAcks).toBeGreaterThan(autoAcks)
+    const acksBy = (id: string) =>
+      state.journal.filter((j) => j.type === 'ack' && j.nodeId === id).map((j) => j.messageId)
+
+    const manual = acksBy('manual')
+    const auto = acksBy('auto')
+
+    // The whole point of manual ack: every message is confirmed, and confirmed once.
+    // A duplicate here means a crash failed to cancel the work it interrupted.
+    expect(new Set(manual).size).toBe(manual.length)
+    expect(manual.length).toBeGreaterThan(auto.length)
+    // The auto lane was crashed for most of the run and cannot have confirmed
+    // everything the manual lane did.
+    expect(auto.length).toBeLessThan(4)
   })
 })
 

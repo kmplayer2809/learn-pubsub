@@ -83,7 +83,7 @@ export function applyDeliver(state: EngineState, event: SimEvent): ApplyResult {
     next,
     state.now + consumer.processingMs + jitter,
     'consumeDone',
-    { message, queueId, consumerId },
+    { message, queueId, consumerId, epoch: state.crashEpoch[consumerId] ?? 0 },
   )
   return { state: afterSchedule, newEvents: [doneEvent] }
 }
@@ -94,6 +94,12 @@ export function applyConsumeDone(state: EngineState, event: SimEvent): ApplyResu
   const consumerId = event.payload.consumerId as NodeId
   const consumer = state.topology.consumers.find((c) => c.id === consumerId)
   if (!consumer) return { state, newEvents: [] }
+
+  // The consumer crashed while this message was being processed. The crash already
+  // requeued it (manual ack) or destroyed it (auto ack); acking now would confirm work
+  // that never finished, and on the manual path would confirm the same message twice.
+  const epoch = (event.payload.epoch as number) ?? 0
+  if (epoch !== (state.crashEpoch[consumerId] ?? 0)) return { state, newEvents: [] }
 
   let next = state
   let reject = false
