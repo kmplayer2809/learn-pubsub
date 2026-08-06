@@ -27,6 +27,23 @@ describe('every lesson', () => {
     expect(runLesson(id)).toEqual(runLesson(id))
   })
 
+  it.each(LESSONS.map((l) => [l.id, l] as const))('%s confirms every publish', (_id, lesson) => {
+    // Lesson 10 teaches that a confirm is the broker answering every publish, so
+    // any lesson where the two counters disagree contradicts it in the metrics
+    // panel. 14-rpc did: its three replies are published by a consumer rather
+    // than a publisher, and the confirm hop test used to require a publisher id.
+    const sim = createSimulation({
+      topology: lesson.topology,
+      script: lesson.script,
+      failures: lesson.failures,
+      seed: lesson.seed,
+    })
+    sim.advanceTo(lesson.durationMs + 30_000)
+    const { published, confirmed } = sim.snapshot().metrics
+    expect(published).toBeGreaterThan(0)
+    expect(confirmed).toBe(published)
+  })
+
   it.each(LESSONS.map((l) => [l.id, l] as const))('%s narrative stays inside its duration', (_id, lesson) => {
     for (const step of lesson.narrative) {
       expect(step.at).toBeLessThanOrEqual(lesson.durationMs)

@@ -157,13 +157,21 @@ export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
 
   let next = clearInFlight(state, message.id, edgeId(fromId, exchangeId))
 
-  // A confirm answers the publish, not any single hop of routing: a publish that
-  // fans out through an exchange-to-exchange binding must still produce exactly
-  // one confirm, so only the route triggered directly by applyPublish schedules
-  // one. That first hop is always identifiable because applyPublish is the only
-  // caller that sets `fromId` to a publisher id; a route forwarded from one
-  // exchange to another sets `fromId` to the upstream exchange's id instead.
-  const isPublishHop = state.topology.publishers.some((p) => p.id === fromId)
+  // A confirm answers a client's publish, not any single hop of routing, so only a
+  // route that originated at a *client* schedules one. Two kinds of hop must be
+  // excluded, and they fail different tests:
+  //   - an exchange-to-exchange binding forwards with `fromId` set to the upstream
+  //     exchange, so a fan-out through one must not double-confirm;
+  //   - dead-lettering republishes with `fromId` set to the *queue*, and that is
+  //     the broker moving a message it already owns, not a new publish. Testing
+  //     merely for "not an exchange" let those through and inflated 13-retry-backoff
+  //     to 56 confirms against 4 publishes.
+  // Consumers count as clients: one answering an RPC publishes under its own node id
+  // (advanced.ts buildReplyEvents). Requiring a publisher id left 14-rpc reading
+  // `published 6 / confirmed 3`, contradicting what lesson 10 teaches.
+  const isPublishHop =
+    state.topology.publishers.some((p) => p.id === fromId) ||
+    state.topology.consumers.some((c) => c.id === fromId)
   function withConfirm(state: EngineState, hasDurablePair: boolean): [EngineState, SimEvent[]] {
     if (!isPublishHop) return [state, []]
     const delay = message.persistent && hasDurablePair ? CONFIRM_PERSISTENT_MS : CONFIRM_MS
