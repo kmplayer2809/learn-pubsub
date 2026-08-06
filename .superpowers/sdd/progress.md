@@ -227,6 +227,40 @@ Task 17 review: the formal task reviewer was never dispatched (the pause landed 
   The controller reviewed it directly instead and found the toFlow regression above. The
   final whole-branch review still needs to cover 58cf9f9 properly.
 
+Task 18: code complete (commit 46c2d69). 295 tests / 27 files, typecheck clean.
+  Sandbox ships: add/delete nodes, drag to connect, node config, publish form, generator,
+  localStorage save/reset. Controller drove the running app rather than reading the report
+  and confirmed the shell works — all 17 lessons plus a Sandbox button in the sidebar, the
+  four add-node buttons create wired nodes, the node config panel edits and deletes, the
+  publish form correctly refuses to enable before a publisher exists.
+  MY BRIEF WAS WRONG, not the agent: I told it not to add localStorage persistence, but
+  the plan's own Task 18 specifies `save`/`load` under STORAGE_KEY including a malformed-
+  payload test. The agent followed the brief file, which is correct. Do not "fix" this.
+
+  TWO DEFECTS FOUND IN THE BROWSER, fix dispatched:
+  1. The Sandbox renders engine ValidationIssue.message verbatim, so its only feedback
+     channel is English: `warning: queue queue-3 has no binding, so no message can reach
+     it`. Invisible in lessons because every shipped lesson is valid; in the Sandbox an
+     invalid topology is the normal mid-edit state, so this is the primary guidance a
+     learner gets and the one part of the UI still in English. Engine must stay English
+     (its tests assert these strings), so the fix adds a `code` to ValidationIssue and
+     renders Vietnamese from it in the UI. Seven issue shapes in validate.ts.
+  2. Every `.react-flow__handle` measures 6x6 CSS px in the live page, and dragging
+     between handles is the ONLY way to create a binding — selecting an exchange offers a
+     type selector and delete, nothing else. The panel says `kéo để connect` and gives a
+     six-pixel target for it.
+  UNVERIFIED BY ME: whether drag-to-connect actually works. React Flow uses D3-drag and
+  ignored synthetic PointerEvents, so I could not exercise the path; the agent reports
+  testing it by hand. The fix agent was told to confirm it and report BLOCKED if broken.
+  Also carried forward from the agent's own report: it found that a message published
+  under a publisherId that is not a real topology node gets no confirm, and worked around
+  it in the UI by requiring a real publisher. That is a consequence of the 5edea33
+  predicate (publisher OR consumer). Sandbox-only, and the lesson-wide
+  `confirms every publish` invariant does not cover sandbox topologies.
+  Agent also flagged that the runaway guard cannot be tripped by normal Play/Scrub, since
+  each routing hop costs a fixed 600ms of virtual time. Not a bug — it also means a
+  hand-built loop cannot freeze the tab in reachable time — but worth a look at Task 20.
+
 === PAUSED 2026-08-06 23:30 (+07) at the user's request; resumed 03:34 on 2026-08-07. ===
   ON RESUME, do NOT re-dispatch anything marked complete above. Order of remaining work:
   finish Task 17's review loop (read .superpowers/sdd/task-17-report.md and `git log` to
