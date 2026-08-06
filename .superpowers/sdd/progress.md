@@ -27,6 +27,10 @@ Task 9: complete (commits 136f78d..3b6eb73, 80 tests, engine finished). Controll
   Verified independently by the controller with a 3-publish crash+recover topology scrubbed to 4 targets; payloads preserved verbatim, journal monotonic.
   RESOLVED: the non-zero-TTL dead-letter cycle guard now has a real test and fires. RESOLVED: pushAll has two dedicated tests. Dangling-destination validation confirmed present in validateTopology.
 
+Task 10: complete (commits 13fa291..570508a, 89 tests). Lesson schema, registry, hello-world lesson. Controller reviewed directly: brief matched the engine types with no cast-to-compile; golden-journal snapshot has real monotonic content (26 lines) and is backed by explicit count/ordering assertions, not snapshot-only. Implementer added a 6th test beyond the brief on its own initiative — accepted.
+  Controller added schema guards (570508a) because Lessons 2-17 arrive from three separate subagents: duplicate ids, empty/out-of-order narratives, unknown groups, checkpoint answerIndex out of range. Probed: a duplicated lesson with reversed narrative fails both new guards.
+  Schema note for Tasks 15-17: Lesson folds the design spec's separate `consumers` and `highlights` arrays into `topology.consumers` and `NarrativeStep.highlight`. Adds summary, seed, durationMs.
+
 ## Open notes (carry to final review)
 - Minor: two zustand versions installed — top-level zustand@5 plus zustand@4.5.7 nested under @xyflow/react@12. Two instances in one tree can cause state-sharing bugs. Watch during Task 11 (store) and Task 12 (canvas).
 - Root tsconfig.json is references-only. Bare `tsc --noEmit` is a silent no-op; use `npm run typecheck` (tsc -b).
