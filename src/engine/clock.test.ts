@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createScheduler, peekTime, popDue, push } from './clock'
+import { createScheduler, peekTime, popDue, push, pushAll } from './clock'
 import type { SimEvent } from './types'
 
 const ev = (at: number, seq: number, type: SimEvent['type'] = 'publish'): SimEvent => ({
@@ -46,5 +46,21 @@ describe('scheduler', () => {
     const pushed = push(s, ev(10, 1))
     expect(peekTime(s)).toBeUndefined()
     expect(peekTime(pushed)).toBe(10)
+  })
+
+  it('pushAll keeps ordering across a batch pushed at once', () => {
+    const s = pushAll(createScheduler(), [ev(300, 1), ev(100, 2), ev(300, 0), ev(200, 3)])
+    const [due] = popDue(s, 1000)
+    expect(due.map((e) => [e.at, e.seq])).toEqual([
+      [100, 2],
+      [200, 3],
+      [300, 0],
+      [300, 1],
+    ])
+  })
+
+  it('pushAll on an empty batch returns an equivalent scheduler', () => {
+    const s = pushAll(createScheduler(), [ev(50, 1)])
+    expect(peekTime(pushAll(s, []))).toBe(50)
   })
 })
