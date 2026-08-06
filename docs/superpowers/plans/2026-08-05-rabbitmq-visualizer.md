@@ -2525,7 +2525,7 @@ git commit -m "feat: add priority ordering, rpc replies, and consumer crash reco
   - `validateTopology(topology: Topology): ValidationIssue[]`
   - `interface ValidationIssue { nodeId?: NodeId; severity: 'error' | 'warning'; message: string }`
   - `createSimulation(options: SimulationOptions): Simulation`
-  - `interface SimulationOptions { topology: Topology; script: ScriptedAction[]; seed: number }`
+  - `interface SimulationOptions { topology: Topology; script: ScriptedAction[]; failures?: ScriptedFailure[]; seed: number; maxEvents?: number }`
   - `interface ScriptedAction { at: number; publisherId: NodeId; exchangeId: NodeId; routingKey: string; body: string; headers?: Record<string, string>; priority?: number; correlationId?: string; replyTo?: NodeId; tone?: string }`
   - `interface Simulation { advanceTo(t: number): void; stepOnce(): void; reset(): void; nextEventTime(): number | undefined; snapshot(): EngineState; issues: ValidationIssue[] }`
   - Guard constants `MAX_EVENTS_PER_RUN = 200_000`, `MAX_JOURNAL = 5_000`
@@ -2871,6 +2871,12 @@ export interface SimulationOptions {
   script: ScriptedAction[]
   failures?: ScriptedFailure[]
   seed: number
+  /**
+   * Overrides MAX_EVENTS_PER_RUN. The Sandbox lowers it so a user-built runaway
+   * topology trips the guard in a fraction of a second instead of grinding, and
+   * the guard test uses it to prove the halt without processing 200_000 events.
+   */
+  maxEvents?: number
 }
 
 export interface Simulation {
@@ -3052,6 +3058,10 @@ it('halts a non-zero-TTL dead-letter cycle instead of running forever', () => {
     topology: cycle,
     seed: 1,
     script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'loop' }],
+    // Reaching the default 200_000 ceiling costs ~60.5M ms of virtual time and
+    // ~3s of wall clock. The property under test is that the guard halts an
+    // endless cycle, not the default constant's value, so lower the ceiling.
+    maxEvents: 2000,
   })
   sim.advanceTo(60 * 60 * 1000)
   const snap = sim.snapshot()
