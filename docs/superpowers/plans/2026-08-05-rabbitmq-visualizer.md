@@ -4966,6 +4966,402 @@ git commit -m "feat: translate lesson and UI copy to Vietnamese"
 
 ---
 
+## Task 15c: Dark toolbar, message labels, and the live in-flight panel
+
+Three gaps a reader hits immediately. React Flow's `<Controls />` ships with a white
+button strip that glares against the slate-950 canvas. In-flight particles are anonymous
+dots, so a reader watching a fanout cannot tell which copy is which. And there is nowhere
+to read what is on the wire *right now* — the event log is a scrolling history, not a
+live state view.
+
+**The enabling change is in the engine.** `InFlight` carries only `messageId`, but an
+in-flight message has been removed from its queue and is not yet in `unacked`, so nothing
+in `EngineState` can resolve that id back to a message. This is the identical defect
+already fixed for `unacked`: the record must carry the whole message, because it is the
+only copy. Without it the panel cannot show a routing key, a priority, or a redelivery
+count.
+
+**Files:**
+- Modify: `src/engine/types.ts` (the `InFlight` interface), `src/engine/broker.ts` (`addInFlight`, `clearInFlight`), `src/engine/delivery.ts`, `src/engine/dlx.ts` (call sites only)
+- Modify: `src/index.css` (React Flow dark theme overrides)
+- Modify: `src/ui/canvas/MessageLayer.tsx` (particle labels)
+- Modify: `src/ui/App.tsx` (mount the panel between canvas and transport)
+- Create: `src/ui/canvas/InFlightPanel.tsx`, `src/ui/canvas/InFlightPanel.test.tsx`
+- Test: `src/engine/broker.test.ts` (existing, must stay green)
+
+**Interfaces:**
+- Consumes: `progressOf` and `TONE_FILL` from `src/ui/canvas/geometry`
+- Produces: `InFlight.message: Message` replacing `InFlight.messageId`; `<InFlightPanel state={state} />`
+
+- [ ] **Step 1: Widen `InFlight` to carry the message**
+
+In `src/engine/types.ts`, replace the `messageId` field:
+
+```ts
+/** A message currently animating along an edge. */
+export interface InFlight {
+  /**
+   * The whole message, not its id. An in-flight message has already been removed
+   * from its queue and has not yet landed in `unacked`, so this record is the ONLY
+   * copy — the same reason `unacked` stores messages. The in-flight panel reads the
+   * routing key, priority, and redelivery count from here; there is nowhere else in
+   * `EngineState` to look them up while the message is on the wire.
+   */
+  message: Message
+  edgeId: string
+  fromT: number
+  toT: number
+  /** Colour class chosen by the lesson to distinguish streams. */
+  tone: string
+}
+```
+
+In `src/engine/broker.ts`, take the message instead of the id and store it. `clearInFlight`
+keeps taking an id — it only filters:
+
+```ts
+export function addInFlight(
+  state: EngineState,
+  message: Message,
+  from: NodeId,
+  to: NodeId,
+  tone: string,
+): EngineState {
+  return {
+    ...state,
+    inFlight: [
+      ...state.inFlight,
+      { message, edgeId: edgeId(from, to), fromT: state.now, toT: state.now + TRAVEL_MS, tone },
+    ],
+  }
+}
+
+export function clearInFlight(state: EngineState, messageId: string, edge: string): EngineState {
+  return {
+    ...state,
+    inFlight: state.inFlight.filter((f) => !(f.message.id === messageId && f.edgeId === edge)),
+  }
+}
+```
+
+All four `addInFlight` call sites (`broker.ts:123`, `broker.ts:176`, `delivery.ts:48`,
+`dlx.ts:56`) already hold `message` in scope: change `message.id` to `message`. Leave every
+`clearInFlight` call unchanged.
+
+`src/engine/advanced.ts` filters `inFlight` by `edgeId` only and needs no change.
+
+- [ ] **Step 2: Run the engine suite**
+
+Run: `npm test -- src/engine` and `npm run typecheck`
+Expected: PASS. The compiler finds every remaining `flight.messageId` for you — that is
+the point of replacing the field rather than adding one beside it.
+
+- [ ] **Step 3: Dark-theme the React Flow chrome**
+
+Append to `src/index.css`. React Flow's controls and minimap are styled by its own
+stylesheet, which `CanvasView.tsx` imports; these rules override it:
+
+```css
+/* React Flow ships a light control strip. Match the slate-950 canvas instead. */
+.react-flow__controls {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+}
+
+.react-flow__controls-button {
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  fill: #cbd5e1;
+}
+
+.react-flow__controls-button:hover {
+  background: #334155;
+  fill: #f1f5f9;
+}
+
+.react-flow__controls-button:disabled {
+  fill: #475569;
+}
+
+.react-flow__attribution {
+  background: transparent;
+  color: #475569;
+}
+```
+
+- [ ] **Step 4: Label the particles**
+
+In `src/ui/canvas/MessageLayer.tsx`, carry the label through the `Particle` shape and draw
+it above the dot. The label is the message id (`m1`, `m2`, …) — short enough not to collide
+at speed, and the same id the panel lists, so the reader can match canvas to table.
+
+```tsx
+interface Particle {
+  key: string
+  x: number
+  y: number
+  tone: string
+  label: string
+}
+```
+
+In the layout effect, build it from the message and keep the key stable:
+
+```tsx
+next.push({
+  key: `${flight.message.id}@${flight.edgeId}`,
+  x,
+  y,
+  tone: flight.tone,
+  label: flight.message.id,
+})
+```
+
+And in the render, add the label above each dot. `paintOrder="stroke"` with a dark stroke
+gives the text a halo so it stays readable over an edge line:
+
+```tsx
+<text
+  x={p.x}
+  y={p.y - 13}
+  textAnchor="middle"
+  className="font-mono"
+  fontSize={10}
+  fill={TONE_FILL[p.tone] ?? '#94a3b8'}
+  stroke="#020617"
+  strokeWidth={3}
+  paintOrder="stroke"
+>
+  {p.label}
+</text>
+```
+
+- [ ] **Step 5: Write the failing panel test**
+
+`src/ui/canvas/InFlightPanel.test.tsx`:
+
+```tsx
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import type { EngineState, InFlight, Message } from '../../engine'
+import { InFlightPanel } from './InFlightPanel'
+
+function message(over: Partial<Message> = {}): Message {
+  return {
+    id: 'm1',
+    body: 'hello',
+    routingKey: 'order.created',
+    headers: {},
+    priority: 0,
+    publishedAt: 0,
+    redeliveryCount: 0,
+    deathTrail: [],
+    persistent: false,
+    ...over,
+  }
+}
+
+function flight(over: Partial<InFlight> = {}): InFlight {
+  return { message: message(), edgeId: 'ex->orders', fromT: 0, toT: 1000, tone: 'sky', ...over }
+}
+
+function state(inFlight: InFlight[], now = 500): EngineState {
+  return { now, inFlight } as unknown as EngineState
+}
+
+describe('InFlightPanel', () => {
+  it('shows an empty state when nothing is on the wire', () => {
+    render(<InFlightPanel state={state([])} />)
+    expect(screen.getByTestId('inflight-empty')).toBeTruthy()
+    expect(screen.queryByTestId('inflight-row')).toBeNull()
+  })
+
+  it('lists each in-flight message with its route and routing key', () => {
+    render(<InFlightPanel state={state([flight()])} />)
+    const row = screen.getByTestId('inflight-row')
+    expect(row.textContent).toContain('m1')
+    expect(row.textContent).toContain('ex')
+    expect(row.textContent).toContain('orders')
+    expect(row.textContent).toContain('order.created')
+  })
+
+  it('reports progress from virtual time, not wall-clock', () => {
+    // Half-way between fromT and toT at now=500 of a 0..1000 flight.
+    render(<InFlightPanel state={state([flight()], 500)} />)
+    expect(screen.getByTestId('inflight-progress').getAttribute('aria-valuenow')).toBe('50')
+    // Same flight, later virtual time: the bar must move without any timer firing.
+    render(<InFlightPanel state={state([flight()], 900)} />)
+    expect(screen.getAllByTestId('inflight-progress')[1]!.getAttribute('aria-valuenow')).toBe('90')
+  })
+
+  it('badges redelivery, priority, and persistence only when they are set', () => {
+    render(
+      <InFlightPanel
+        state={state([flight({ message: message({ redeliveryCount: 2, priority: 5, persistent: true }) })])}
+      />,
+    )
+    const row = screen.getByTestId('inflight-row')
+    expect(row.textContent).toContain('redelivery 2')
+    expect(row.textContent).toContain('priority 5')
+    expect(row.textContent).toContain('persistent')
+  })
+
+  it('omits the badges on a plain message', () => {
+    render(<InFlightPanel state={state([flight()])} />)
+    const row = screen.getByTestId('inflight-row')
+    expect(row.textContent).not.toContain('redelivery')
+    expect(row.textContent).not.toContain('priority')
+    expect(row.textContent).not.toContain('persistent')
+  })
+
+  it('orders rows by departure time so a landing message does not reshuffle the rest', () => {
+    const older = flight({ message: message({ id: 'm1' }), fromT: 0 })
+    const newer = flight({ message: message({ id: 'm2' }), fromT: 400, edgeId: 'ex->audit' })
+    // Deliberately supplied newest-first: the panel must not trust array order.
+    render(<InFlightPanel state={state([newer, older], 500)} />)
+    const ids = screen.getAllByTestId('inflight-row').map((r) => r.getAttribute('data-message-id'))
+    expect(ids).toEqual(['m1', 'm2'])
+  })
+})
+```
+
+- [ ] **Step 6: Run it to confirm failure**
+
+Run: `npm test -- src/ui/canvas/InFlightPanel.test.tsx`
+Expected: FAIL, cannot resolve `./InFlightPanel`.
+
+- [ ] **Step 7: Write the panel**
+
+`src/ui/canvas/InFlightPanel.tsx`. It is a presentational read of `state` — no store access,
+no effects, no timers. Progress comes from virtual time via `progressOf`, exactly like the
+particles, so pause, step, and rewind need no handling here.
+
+```tsx
+import type { EngineState } from '../../engine'
+import { progressOf, TONE_FILL } from './geometry'
+
+/** `edgeId` is minted as `${from}->${to}`; the panel is the only place that reads it back. */
+function routeOf(edgeId: string): [string, string] {
+  const [from = edgeId, to = ''] = edgeId.split('->')
+  return [from, to]
+}
+
+export function InFlightPanel({ state }: { state: EngineState }) {
+  // Sorted by departure, not array order: rows must not jump when a message lands.
+  const flights = [...state.inFlight].sort(
+    (a, b) => a.fromT - b.fromT || a.message.id.localeCompare(b.message.id),
+  )
+
+  return (
+    <div className="max-h-32 overflow-y-auto px-3 py-2" data-testid="inflight-panel">
+      <div className="mb-1 flex items-baseline gap-2">
+        <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Message đang bay</h3>
+        <span className="font-mono text-[10px] text-slate-600">{flights.length}</span>
+      </div>
+
+      {flights.length === 0 ? (
+        <p className="text-[11px] text-slate-600" data-testid="inflight-empty">
+          Không có message nào trên đường truyền.
+        </p>
+      ) : (
+        <ul className="space-y-1">
+          {flights.map((f) => {
+            const [from, to] = routeOf(f.edgeId)
+            const pct = Math.round(progressOf(f, state.now) * 100)
+            const colour = TONE_FILL[f.tone] ?? '#94a3b8'
+            return (
+              <li
+                key={`${f.message.id}@${f.edgeId}`}
+                data-testid="inflight-row"
+                data-message-id={f.message.id}
+                className="flex items-center gap-2 text-[11px]"
+              >
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: colour }}
+                />
+                <span className="w-8 shrink-0 font-mono text-slate-200">{f.message.id}</span>
+                <span className="w-40 shrink-0 truncate font-mono text-slate-400">
+                  {from} <span className="text-slate-600">{'->'}</span> {to}
+                </span>
+                <span className="w-36 shrink-0 truncate font-mono text-sky-300">
+                  {f.message.routingKey || '—'}
+                </span>
+                <span
+                  role="progressbar"
+                  aria-valuenow={pct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  data-testid="inflight-progress"
+                  className="h-1.5 min-w-16 flex-1 overflow-hidden rounded bg-slate-800"
+                >
+                  <span
+                    className="block h-full rounded"
+                    style={{ width: `${pct}%`, backgroundColor: colour }}
+                  />
+                </span>
+                <span className="flex shrink-0 gap-1 text-[10px] text-slate-500">
+                  {f.message.redeliveryCount > 0 && (
+                    <span className="rounded bg-amber-950 px-1 text-amber-300">
+                      redelivery {f.message.redeliveryCount}
+                    </span>
+                  )}
+                  {f.message.priority > 0 && (
+                    <span className="rounded bg-slate-800 px-1 text-slate-300">
+                      priority {f.message.priority}
+                    </span>
+                  )}
+                  {f.message.persistent && (
+                    <span className="rounded bg-emerald-950 px-1 text-emerald-300">persistent</span>
+                  )}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+```
+
+- [ ] **Step 8: Mount it**
+
+In `src/ui/App.tsx`, put the panel between the canvas and the transport bar so it sits
+where the eye already is and never covers the topology:
+
+```tsx
+        <div className="border-t border-slate-800">
+          <InFlightPanel state={state} />
+        </div>
+        <div className="border-t border-slate-800">
+          <Transport durationMs={lesson.durationMs} onStep={stepOnce} />
+        </div>
+```
+
+- [ ] **Step 9: Run the full suite**
+
+Run: `npm test` then `npm run typecheck`
+Expected: PASS. `src/engine/purity.test.ts` must stay green — nothing added to
+`src/engine/**` here imports React or touches the DOM.
+
+- [ ] **Step 10: Verify visually**
+
+Run `npm run dev`, open lesson 3 (fanout) and lesson 4 (topic).
+Expected: the zoom control strip is dark slate and legible, not a white block; each moving
+dot carries its id above it and stays readable while crossing an edge; the panel lists one
+row per moving message with a filling progress bar, and empties to
+`Không có message nào trên đường truyền.` between bursts. Scrub backwards — the rows and
+bars must follow virtual time backwards with no stale entries.
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add src/engine src/index.css src/ui
+git commit -m "feat: dark canvas chrome, message id labels, and a live in-flight panel"
+```
+
+---
+
 ## Task 16: Reliability and dead-lettering lessons 7 through 13
 
 **Language:** every `title`, `summary`, narrative `title`/`body`, and checkpoint below is
