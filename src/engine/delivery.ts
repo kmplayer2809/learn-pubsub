@@ -1,4 +1,4 @@
-import { buildReplyEvents } from './advanced'
+import { buildReplyEvents, requeueByPriority } from './advanced'
 import { addInFlight, clearInFlight, edgeId, log, scheduleEvent, TRAVEL_MS } from './broker'
 import { deadLetter } from './dlx'
 import { nextFloat } from './rng'
@@ -159,14 +159,18 @@ export function applyNack(state: EngineState, event: SimEvent): ApplyResult {
   // applyConsumeDone always carries the message; a nack without one cannot be requeued.
   if (requeue && message) {
     const redelivered: Message = { ...message, redeliveryCount: message.redeliveryCount + 1 }
+    // Task 8 note: on a priority queue this must go back to the head of its own
+    // priority band, not the head of the whole queue — see requeueByPriority.
+    const spec = state.topology.queues.find((q) => q.id === queueId)
     next = {
       ...next,
       queues: {
         ...next.queues,
-        [queueId]: [
+        [queueId]: requeueByPriority(
+          next.queues[queueId] ?? [],
           { message: redelivered, enqueuedAt: state.now },
-          ...(next.queues[queueId] ?? []),
-        ],
+          spec?.maxPriority,
+        ),
       },
     }
     next = log(next, {

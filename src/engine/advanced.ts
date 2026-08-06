@@ -16,6 +16,24 @@ export function insertByPriority(
   return [...queue.slice(0, index), incoming, ...queue.slice(index)]
 }
 
+/**
+ * Returns a rejected or crash-released message to the queue. It goes back to
+ * the head, but on a priority queue "the head" means the head of its own
+ * priority band: a requeued message must not jump ahead of higher-priority
+ * messages that were waiting behind it. Unlike insertByPriority this inserts
+ * ahead of equals, because the message had already reached the front once.
+ */
+export function requeueByPriority(
+  queue: readonly QueuedMessage[],
+  incoming: QueuedMessage,
+  maxPriority: number | undefined,
+): QueuedMessage[] {
+  if (maxPriority === undefined) return [incoming, ...queue]
+  const index = queue.findIndex((q) => q.message.priority <= incoming.message.priority)
+  if (index === -1) return [...queue, incoming]
+  return [...queue.slice(0, index), incoming, ...queue.slice(index)]
+}
+
 export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyResult {
   const consumerId = event.payload.consumerId as NodeId
   const held = (event.payload.heldMessages as Message[]) ?? []
@@ -29,17 +47,19 @@ export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyRe
   }
 
   if (consumer && held.length > 0 && !consumer.autoAck) {
-    const requeued = held.map<QueuedMessage>((m) => ({
-      message: { ...m, redeliveryCount: m.redeliveryCount + 1 },
-      enqueuedAt: state.now,
-    }))
-    next = {
-      ...next,
-      queues: {
-        ...next.queues,
-        [consumer.queueId]: [...requeued, ...(next.queues[consumer.queueId] ?? [])],
-      },
-    }
+    const spec = state.topology.queues.find((q) => q.id === consumer.queueId)
+    // Fold from the right so that after each insert-ahead-of-equals the held
+    // messages end up in their original order rather than reversed.
+    const restored = held.reduceRight<QueuedMessage[]>(
+      (acc, m) =>
+        requeueByPriority(
+          acc,
+          { message: { ...m, redeliveryCount: m.redeliveryCount + 1 }, enqueuedAt: state.now },
+          spec?.maxPriority,
+        ),
+      [...(next.queues[consumer.queueId] ?? [])],
+    )
+    next = { ...next, queues: { ...next.queues, [consumer.queueId]: restored } }
     next = log(next, {
       at: state.now,
       type: 'consumerCrash',

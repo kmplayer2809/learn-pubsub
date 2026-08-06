@@ -171,6 +171,39 @@ describe('applyNack', () => {
     expect(next.queues.q1![0]!.message.redeliveryCount).toBe(1)
     expect(next.metrics.nacked).toBe(1)
   })
+
+  it('does not let a rejected low-priority message jump ahead of waiting high-priority ones on a priority queue', () => {
+    const priorityTopo = topo([consumer({ id: 'c1' })])
+    priorityTopo.queues = [{ ...priorityTopo.queues[0]!, maxPriority: 9 }]
+    const base = createEngineState(priorityTopo, 1)
+    const lowPriorityMessage = {
+      id: 'm-low',
+      body: 'x',
+      routingKey: 'go',
+      headers: {},
+      priority: 0,
+      publishedAt: 0,
+      redeliveryCount: 0,
+      deathTrail: [],
+      persistent: false,
+    }
+    const state: EngineState = {
+      ...base,
+      queues: {
+        q1: [
+          { message: { ...lowPriorityMessage, id: 'm-high', priority: 9 }, enqueuedAt: 0 },
+          { message: { ...lowPriorityMessage, id: 'm-mid', priority: 5 }, enqueuedAt: 0 },
+        ],
+      },
+    }
+    const { state: next } = applyNack(state, {
+      at: 0,
+      seq: 0,
+      type: 'nack',
+      payload: { message: lowPriorityMessage, consumerId: 'c1', messageId: 'm-low', queueId: 'q1', requeue: true },
+    })
+    expect(next.queues.q1!.map((q) => q.message.id)).toEqual(['m-high', 'm-mid', 'm-low'])
+  })
 })
 
 describe('applyConsumeDone', () => {

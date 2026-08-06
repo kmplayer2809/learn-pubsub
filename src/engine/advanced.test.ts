@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { applyConsumerCrash, applyConsumerRecover, buildReplyEvents, insertByPriority } from './advanced'
+import {
+  applyConsumerCrash,
+  applyConsumerRecover,
+  buildReplyEvents,
+  insertByPriority,
+  requeueByPriority,
+} from './advanced'
 import { createEngineState } from './broker'
 import type { EngineState, Message, QueuedMessage, Topology } from './types'
 
@@ -67,6 +73,32 @@ describe('insertByPriority', () => {
   })
 })
 
+describe('requeueByPriority', () => {
+  it('prepends when the queue has no maxPriority', () => {
+    const queue = [entry('m1', 0), entry('m2', 0)]
+    expect(requeueByPriority(queue, entry('m3', 0), undefined).map((q) => q.message.id)).toEqual(['m3', 'm1', 'm2'])
+  })
+
+  it('does not let a rejected low-priority message jump ahead of waiting high-priority ones', () => {
+    const queue = [entry('m-high', 9), entry('m-mid', 5)]
+    expect(requeueByPriority(queue, entry('m-low', 0), 9).map((q) => q.message.id)).toEqual([
+      'm-high',
+      'm-mid',
+      'm-low',
+    ])
+  })
+
+  it('returns the message to the head of its own priority band, ahead of equals', () => {
+    const queue = [entry('m-high', 9), entry('m-peer', 5), entry('m-low', 0)]
+    expect(requeueByPriority(queue, entry('m-back', 5), 9).map((q) => q.message.id)).toEqual([
+      'm-high',
+      'm-back',
+      'm-peer',
+      'm-low',
+    ])
+  })
+})
+
 describe('applyConsumerCrash', () => {
   it('requeues unacked messages at the head with an incremented redelivery count', () => {
     const base = createEngineState(topology, 1)
@@ -84,6 +116,25 @@ describe('applyConsumerCrash', () => {
     expect(next.unacked.c1).toEqual([])
     expect(next.queues.q1!.map((q) => q.message.id)).toEqual(['m1', 'm2'])
     expect(next.queues.q1![0]!.message.redeliveryCount).toBe(1)
+  })
+
+  it('does not let a held low-priority message jump ahead of a waiting high-priority one on a priority queue', () => {
+    const priorityTopology: Topology = {
+      ...topology,
+      queues: [{ ...topology.queues[0]!, maxPriority: 9 }],
+    }
+    const base = createEngineState(priorityTopology, 1)
+    const state: EngineState = {
+      ...base,
+      unacked: { c1: ['m-low'] },
+      queues: { q1: [entry('m-high', 9)] },
+    }
+    const held = [message('m-low', { priority: 0 })]
+    const { state: next } = applyConsumerCrash(
+      { ...state, journal: [] },
+      { at: 0, seq: 0, type: 'consumerCrash', payload: { consumerId: 'c1', heldMessages: held } },
+    )
+    expect(next.queues.q1!.map((q) => q.message.id)).toEqual(['m-high', 'm-low'])
   })
 })
 
