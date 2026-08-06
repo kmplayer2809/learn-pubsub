@@ -184,7 +184,22 @@ Task 17 dispatch notes: Pattern lessons 14-17 (RPC, priority,
   measure the journal first, fix the number and show evidence if the engine is right, and
   report BLOCKED rather than loosen any assertion to green.
 
-=== PAUSED 2026-08-06 23:30 (+07) at the user's request; resume ~03:30 on 2026-08-07. ===
+toFlow regression: FIXED (commit 0414e1d). 258 tests / 25 files, typecheck clean.
+  Controller fixed inline rather than dispatching — full context already held, and the
+  fix was precisely specified. Reply edges now derive from the script's `replyTo`: for
+  each action carrying one, find the queues bound to the exchange it was published to and
+  draw an edge from the consumers on those queues to the `replyTo` exchange. Yields
+  exactly `worker->replies` on 14-rpc and nothing anywhere else. Styling reverted from
+  the dead-letter dash to the ordinary solid stroke — a reply is a real publish path.
+  `toFlowEdges(topology, script = [])`; CanvasView takes an optional `script` prop, App
+  passes `lesson.script`.
+  ROOT CAUSE worth remembering: the pre-existing invariant test was ONE-DIRECTIONAL. It
+  asserted every travelled edge is drawn, so it stayed green no matter how many edges
+  were invented, and the cross-product satisfied it trivially. Added the other direction
+  (every consumer->exchange edge drawn must be travelled) plus an explicit 14-rpc case.
+  RED-PROBED both: restoring the cross-product turns the new test red on 16 of 16 lessons.
+
+=== PAUSED 2026-08-06 23:30 (+07) at the user's request; resumed 03:34 on 2026-08-07. ===
   ON RESUME, do NOT re-dispatch anything marked complete above. Order of remaining work:
   finish Task 17's review loop (read .superpowers/sdd/task-17-report.md and `git log` to
   see whether the agent committed before the pause — trust git over recollection), then
