@@ -87,8 +87,8 @@ export const topicExchange: Lesson = {
   narrative: [
     {
       at: 0,
-      title: 'The single-word wildcard matches exactly one word',
-      body: 'The binding on `eu-orders` is `order.eu.` plus the single-word wildcard, so it matches a key with exactly three dot-separated words, the first two literal and the last anything. `order.eu.created` fits; `order.eu.west.created` would not — that has one word too many.',
+      title: '`*` matches exactly one word',
+      body: 'The binding on `eu-orders` is `order.eu.*`, so it matches a key with exactly three dot-separated words: the first two literal, the last anything. `order.eu.created` fits; `order.eu.west.created` would not — that has one word too many.',
       highlight: ['p1', 'ex', 'eu-orders'],
     },
     {
@@ -99,8 +99,8 @@ export const topicExchange: Lesson = {
     },
     {
       at: 6000,
-      title: 'A bare key still matches `#`, but not the single-word wildcard',
-      body: 'The key `order` alone matches `order.#` — `#` is happy with zero remaining words — but it does **not** match the `eu-orders` binding, which needs exactly two more words after `order`.',
+      title: 'A bare key still matches `#`, but not `*`',
+      body: 'The key `order` alone matches `order.#` — `#` is happy with zero remaining words — but it does **not** match `order.eu.*`, which needs exactly two more words after `order`.',
       highlight: ['all-orders', 'eu-orders'],
     },
     {

@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { LESSONS } from '../../lessons/registry'
-import { Markdown } from './Markdown'
+import { Markdown, MarkdownInline } from './Markdown'
 
 describe('Markdown', () => {
   it('renders bold, italic and code without leaking their markers', () => {
@@ -36,7 +36,40 @@ describe('Markdown', () => {
     for (const lesson of LESSONS) {
       for (const step of lesson.narrative) {
         const { container } = render(<Markdown text={step.body} />)
-        expect(container.textContent, `${lesson.id} @${step.at}`).not.toMatch(/\*|`/)
+        // Text inside a rendered <code> span is exempt: `order.eu.*` is a topic
+        // pattern whose asterisk is the point, not an unrendered marker. Lesson
+        // 04 teaches * versus #, so forbidding the glyph there would force the
+        // lesson to describe its own subject in words instead of showing it.
+        const copy = container.cloneNode(true) as HTMLElement
+        for (const code of copy.querySelectorAll('code')) code.remove()
+        expect(copy.textContent, `${lesson.id} @${step.at}`).not.toMatch(/\*|`/)
+        checked++
+      }
+    }
+    expect(checked).toBeGreaterThan(0)
+  })
+})
+
+describe('MarkdownInline', () => {
+  it('renders inline constructs without a paragraph wrapper', () => {
+    const { container } = render(<MarkdownInline text="use `#` for **many** words" />)
+    expect(container.querySelector('p')).toBeNull()
+    expect(container.querySelector('code')?.textContent).toBe('#')
+    expect(container.querySelector('strong')?.textContent).toBe('many')
+    expect(container.textContent).toBe('use # for many words')
+  })
+
+  it('leaves no unrendered markers in any lesson narrative title', () => {
+    // Titles render into an <h2>, which cannot contain a <p>. Before
+    // MarkdownInline existed they were dropped in as raw text, so lesson 04's
+    // "`#` matches zero or more words" showed its backticks to the reader.
+    let checked = 0
+    for (const lesson of LESSONS) {
+      for (const step of lesson.narrative) {
+        const { container } = render(<MarkdownInline text={step.title} />)
+        const copy = container.cloneNode(true) as HTMLElement
+        for (const code of copy.querySelectorAll('code')) code.remove()
+        expect(copy.textContent, `${lesson.id} @${step.at}`).not.toMatch(/\*|`/)
         checked++
       }
     }

@@ -2,7 +2,7 @@ import type { EngineState, ValidationIssue } from '../../engine'
 import type { Lesson } from '../../lessons/types'
 import { useAppStore } from '../../sim/store'
 import { activeStepIndex } from './activeStep'
-import { Markdown } from './Markdown'
+import { Markdown, MarkdownInline } from './Markdown'
 
 function NodeConfig({ lesson, state, nodeId }: { lesson: Lesson; state: EngineState; nodeId: string }) {
   const queue = lesson.topology.queues.find((q) => q.id === nodeId)
@@ -69,7 +69,9 @@ export function Inspector({
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto" data-testid="inspector">
       <section>
-        <h2 className="mb-1 text-sm font-semibold text-slate-100">{step?.title ?? lesson.title}</h2>
+        <h2 className="mb-1 text-sm font-semibold text-slate-100">
+          <MarkdownInline text={step?.title ?? lesson.title} />
+        </h2>
         <Markdown text={step?.body ?? lesson.summary} />
       </section>
 
