@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ScriptedAction, Topology } from '../engine'
+import type { BindingSpec, ScriptedAction, Topology } from '../engine'
 
 export const STORAGE_KEY = 'rabbitmq-visualizer.sandbox'
 /** Virtual seconds a load generator covers; a fixed horizon keeps runs replayable. */
@@ -25,6 +25,8 @@ interface SandboxState {
   updateNode(id: string, patch: Record<string, unknown>): void
   removeNode(id: string): void
   addBinding(exchangeId: string, destinationId: string, routingKey: string): void
+  updateBinding(id: string, patch: Partial<Pick<BindingSpec, 'routingKey'>>): void
+  removeBinding(id: string): void
   publish(action: ScriptedAction): void
   setGenerator(generator: Generator): void
   save(): void
@@ -128,6 +130,21 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
           },
         ],
       },
+    }))
+  },
+
+  updateBinding(id, patch) {
+    set((s) => ({
+      topology: {
+        ...s.topology,
+        bindings: s.topology.bindings.map((b) => (b.id === id ? { ...b, ...patch } : b)),
+      },
+    }))
+  },
+
+  removeBinding(id) {
+    set((s) => ({
+      topology: { ...s.topology, bindings: s.topology.bindings.filter((b) => b.id !== id) },
     }))
   },
 

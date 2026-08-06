@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import type { EngineState, Topology, ValidationIssue } from '../engine'
-import { HaltedBanner, IssuesList } from '../ui/Inspector/Inspector'
+import { EventLog, HaltedBanner, IssuesList, MetricsGrid } from '../ui/Inspector/Inspector'
 import { useAppStore } from '../sim/store'
 import { type SandboxNodeKind, useSandboxStore } from './sandboxStore'
 
@@ -30,6 +30,8 @@ function SelectedNodeConfig() {
   const topology = useSandboxStore((s) => s.topology)
   const updateNode = useSandboxStore((s) => s.updateNode)
   const removeNode = useSandboxStore((s) => s.removeNode)
+  const updateBinding = useSandboxStore((s) => s.updateBinding)
+  const removeBinding = useSandboxStore((s) => s.removeBinding)
 
   const exchange = topology.exchanges.find((e) => e.id === selectedNodeId)
   const queue = topology.queues.find((q) => q.id === selectedNodeId)
@@ -49,20 +51,53 @@ function SelectedNodeConfig() {
   return (
     <div className="space-y-1.5 text-[11px] text-slate-300">
       {exchange && (
-        <label className={fieldRow}>
-          <span>type</span>
-          <select
-            value={exchange.type}
-            onChange={(e) => updateNode(exchange.id, { type: e.target.value })}
-            className={selectClass}
-          >
-            {EXCHANGE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </label>
+        <>
+          <label className={fieldRow}>
+            <span>type</span>
+            <select
+              value={exchange.type}
+              onChange={(e) => updateNode(exchange.id, { type: e.target.value })}
+              className={selectClass}
+            >
+              {EXCHANGE_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="space-y-1 pt-1">
+            <p className="text-slate-500">bindings</p>
+            {topology.bindings.filter((b) => b.exchangeId === exchange.id).length === 0 && (
+              <p className="text-slate-500">
+                Chưa có binding nào. Kéo từ handle của exchange này tới một queue để tạo binding.
+              </p>
+            )}
+            {topology.bindings
+              .filter((b) => b.exchangeId === exchange.id)
+              .map((b) => (
+                <div key={b.id} className="flex items-center gap-1.5" data-testid={`binding-${b.id}`}>
+                  <span className="w-16 shrink-0 truncate text-slate-500" title={b.destinationId}>
+                    → {b.destinationId}
+                  </span>
+                  <input
+                    value={b.routingKey ?? ''}
+                    onChange={(e) => updateBinding(b.id, { routingKey: e.target.value })}
+                    placeholder="routing key"
+                    aria-label={`routing key cho binding tới ${b.destinationId}`}
+                    className="w-24 flex-1 rounded bg-slate-800 px-1.5 py-0.5 text-slate-200"
+                  />
+                  <button
+                    onClick={() => removeBinding(b.id)}
+                    aria-label={`xóa binding tới ${b.destinationId}`}
+                    className="shrink-0 rounded border border-rose-800 px-1.5 text-rose-300 hover:bg-rose-950"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+          </div>
+        </>
       )}
 
       {queue && (
@@ -256,6 +291,11 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
       </section>
 
       <section>
+        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Chỉ số</h3>
+        <MetricsGrid metrics={state.metrics} />
+      </section>
+
+      <section>
         <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Publish message</h3>
         {!activePublisherId && (
           <p className="mb-1 text-[11px] text-slate-500">Thêm một publisher trước khi publish.</p>
@@ -314,6 +354,11 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
           className="w-full accent-sky-500"
           aria-label="generator rate"
         />
+      </section>
+
+      <section className="min-h-0 flex-1">
+        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Nhật ký sự kiện</h3>
+        <EventLog journal={state.journal} />
       </section>
 
       <section className="mt-auto flex gap-2 border-t border-slate-800 pt-3">

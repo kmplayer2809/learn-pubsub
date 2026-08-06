@@ -32,6 +32,38 @@ describe('sandbox store', () => {
     expect(useSandboxStore.getState().topology.bindings).toHaveLength(1)
   })
 
+  it('updates a binding routing key without touching other bindings', () => {
+    const s = useSandboxStore.getState()
+    s.addNode('exchange', { x: 100, y: 100 })
+    s.addNode('queue', { x: 300, y: 100 })
+    s.addNode('queue', { x: 300, y: 300 })
+    const { exchanges, queues } = useSandboxStore.getState().topology
+    s.addBinding(exchanges[0]!.id, queues[0]!.id, '')
+    s.addBinding(exchanges[0]!.id, queues[1]!.id, 'other')
+    const [b1, b2] = useSandboxStore.getState().topology.bindings
+
+    s.updateBinding(b1!.id, { routingKey: 'demo' })
+
+    const bindings = useSandboxStore.getState().topology.bindings
+    expect(bindings.find((b) => b.id === b1!.id)!.routingKey).toBe('demo')
+    expect(bindings.find((b) => b.id === b2!.id)!.routingKey).toBe('other')
+  })
+
+  it('removes a binding without touching the nodes it connected', () => {
+    const s = useSandboxStore.getState()
+    s.addNode('exchange', { x: 100, y: 100 })
+    s.addNode('queue', { x: 300, y: 100 })
+    const { exchanges, queues } = useSandboxStore.getState().topology
+    s.addBinding(exchanges[0]!.id, queues[0]!.id, 'key')
+    const binding = useSandboxStore.getState().topology.bindings[0]!
+
+    s.removeBinding(binding.id)
+
+    expect(useSandboxStore.getState().topology.bindings).toEqual([])
+    expect(useSandboxStore.getState().topology.exchanges).toHaveLength(1)
+    expect(useSandboxStore.getState().topology.queues).toHaveLength(1)
+  })
+
   it('removes a node and every binding that referenced it', () => {
     const s = useSandboxStore.getState()
     s.addNode('exchange', { x: 100, y: 100 })

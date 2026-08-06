@@ -1,4 +1,4 @@
-import type { EngineState, ValidationIssue } from '../../engine'
+import type { EngineState, JournalEntry, Metrics, ValidationIssue } from '../../engine'
 import type { Lesson } from '../../lessons/types'
 import { useAppStore } from '../../sim/store'
 import { activeStepIndex } from './activeStep'
@@ -79,6 +79,41 @@ export function HaltedBanner({ halted }: { halted?: { reason: string } }) {
   )
 }
 
+/**
+ * Shared with SandboxPanel: driven generically by `Object.entries`, so a new
+ * counter in `Metrics` appears in both surfaces with no per-counter work.
+ * Metric keys (`published`, `routed`, ...) stay English, matching lesson mode.
+ */
+export function MetricsGrid({ metrics }: { metrics: Metrics }) {
+  return (
+    <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
+      {Object.entries(metrics).map(([key, value]) => (
+        <div key={key} className="contents">
+          <dt>{key}</dt>
+          <dd className="text-slate-200">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+/** Shared with SandboxPanel: the last 40 journal entries, newest first. */
+export function EventLog({ journal }: { journal: JournalEntry[] }) {
+  return (
+    <ul className="space-y-0.5 font-mono text-[10px] text-slate-400">
+      {journal
+        .slice(-40)
+        .reverse()
+        .map((entry, i) => (
+          <li key={i}>
+            <span className="text-slate-600">{(entry.at / 1000).toFixed(1)}s </span>
+            {entry.text}
+          </li>
+        ))}
+    </ul>
+  )
+}
+
 export function Inspector({
   lesson,
   state,
@@ -111,30 +146,13 @@ export function Inspector({
         {selectedNodeId ? (
           <NodeConfig lesson={lesson} state={state} nodeId={selectedNodeId} />
         ) : (
-          <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
-            {Object.entries(state.metrics).map(([key, value]) => (
-              <div key={key} className="contents">
-                <dt>{key}</dt>
-                <dd className="text-slate-200">{value}</dd>
-              </div>
-            ))}
-          </dl>
+          <MetricsGrid metrics={state.metrics} />
         )}
       </section>
 
       <section className="min-h-0 flex-1">
         <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Nhật ký sự kiện</h3>
-        <ul className="space-y-0.5 font-mono text-[10px] text-slate-400">
-          {state.journal
-            .slice(-40)
-            .reverse()
-            .map((entry, i) => (
-              <li key={i}>
-                <span className="text-slate-600">{(entry.at / 1000).toFixed(1)}s </span>
-                {entry.text}
-              </li>
-            ))}
-        </ul>
+        <EventLog journal={state.journal} />
       </section>
     </div>
   )

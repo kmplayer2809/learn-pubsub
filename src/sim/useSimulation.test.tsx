@@ -4,10 +4,35 @@ import type { EngineState, Simulation, Topology } from '../engine'
 import * as engineModule from '../engine'
 import { LESSONS } from '../lessons/registry'
 import type { Lesson } from '../lessons/types'
+import { emptyTopology, useSandboxStore } from '../sandbox/sandboxStore'
 import { useAppStore } from './store'
 import { useSimulation } from './useSimulation'
 
 const EMPTY_TOPOLOGY: Topology = { publishers: [], exchanges: [], queues: [], consumers: [], bindings: [] }
+
+// A minimal direct-exchange topology used only by the sandbox-mode tests: one
+// publisher, one exchange, one queue bound with an empty routing key (the
+// same default a drag-created binding gets), one consumer.
+const SANDBOX_TOPOLOGY: Topology = {
+  publishers: [{ id: 'p1', label: 'p1', position: { x: 0, y: 0 } }],
+  exchanges: [{ id: 'ex1', label: 'ex1', type: 'direct', position: { x: 100, y: 0 } }],
+  queues: [{ id: 'q1', label: 'q1', kind: 'classic', position: { x: 200, y: 0 } }],
+  consumers: [
+    {
+      id: 'c1',
+      label: 'c1',
+      queueId: 'q1',
+      prefetch: 1,
+      autoAck: false,
+      processingMs: 100,
+      jitterMs: 0,
+      nackRate: 0,
+      requeueOnNack: true,
+      position: { x: 300, y: 0 },
+    },
+  ],
+  bindings: [{ id: 'b1', exchangeId: 'ex1', destinationId: 'q1', destinationKind: 'queue', routingKey: '' }],
+}
 
 // A second, lesson-independent fixture used only for the "switching lessons"
 // test. Its script deliberately starts after t=0 so a fresh build's initial
@@ -30,6 +55,7 @@ let nowMs = 0
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
+  useSandboxStore.setState({ topology: emptyTopology(), script: [], generator: undefined }, false)
   frameCallbacks = []
   nowMs = 0
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
@@ -252,6 +278,51 @@ describe('useSimulation', () => {
     expect(useAppStore.getState().virtualTime).toBe(0)
     expect(useAppStore.getState().playing).toBe(false)
     expect(result.current.state.journal).toEqual([])
+
+    unmount()
+  })
+
+  // Defect 3 (task 18 fix wave 2): the sandbox publish form schedules a
+  // ScriptedAction at the CURRENT virtual time (SandboxPanel's
+  // `publish({ at: virtualTime, ... })`), which can already be well past
+  // zero if the user played the clock forward before publishing. Because the
+  // sandbox rebuilds its whole Simulation from scratch and replays it to the
+  // current virtual time on every script change (see useSimulation's build
+  // effect, keyed on `sandboxScript`), an action whose `at` equals "now" is
+  // never left behind in the past — this test proves it is applied
+  // immediately, not silently dropped.
+  it('sandbox: publishing after the virtual clock has already advanced still processes the message', () => {
+    useSandboxStore.setState({ topology: SANDBOX_TOPOLOGY, script: [] }, false)
+    act(() => {
+      useAppStore.getState().openSandbox()
+    })
+
+    const { result, unmount } = renderHook(() => useSimulation())
+
+    act(() => {
+      useAppStore.getState().play()
+    })
+    advanceFrame(5000)
+    act(() => {
+      useAppStore.getState().pause()
+    })
+
+    const virtualTimeAtPublish = useAppStore.getState().virtualTime
+    expect(virtualTimeAtPublish).toBeGreaterThan(0)
+    expect(result.current.state.metrics.published).toBe(0)
+
+    act(() => {
+      useSandboxStore.getState().publish({
+        at: virtualTimeAtPublish,
+        publisherId: 'p1',
+        exchangeId: 'ex1',
+        routingKey: '',
+        body: 'hello',
+      })
+    })
+
+    expect(result.current.state.metrics.published).toBe(1)
+    expect(result.current.state.journal.some((j) => j.text.includes('published'))).toBe(true)
 
     unmount()
   })
