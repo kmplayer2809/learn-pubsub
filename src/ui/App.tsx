@@ -11,7 +11,7 @@ export default function App() {
   const lesson = getLesson(lessonId)
   const { state, issues, stepOnce } = useSimulation()
 
-  if (!lesson) return <div className="p-4 text-slate-200">Lesson not found.</div>
+  if (!lesson) return <div className="p-4 text-slate-200">Không tìm thấy bài học.</div>
 
   return (
     <div className="flex h-full bg-slate-950 text-slate-100">

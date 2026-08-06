@@ -13,6 +13,6 @@ describe('App', () => {
 
   it('shows a play button in the transport bar', () => {
     render(<App />)
-    expect(screen.getByTestId('play-pause').textContent).toBe('Play')
+    expect(screen.getByTestId('play-pause').textContent).toBe('Chạy')
   })
 })

@@ -4,7 +4,7 @@ export const topicExchange: Lesson = {
   id: '04-topic',
   group: 'basics',
   title: 'Topic exchange',
-  summary: 'Wildcard routing: `*` matches one word, `#` matches zero or more.',
+  summary: 'Wildcard routing: `*` khớp một từ, `#` khớp không hoặc nhiều từ hơn.',
   seed: 4,
   durationMs: 12_000,
   topology: {
@@ -87,26 +87,26 @@ export const topicExchange: Lesson = {
   narrative: [
     {
       at: 0,
-      title: '`*` matches exactly one word',
-      body: 'The binding on `eu-orders` is `order.eu.*`, so it matches a key with exactly three dot-separated words: the first two literal, the last anything. `order.eu.created` fits; `order.eu.west.created` would not — that has one word too many.',
+      title: '`*` khớp đúng một từ',
+      body: 'Binding trên `eu-orders` là `order.eu.*`, nên nó khớp với key có đúng ba từ ngăn cách bởi dấu chấm: hai từ đầu cố định, từ cuối là bất kỳ. `order.eu.created` khớp; `order.eu.west.created` thì không — vì key đó thừa một từ.',
       highlight: ['p1', 'ex', 'eu-orders'],
     },
     {
       at: 3000,
-      title: '`#` matches zero or more words',
-      body: 'The binding `order.#` on `all-orders` matches `order` alone, `order.eu.created`, and anything else that starts with `order`. It is the loosest wildcard a topic exchange offers.',
+      title: '`#` khớp không hoặc nhiều từ',
+      body: 'Binding `order.#` trên `all-orders` khớp với `order` đứng một mình, `order.eu.created`, và bất kỳ key nào khác bắt đầu bằng `order`. Đây là wildcard lỏng lẻo nhất mà một topic exchange cung cấp.',
       highlight: ['all-orders'],
     },
     {
       at: 6000,
-      title: 'A bare key still matches `#`, but not `*`',
-      body: 'The key `order` alone matches `order.#` — `#` is happy with zero remaining words — but it does **not** match `order.eu.*`, which needs exactly two more words after `order`.',
+      title: 'Key trơn vẫn khớp `#`, nhưng không khớp `*`',
+      body: 'Key `order` đứng một mình khớp `order.#` — `#` chấp nhận cả trường hợp không còn từ nào — nhưng nó **không** khớp `order.eu.*`, vốn cần đúng thêm hai từ nữa sau `order`.',
       highlight: ['all-orders', 'eu-orders'],
     },
     {
       at: 9000,
-      title: 'A message can land in several queues at once',
-      body: 'Nothing about topic routing is exclusive. `order.eu.created` above matched `eu-orders`, `all-orders`, *and* `created-only` in the same publish — three independent copies from one message.',
+      title: 'Một message có thể rơi vào nhiều queue cùng lúc',
+      body: 'Không có gì trong topic routing là độc quyền. `order.eu.created` ở trên khớp cả `eu-orders`, `all-orders`, *và* `created-only` trong cùng một lần publish — ba bản copy độc lập từ một message.',
       highlight: ['eu-orders', 'all-orders', 'created-only'],
     },
   ],

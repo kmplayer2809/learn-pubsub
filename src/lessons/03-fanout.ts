@@ -4,7 +4,7 @@ export const fanoutExchange: Lesson = {
   id: '03-fanout',
   group: 'basics',
   title: 'Fanout exchange',
-  summary: 'One message, broadcast to every bound queue, regardless of routing key.',
+  summary: 'Một message được broadcast tới mọi queue đã bind, bất kể routing key.',
   seed: 3,
   durationMs: 9_000,
   topology: {
@@ -85,26 +85,26 @@ export const fanoutExchange: Lesson = {
   narrative: [
     {
       at: 0,
-      title: 'Fanout ignores the routing key entirely',
-      body: 'Every binding on `ex` carries a routing key — `ignored-a`, `ignored-b`, `ignored-c` — but a fanout exchange never looks at them. Every bound queue receives every message.',
+      title: 'Fanout bỏ qua hoàn toàn routing key',
+      body: 'Mỗi binding trên `ex` đều mang một routing key — `ignored-a`, `ignored-b`, `ignored-c` — nhưng fanout exchange chẳng bao giờ nhìn vào chúng. Mọi queue đã bind đều nhận mọi message.',
       highlight: ['p1', 'ex'],
     },
     {
       at: 1400,
-      title: 'One message becomes three copies',
-      body: 'Watch the particle leave `ex` and split into three at once, one toward `email`, one toward `analytics`, one toward `audit`. Each queue gets an independent copy of the same message.',
+      title: 'Một message trở thành ba bản copy',
+      body: 'Hãy quan sát particle rời khỏi `ex` rồi tách thành ba cùng lúc, một hướng về `email`, một hướng về `analytics`, một hướng về `audit`. Mỗi queue nhận một bản copy độc lập của cùng một message.',
       highlight: ['email', 'analytics', 'audit'],
     },
     {
       at: 3000,
-      title: 'A slow queue never slows the others',
-      body: 'Because each queue owns its own copy, a consumer that is slow to drain `audit` has no effect on how fast `email` or `analytics` are served.',
+      title: 'Một queue chậm không làm chậm các queue khác',
+      body: 'Vì mỗi queue sở hữu bản copy của riêng mình, một consumer chậm chạp trong việc drain `audit` không ảnh hưởng gì tới tốc độ phục vụ của `email` hay `analytics`.',
       highlight: ['email', 'analytics', 'audit'],
     },
     {
       at: 5000,
-      title: 'No pattern, no exception',
-      body: 'There is no routing key that would make a fanout exchange skip a bound queue. Binding to a fanout exchange is a *broadcast* subscription, full stop.',
+      title: 'Không pattern, không ngoại lệ',
+      body: 'Không có routing key nào khiến fanout exchange bỏ qua một queue đã bind. Bind vào fanout exchange chính là một subscription kiểu *broadcast*, chấm hết.',
       highlight: ['ex'],
     },
   ],

@@ -4,7 +4,7 @@ export const competingConsumers: Lesson = {
   id: '06-competing-consumers',
   group: 'basics',
   title: 'Competing consumers',
-  summary: 'One queue, several consumers: work is split, not duplicated.',
+  summary: 'Một queue, nhiều consumer: work được chia, không bị nhân bản.',
   seed: 6,
   durationMs: 14_000,
   topology: {
@@ -61,26 +61,26 @@ export const competingConsumers: Lesson = {
   narrative: [
     {
       at: 0,
-      title: 'One queue, three competing consumers',
-      body: '`fast`, `medium`, and `slow` are all bound to the same queue, `work`. This is not fanout — each message goes to exactly *one* of them. The three consumers compete for messages instead of duplicating them.',
+      title: 'Một queue, ba consumer cạnh tranh nhau',
+      body: '`fast`, `medium`, và `slow` đều bind vào cùng một queue, `work`. Đây không phải fanout — mỗi message chỉ đi tới đúng *một* trong số họ. Ba consumer cạnh tranh để giành message thay vì bị nhân bản.',
       highlight: ['work', 'fast', 'medium', 'slow'],
     },
     {
       at: 1800,
-      title: 'Delivery rotates while a consumer is free',
-      body: 'With `prefetch: 1` on every consumer, the broker hands the next message to whichever eligible consumer is next in rotation — but only if that consumer is not already holding an unacked message.',
+      title: 'Delivery xoay vòng khi consumer còn rảnh',
+      body: 'Với `prefetch: 1` trên mọi consumer, broker giao message kế tiếp cho bất kỳ consumer nào đủ điều kiện và tới lượt trong vòng xoay — nhưng chỉ khi consumer đó chưa giữ sẵn một message chưa ack.',
       highlight: ['work'],
     },
     {
       at: 5000,
-      title: 'The slow consumer falls behind',
-      body: '`slow` takes 2000ms to process a message, five times longer than `fast` at 400ms. While `slow` is still busy with one message, it is skipped, and `fast` becomes eligible again far sooner.',
+      title: 'Consumer chậm bị tụt lại phía sau',
+      body: '`slow` mất 2000ms để xử lý một message, gấp năm lần `fast` chỉ mất 400ms. Trong lúc `slow` còn đang bận với một message, nó bị bỏ qua, và `fast` đủ điều kiện trở lại sớm hơn nhiều.',
       highlight: ['slow', 'fast'],
     },
     {
       at: 9000,
-      title: 'Prefetch is what makes this fair, not the queue',
-      body: 'The queue itself has no idea which consumer is faster. It is the prefetch ceiling of `1` that keeps a busy consumer out of rotation, letting free consumers pick up more of the total work.',
+      title: 'Chính prefetch tạo ra sự công bằng, không phải queue',
+      body: 'Bản thân queue chẳng hề biết consumer nào nhanh hơn. Chính trần prefetch `1` mới là thứ giữ một consumer đang bận ra khỏi vòng xoay, để các consumer rảnh giành được nhiều phần việc hơn trong tổng khối lượng.',
       highlight: ['work'],
     },
   ],

@@ -4,7 +4,7 @@ export const headersExchange: Lesson = {
   id: '05-headers',
   group: 'basics',
   title: 'Headers exchange',
-  summary: 'Routing on header values instead of the routing key, with `all` versus `any` matching.',
+  summary: 'Route dựa trên header value thay vì routing key, với kiểu khớp `all` so với `any`.',
   seed: 5,
   durationMs: 10_000,
   topology: {
@@ -117,26 +117,26 @@ export const headersExchange: Lesson = {
   narrative: [
     {
       at: 0,
-      title: 'Headers exchanges ignore the routing key entirely',
-      body: 'Every message here is published with an empty routing key. A headers exchange routes on the message\'s `headers` map instead, comparing it against each binding\'s header criteria.',
+      title: 'Headers exchange bỏ qua hoàn toàn routing key',
+      body: 'Mọi message ở đây đều được publish với routing key rỗng. Thay vào đó, headers exchange route dựa trên `headers` map của message, so sánh nó với tiêu chí header của từng binding.',
       highlight: ['p1', 'ex'],
     },
     {
       at: 2200,
-      title: '`x-match: all` needs every header to match',
-      body: '`pdf-reports` is bound with `xMatch: all` against `{format: pdf, kind: report}`. Only a message carrying **both** of those headers with those exact values is routed there.',
+      title: '`x-match: all` cần mọi header đều khớp',
+      body: '`pdf-reports` bind với `xMatch: all` theo `{format: pdf, kind: report}`. Chỉ message mang **cả hai** header đó với đúng giá trị mới được route tới đây.',
       highlight: ['pdf-reports'],
     },
     {
       at: 4200,
-      title: '`x-match: any` needs just one',
-      body: '`anything-pdf` and `csv-or-report` are both bound with `xMatch: any`. A message matching *any single* listed header — not all of them — is routed there.',
+      title: '`x-match: any` chỉ cần một header khớp',
+      body: '`anything-pdf` và `csv-or-report` đều bind với `xMatch: any`. Message chỉ cần khớp *một* header bất kỳ trong danh sách — không cần khớp hết — là được route tới đây.',
       highlight: ['anything-pdf', 'csv-or-report'],
     },
     {
       at: 6200,
-      title: 'No matching header, no route',
-      body: 'The last message carries only `kind: invoice`, which appears in none of the three bindings\' criteria. It matches nothing and is dropped, exactly like an unroutable direct-exchange key.',
+      title: 'Không header nào khớp, không có route',
+      body: 'Message cuối cùng chỉ mang `kind: invoice`, không xuất hiện trong tiêu chí của cả ba binding. Nó không khớp gì cả và bị drop, y hệt một routing key không thể route được ở direct exchange.',
       highlight: ['ex'],
     },
   ],

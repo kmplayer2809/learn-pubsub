@@ -4,7 +4,7 @@ export const directExchange: Lesson = {
   id: '02-direct',
   group: 'basics',
   title: 'Direct exchange',
-  summary: 'Exact routing-key matching, and what happens when nothing matches.',
+  summary: 'Routing key khớp chính xác, và điều gì xảy ra khi không có gì khớp.',
   seed: 2,
   durationMs: 10_000,
   topology: {
@@ -69,26 +69,26 @@ export const directExchange: Lesson = {
   narrative: [
     {
       at: 0,
-      title: 'A direct exchange matches the key exactly',
-      body: 'Each binding on `ex` names a routing key. A message is only routed to a binding whose key is an *exact* string match — no patterns, no partial hits.',
+      title: 'Direct exchange khớp key một cách chính xác',
+      body: 'Mỗi binding trên `ex` gán một routing key. Message chỉ được route tới binding có key khớp *chính xác* dạng string — không pattern, không khớp một phần.',
       highlight: ['p1', 'ex'],
     },
     {
       at: 1800,
-      title: 'Two queues, one key, two copies',
-      body: 'Both `pay` and `audit` are bound with the key `payment`. A message published with that key is routed to **both** — each queue gets its own independent copy.',
+      title: 'Hai queue, một key, hai bản copy',
+      body: 'Cả `pay` và `audit` đều bind với key `payment`. Message publish với key đó được route tới **cả hai** — mỗi queue nhận một bản copy độc lập của riêng mình.',
       highlight: ['pay', 'audit'],
     },
     {
       at: 3600,
-      title: 'An unmatched key is silently discarded',
-      body: 'This message carries the key `refund`, and no binding on `ex` uses that key. With no `mandatory` flag and no alternate exchange configured, the broker just drops it.',
+      title: 'Key không khớp bị âm thầm loại bỏ',
+      body: 'Message này mang key `refund`, và không binding nào trên `ex` dùng key đó. Không có flag `mandatory`, cũng không có alternate exchange nào được cấu hình, nên broker đơn giản là drop nó.',
       highlight: ['ex'],
     },
     {
       at: 6000,
-      title: 'Why `mandatory` and alternate exchanges exist',
-      body: 'A dropped message like the `refund` one leaves no trace at the queue. Marking a publish `mandatory`, or binding an alternate exchange to catch the leftovers, is how you avoid losing messages silently.',
+      title: 'Vì sao `mandatory` và alternate exchange tồn tại',
+      body: 'Một message bị drop như message `refund` ở trên không để lại dấu vết nào ở queue. Đánh dấu publish là `mandatory`, hoặc bind một alternate exchange để hứng phần dư ra, chính là cách bạn tránh mất message một cách âm thầm.',
       highlight: ['ex'],
     },
   ],

@@ -7,10 +7,10 @@ import { headersExchange } from './05-headers'
 import { competingConsumers } from './06-competing-consumers'
 
 export const LESSON_GROUPS: { id: LessonGroup; label: string }[] = [
-  { id: 'basics', label: 'Basics' },
-  { id: 'reliability', label: 'Reliability' },
-  { id: 'dlx', label: 'Dead-lettering & retry' },
-  { id: 'patterns', label: 'Patterns' },
+  { id: 'basics', label: 'Cơ bản' },
+  { id: 'reliability', label: 'Độ tin cậy' },
+  { id: 'dlx', label: 'Dead-letter & retry' },
+  { id: 'patterns', label: 'Pattern nâng cao' },
 ]
 
 export const LESSONS: Lesson[] = [

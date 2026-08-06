@@ -26,7 +26,7 @@ function NodeConfig({ lesson, state, nodeId }: { lesson: Lesson; state: EngineSt
     return (
       <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
         <dt>queue</dt><dd className="text-slate-200">{consumer.queueId}</dd>
-        <dt>prefetch</dt><dd className="text-slate-200">{consumer.prefetch || 'unlimited'}</dd>
+        <dt>prefetch</dt><dd className="text-slate-200">{consumer.prefetch || 'không giới hạn'}</dd>
         <dt>ack mode</dt><dd className="text-slate-200">{consumer.autoAck ? 'auto' : 'manual'}</dd>
         <dt>unacked</dt><dd className="text-slate-200">{(state.unacked[consumer.id] ?? []).length}</dd>
         <dt>processing</dt><dd className="text-slate-200">{consumer.processingMs}ms</dd>
@@ -51,7 +51,7 @@ function NodeConfig({ lesson, state, nodeId }: { lesson: Lesson; state: EngineSt
     )
   }
 
-  return <p className="text-[11px] text-slate-500">No configuration for this node.</p>
+  return <p className="text-[11px] text-slate-500">Node này không có cấu hình.</p>
 }
 
 export function Inspector({
@@ -87,13 +87,13 @@ export function Inspector({
 
       {state.halted && (
         <p className="rounded border border-amber-700 bg-amber-950 p-2 text-[11px] text-amber-200">
-          Run halted: {state.halted.reason}
+          Đã dừng: {state.halted.reason}
         </p>
       )}
 
       <section>
         <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
-          {selectedNodeId ? `Config · ${selectedNodeId}` : 'Metrics'}
+          {selectedNodeId ? `Cấu hình · ${selectedNodeId}` : 'Chỉ số'}
         </h3>
         {selectedNodeId ? (
           <NodeConfig lesson={lesson} state={state} nodeId={selectedNodeId} />
@@ -110,7 +110,7 @@ export function Inspector({
       </section>
 
       <section className="min-h-0 flex-1">
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Event log</h3>
+        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Nhật ký sự kiện</h3>
         <ul className="space-y-0.5 font-mono text-[10px] text-slate-400">
           {state.journal
             .slice(-40)

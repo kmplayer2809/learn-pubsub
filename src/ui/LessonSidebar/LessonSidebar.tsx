@@ -35,7 +35,7 @@ export function LessonSidebar() {
         disabled
         className="mt-auto cursor-not-allowed border-t border-slate-800 px-3 py-2 text-left text-xs text-slate-600"
       >
-        Sandbox (coming soon)
+        Sandbox (sắp có)
       </button>
     </nav>
   )

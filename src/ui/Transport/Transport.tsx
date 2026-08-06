@@ -14,14 +14,14 @@ export function Transport({ durationMs, onStep }: { durationMs: number; onStep()
   return (
     <div className="flex items-center gap-3 px-3 py-2" data-testid="transport">
       <button onClick={() => seek(0)} className="rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800">
-        Restart
+        Chạy lại
       </button>
       <button
         onClick={() => (playing ? pause() : play())}
         className="rounded bg-sky-600 px-3 py-1 text-xs font-medium text-white hover:bg-sky-500"
         data-testid="play-pause"
       >
-        {playing ? 'Pause' : 'Play'}
+        {playing ? 'Tạm dừng' : 'Chạy'}
       </button>
       <button
         onClick={() => {
@@ -30,7 +30,7 @@ export function Transport({ durationMs, onStep }: { durationMs: number; onStep()
         }}
         className="rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
       >
-        Step
+        Bước
       </button>
 
       <input
