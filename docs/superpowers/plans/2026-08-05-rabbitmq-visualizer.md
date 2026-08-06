@@ -1680,14 +1680,18 @@ export function applyNack(state: EngineState, event: SimEvent): ApplyResult {
   // applyConsumeDone always carries the message; a nack without one cannot be requeued.
   if (requeue && message) {
     const redelivered: Message = { ...message, redeliveryCount: message.redeliveryCount + 1 }
+    // Task 8 note: on a priority queue this must go back to the head of its own
+    // priority band, not the head of the whole queue — see requeueByPriority.
+    const spec = state.topology.queues.find((q) => q.id === queueId)
     next = {
       ...next,
       queues: {
         ...next.queues,
-        [queueId]: [
+        [queueId]: requeueByPriority(
+          next.queues[queueId] ?? [],
           { message: redelivered, enqueuedAt: state.now },
-          ...(next.queues[queueId] ?? []),
-        ],
+          spec?.maxPriority,
+        ),
       },
     }
     next = log(next, {
@@ -2151,12 +2155,15 @@ git commit -m "feat: add ttl expiry, max-length overflow, and dead-lettering"
 - Consumes: `scheduleEvent`, `log` from `src/engine/broker.ts`
 - Produces:
   - `insertByPriority(queue: QueuedMessage[], entry: QueuedMessage, maxPriority: number | undefined): QueuedMessage[]`
+  - `requeueByPriority(queue: QueuedMessage[], entry: QueuedMessage, maxPriority: number | undefined): QueuedMessage[]`
   - `applyConsumerCrash(state: EngineState, event: SimEvent): ApplyResult`
   - `applyConsumerRecover(state: EngineState, event: SimEvent): ApplyResult`
   - `buildReplyEvents(state: EngineState, message: Message, consumerId: NodeId): [SimEvent[], EngineState]`
 
 **Semantics to implement:**
 - **Priority:** when a queue sets `maxPriority`, a new message is inserted ahead of every queued message with a strictly lower priority and behind equals, so equal priorities stay FIFO. Queues without `maxPriority` always append.
+- **Requeue must respect priority.** Tasks 6 and 8 both return messages to a queue by prepending them (`applyNack` on requeue, `applyConsumerCrash` on held messages). Prepending is correct only on a FIFO queue. On a priority queue it lets a rejected priority-0 message jump ahead of waiting priority-9 messages, which defeats the queue's entire purpose after a single nack. Both paths must instead requeue at the head *of the message's own priority band* via `requeueByPriority`, which inserts ahead of equals (the message was already at the head) but never ahead of anything higher. Queues without `maxPriority` keep the plain prepend.
+- **Overflow on a priority queue drops the highest-priority message, and that is correct.** With `maxPriority` set, `insertByPriority` puts the most important message at index 0, so drop-head overflow discards it. This looks wrong and is not: RabbitMQ documents that with `x-max-length` and `drop-head`, "higher priority messages might be dropped to make way for lower priority ones, which might not be what you would expect" — the alternative is `reject-publish`. Keep the behaviour and let Lesson 15 teach the gotcha. Do not "fix" it.
 - **Delayed messages** need no new mechanism: a lesson models them as a queue with a TTL and a dead-letter exchange pointing at the real queue. Task 16's lesson uses exactly that, which is how the delayed-message plugin actually behaves.
 - **RPC:** when an acked message carries `replyTo` and `correlationId`, the consumer publishes a response into the exchange named by `replyTo`, reusing the same `correlationId`. The reply is an ordinary `publish` event, so it animates like any other message.
 - **Consumer crash:** `consumerCrash` adds the consumer to `state.crashed`. Every message it holds unacked is requeued at the head of its queue with `redeliveryCount + 1` — this is the recovery a manual-ack consumer gets. For an `autoAck` consumer there is nothing held, so the in-flight message is lost, which is the whole point of Lesson 7.
@@ -2168,7 +2175,7 @@ git commit -m "feat: add ttl expiry, max-length overflow, and dead-lettering"
 
 ```ts
 import { describe, expect, it } from 'vitest'
-import { applyConsumerCrash, applyConsumerRecover, buildReplyEvents, insertByPriority } from './advanced'
+import { applyConsumerCrash, applyConsumerRecover, buildReplyEvents, insertByPriority, requeueByPriority } from './advanced'
 import { createEngineState } from './broker'
 import type { EngineState, Message, QueuedMessage, Topology } from './types'
 
@@ -2233,6 +2240,32 @@ describe('insertByPriority', () => {
   it('places a lower priority message behind higher ones', () => {
     const queue = [entry('m1', 9)]
     expect(insertByPriority(queue, entry('m2', 1), 10).map((q) => q.message.id)).toEqual(['m1', 'm2'])
+  })
+})
+
+describe('requeueByPriority', () => {
+  it('prepends when the queue has no maxPriority', () => {
+    const queue = [entry('m1', 0), entry('m2', 0)]
+    expect(requeueByPriority(queue, entry('m3', 0), undefined).map((q) => q.message.id)).toEqual(['m3', 'm1', 'm2'])
+  })
+
+  it('does not let a rejected low-priority message jump ahead of waiting high-priority ones', () => {
+    const queue = [entry('m-high', 9), entry('m-mid', 5)]
+    expect(requeueByPriority(queue, entry('m-low', 0), 9).map((q) => q.message.id)).toEqual([
+      'm-high',
+      'm-mid',
+      'm-low',
+    ])
+  })
+
+  it('returns the message to the head of its own priority band, ahead of equals', () => {
+    const queue = [entry('m-high', 9), entry('m-peer', 5), entry('m-low', 0)]
+    expect(requeueByPriority(queue, entry('m-back', 5), 9).map((q) => q.message.id)).toEqual([
+      'm-high',
+      'm-back',
+      'm-peer',
+      'm-low',
+    ])
   })
 })
 
@@ -2315,6 +2348,24 @@ export function insertByPriority(
   return [...queue.slice(0, index), incoming, ...queue.slice(index)]
 }
 
+/**
+ * Returns a rejected or crash-released message to the queue. It goes back to
+ * the head, but on a priority queue "the head" means the head of its own
+ * priority band: a requeued message must not jump ahead of higher-priority
+ * messages that were waiting behind it. Unlike insertByPriority this inserts
+ * ahead of equals, because the message had already reached the front once.
+ */
+export function requeueByPriority(
+  queue: readonly QueuedMessage[],
+  incoming: QueuedMessage,
+  maxPriority: number | undefined,
+): QueuedMessage[] {
+  if (maxPriority === undefined) return [incoming, ...queue]
+  const index = queue.findIndex((q) => q.message.priority <= incoming.message.priority)
+  if (index === -1) return [...queue, incoming]
+  return [...queue.slice(0, index), incoming, ...queue.slice(index)]
+}
+
 export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyResult {
   const consumerId = event.payload.consumerId as NodeId
   const held = (event.payload.heldMessages as Message[]) ?? []
@@ -2328,17 +2379,19 @@ export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyRe
   }
 
   if (consumer && held.length > 0 && !consumer.autoAck) {
-    const requeued = held.map<QueuedMessage>((m) => ({
-      message: { ...m, redeliveryCount: m.redeliveryCount + 1 },
-      enqueuedAt: state.now,
-    }))
-    next = {
-      ...next,
-      queues: {
-        ...next.queues,
-        [consumer.queueId]: [...requeued, ...(next.queues[consumer.queueId] ?? [])],
-      },
-    }
+    const spec = state.topology.queues.find((q) => q.id === consumer.queueId)
+    // Fold from the right so that after each insert-ahead-of-equals the held
+    // messages end up in their original order rather than reversed.
+    const restored = held.reduceRight<QueuedMessage[]>(
+      (acc, m) =>
+        requeueByPriority(
+          acc,
+          { message: { ...m, redeliveryCount: m.redeliveryCount + 1 }, enqueuedAt: state.now },
+          spec?.maxPriority,
+        ),
+      [...(next.queues[consumer.queueId] ?? [])],
+    )
+    next = { ...next, queues: { ...next.queues, [consumer.queueId]: restored } }
     next = log(next, {
       at: state.now,
       type: 'consumerCrash',
