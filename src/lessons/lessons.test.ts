@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createSimulation } from '../engine'
-import { LESSONS } from './registry'
+import { LESSONS, LESSON_GROUPS } from './registry'
 
 /** Runs a lesson to completion and returns a compact, comparable journal. */
 export function runLesson(id: string): string[] {
@@ -31,6 +31,33 @@ describe('every lesson', () => {
     for (const step of lesson.narrative) {
       expect(step.at).toBeLessThanOrEqual(lesson.durationMs)
     }
+    for (const checkpoint of lesson.checkpoints ?? []) {
+      expect(checkpoint.at).toBeLessThanOrEqual(lesson.durationMs)
+      expect(checkpoint.options[checkpoint.answerIndex]).toBeTypeOf('string')
+    }
+  })
+
+  // Lessons 2-17 arrive across three later tasks written by separate authors.
+  // These guards exist so a malformed lesson fails here rather than silently
+  // misbehaving in the UI.
+  it.each(LESSONS.map((l) => [l.id, l] as const))('%s has an ordered, non-empty narrative', (_id, lesson) => {
+    expect(lesson.narrative.length).toBeGreaterThan(0)
+    const times = lesson.narrative.map((s) => s.at)
+    // The inspector advances through steps as virtual time crosses each `at`,
+    // so an out-of-order narrative would skip or repeat explanations.
+    expect([...times].sort((a, b) => a - b)).toEqual(times)
+  })
+
+  it('has no duplicate lesson ids', () => {
+    // A duplicate id makes getLesson() silently return the first match and
+    // collides React keys in the sidebar, showing two entries that open the
+    // same lesson.
+    expect([...new Set(LESSONS.map((l) => l.id))]).toHaveLength(LESSONS.length)
+  })
+
+  it('every lesson belongs to a declared group', () => {
+    const known = new Set(LESSON_GROUPS.map((g) => g.id))
+    for (const lesson of LESSONS) expect(known.has(lesson.group)).toBe(true)
   })
 })
 
