@@ -66,3 +66,129 @@ Task 15: complete (commits 8d4b706..51ae1a8, 156 tests). Basics lessons 02-06 as
 - openSandbox() sets a `sandbox` flag but useSimulation only reads lessonId and ignores it, so opening the Sandbox would keep simulating the last lesson. Not a bug yet (no Sandbox UI until Task 18) — Task 18 must handle it.
 - Minor (Task 12): oxlint Fast Refresh warning on src/ui/CanvasView/nodes.tsx for exporting `nodeTypes` beside components. Inherent to the planned file structure; left as-is.
 - No test renders the real CanvasView/ReactFlow tree. jsdom lacks ResizeObserver and DOMMatrixReadOnly, both of which @xyflow/react needs at mount; stubs are required. Task 14's app smoke test will hit this - stub them in a shared test setup rather than per-file.
+
+## Scope change 2026-08-06 — Vietnamese copy
+
+User asked for all reader-facing copy in Vietnamese with RabbitMQ/programming terms left
+in English. Added as a Global Constraint in the plan (commit f729f22) plus a new
+**Task 15b** (localize lessons 1-6 + UI chrome, add `src/lessons/language.test.ts` guard),
+which runs before Task 16. Tasks 16, 17, 18, 19, 20 must author their copy in Vietnamese
+from the start; their briefs carry the constraint block. Task 19's exported amqplib/NestJS
+code is CODE — it stays English apart from any comment strings.
+
+Task 15b: complete (commits f729f22..2fa6d5f, review clean after one fix wave).
+  163 tests / 22 files. Guard `src/lessons/language.test.ts` is now the gate every
+  lesson task must pass. Controller-verified red probes: an English checkpoint option
+  fails on ENGLISH_FUNCTION_WORDS; an ASCII-only narrative body fails on the per-body
+  VIETNAMESE check (the joined-blob check alone would have let it through).
+  Adjudicated: lesson-level `title` stays English by design, exempted in Global
+  Constraints at 5056db5 — do NOT "fix" it in a later task.
+  Minor carried forward: the fix agent left loanwords route/drop/bind/broker/buffer/
+  pattern in Vietnamese prose deliberately. Confirm at final review that this reads
+  consistently across all 17 lessons.
+
+Task 16: PARTIAL (commit 9881e26). Lessons 07, 08, 09, 11, 12, 13 shipped and green,
+  205 tests / 23 files. **Lesson 10 (durability & confirms) NOT built** — reported
+  BLOCKED: `seedEvents` in src/engine/index.ts never threads a `persistent` field from
+  ScriptedAction into Message.persistent (every message is persistent:false), no UI
+  renders a persistent chip, and no publisher-confirm event type exists in SimEventType.
+  Needs an engine + UI task before the lesson can be written. Tracked as Task 16c (to be
+  written).
+
+Task 16b: OPEN — crash-cancels-processing bug, plan committed at 373db56.
+  Controller-measured on lesson 07 at 9881e26: consumer `manual` acks [m1, m1, m2, m3, m4]
+  while `auto` acks [m1, m2, m3, m4]; metrics published 4 / delivered 9 / acked 9. The
+  stale `consumeDone` scheduled before a crash still fires and acks work that never
+  finished. reliability.test.ts's `manualAcks > autoAcks` was passing 5>4 ON THE DUPLICATE.
+  Fix is a per-consumer `crashEpoch` stamped at dispatch and compared in applyConsumeDone.
+
+Task 15c: OPEN — dark React Flow chrome, message-id labels on particles, live in-flight
+  panel. Plan committed at d2d3bd3. Requires widening `InFlight` to carry the whole
+  `Message` (same defect class as `unacked`: an in-flight message is in no queue and not
+  yet in unacked, so the record is the only copy). Must run AFTER 16b — both touch engine.
+
+Task 16b: complete (commit a0f47a1). 207 tests / 23 files. Controller re-measured
+  lesson 07 after the fix: manual [m1,m2,m3,m4] (4 unique, no duplicate), auto
+  [m2,m3,m4] (m1 correctly lost to the crash), acked 7 / delivered 9. Bug gone.
+  Agent caught a defect in MY brief: the pseudocode crashed at t=500, which does not
+  interrupt processing here (delivery lands ~t=1800 after TRAVEL_MS pipeline delays),
+  so that test would have passed trivially against the buggy code. It recomputed the
+  window to t=2000 and showed both tests red first. Also fixed EngineState literals in
+  src/sim/useSimulation.test.tsx and src/ui/canvas/MessageLayer.test.tsx (crashEpoch: {})
+  — outside the stated scope but required to keep typecheck green; correct call.
+
+  OPEN QUESTION for final review (modeling divergence, not a bug): this engine acks an
+  auto-ack message at `consumeDone`, not at delivery, so a crashed auto-ack consumer
+  produces NO ack at all. Real RabbitMQ acks on delivery, so `acked` would still count
+  the lost message. Lesson 07's narrative says "broker đã coi message là xác nhận xong
+  ngay khi giao", which is true of RabbitMQ but not of what the metrics panel shows.
+  The pedagogical point (auto-ack loses work silently, manual recovers it) survives
+  either way. Decide at final review whether to move the auto-ack to delivery time or
+  to reword the narrative.
+
+Task 15c: complete (commits a0f47a1..9034354). 213 tests / 24 files.
+  Agent caught a defect in MY brief: the CSS override as written lost the cascade.
+  CanvasView.tsx imports @xyflow/react/dist/style.css beneath App, Vite emits it AFTER
+  index.css, same specificity — so React Flow's own rule won and the strip stayed white.
+  Only visible in a running browser. Fixed with !important plus a comment saying why.
+  Controller browser-verified afterwards and found two MORE light-chrome leaks the task
+  missed: `.react-flow__edge-textbg` was pure white with black text (the binding routing
+  key chips — brightest thing on the canvas, on every lesson that binds with a key) and
+  `.react-flow__handle` was ringed in pure white. Fixed at 9034354.
+  LESSON: the CSS override block must be verified with getComputedStyle in a live page,
+  never by reading the stylesheet. Do the same for any future React Flow chrome.
+
+Task 16c: OPEN — persistence, publisher confirms, lesson 10. Plan written at ca30a59.
+  Unblocks the Lesson 10 that Task 16 reported BLOCKED. Three engine gaps to close:
+  ScriptedAction has no `persistent`, QueueSpec has no `durable`, SimEventType has no
+  `confirm`. Model decided in the plan: schedule the confirm from applyRoute, NOT from
+  applyEnqueue — route is the only point that knows the full destination set, so a fanout
+  to three queues still yields exactly one confirm and an unroutable message is still
+  confirmed, both faithful to RabbitMQ. The slow CONFIRM_PERSISTENT_MS path applies only
+  when the message is `persistent` AND a destination queue is `durable` (durability is
+  per-pair). Metrics.confirmed needs no UI work — Inspector.tsx renders metrics with
+  Object.entries, so a new counter appears by itself.
+
+Task 17: code COMPLETE (commit 58cf9f9), REVIEW STILL OWED — the task reviewer was never
+  dispatched because the user paused. 241 tests / 25 files, typecheck clean; controller
+  re-ran both independently rather than trusting the report. All four brief-estimated
+  counts (acked 6, 3, 12; m4 before m3) measured correct — no assertion was changed.
+
+  *** REGRESSION FOUND BY THE CONTROLLER, MUST BE FIXED FIRST ON RESUME ***
+  The agent extended src/ui/CanvasView/toFlow.ts beyond its stated scope, adding a
+  consumer x exchange cross-product edge loop mirroring the existing publisher one. It
+  keeps a canvas invariant test green, but it fabricates edges on EVERY lesson, and it
+  draws them with `dashed = true` — which in this codebase is the DEAD-LETTER styling.
+  Measured spurious consumer->exchange edges (controller ran toFlowEdges over all LESSONS):
+    01:1/4  02:3/10  03:3/10  04:3/10  05:3/10  06:3/8  07:2/7  08:3/9  09:1/4
+    11:4/11  12:2/8  13:4/13  14:4/10  15:1/4  16:2/8  17:2/7
+  Worst case 11-dlx: 4 of 11 edges are fake, all rose-dashed, on the lesson whose entire
+  subject is dead-lettering — the lesson now draws three fake DLX arrows next to its one
+  real one. Even on 14-rpc, the lesson that motivated the change, only `worker->replies`
+  is real; `worker->rpc-ex`, `caller->rpc-ex` and `caller->replies` are invented.
+  FIX DIRECTION: a reply edge is knowable from the script, not the topology — the script
+  declares `replyTo`. Pass the script (or just the set of exchange ids appearing as a
+  `replyTo`) into toFlowEdges and emit a consumer->exchange edge only for those. That is
+  1 edge on 14-rpc and 0 everywhere else. Do NOT keep the cross-product.
+  LESSON (same shape as Task 15c): a green suite says nothing about what the canvas looks
+  like. Verify canvas changes by measuring the derived edge set, not by reading the diff.
+
+Task 17 dispatch notes: Pattern lessons 14-17 (RPC, priority,
+  delayed message, quorum vs classic). Controller verified BEFORE dispatch that the engine
+  genuinely supports all of it — insertByPriority is called from broker.ts, buildReplyEvents
+  and requeueByPriority from delivery.ts, QueueKind exists, and seedEvents already threads
+  priority/correlationId/replyTo. So this task has no 16c-style gap.
+  WARNED THE AGENT: the expected counts in the plan's test code (acked 6 for RPC, 3 for
+  delayed, 12 for quorum) are the controller's estimates from READING the engine, never
+  measured. TRAVEL_MS pipeline delays make the timeline non-obvious. Agent instructed to
+  measure the journal first, fix the number and show evidence if the engine is right, and
+  report BLOCKED rather than loosen any assertion to green.
+
+=== PAUSED 2026-08-06 23:30 (+07) at the user's request; resume ~03:30 on 2026-08-07. ===
+  ON RESUME, do NOT re-dispatch anything marked complete above. Order of remaining work:
+  finish Task 17's review loop (read .superpowers/sdd/task-17-report.md and `git log` to
+  see whether the agent committed before the pause — trust git over recollection), then
+  16c, 18 (sandbox), 19 (code export), 20 (final pass + README), then the whole-branch
+  review and superpowers:finishing-a-development-branch.
+  If the Task 17 completion notification arrives DURING the pause, record its result in
+  this ledger and stop there. The user asked to pause; do not roll on into Task 16c.
