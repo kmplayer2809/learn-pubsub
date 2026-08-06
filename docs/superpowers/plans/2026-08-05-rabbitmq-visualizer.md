@@ -17,6 +17,19 @@
 - Package manager: `npm`.
 - Test runner: `vitest`. Every task ends green before commit.
 - Commit after every task using Conventional Commits (`feat:`, `test:`, `chore:`).
+- **Language: all reader-facing copy is Vietnamese.** Lesson `title`, `summary`, every
+  `NarrativeStep.title` and `.body`, every `Checkpoint.question`, `.options` and
+  `.explanation`, every `LESSON_GROUPS` label, and every UI string (buttons, headings,
+  `aria-label`, empty states) are written in Vietnamese. RabbitMQ and programming terms
+  stay in English, unchanged and untranslated: exchange, queue, binding, routing key,
+  publisher, consumer, ack / nack / requeue, prefetch, QoS, dead-letter exchange (DLX),
+  TTL, max-length, drop-head, persistent, durable, publisher confirms, redelivery,
+  parking lot, RPC, `replyTo`, `correlationId`, quorum, classic, header names such as
+  `x-death-reason`, exchange type names (`direct`, `fanout`, `topic`, `headers`), and all
+  identifiers, code spans, and journal text. Do NOT translate identifiers, `data-testid`
+  values, node ids, or anything inside backticks. Journal/event-log text emitted by
+  `src/engine/**` stays English — the engine is not a presentation layer and tests assert
+  on its substrings.
 
 ---
 
@@ -4778,7 +4791,166 @@ git commit -m "feat: add basics lessons for direct, fanout, topic, headers, and 
 
 ---
 
+## Task 15b: Vietnamese localization of shipped copy
+
+The Global Constraints now require all reader-facing copy to be Vietnamese with RabbitMQ
+and programming terms left in English. Lessons 1-6 and the UI chrome were written in
+English before that constraint existed. This task retranslates them and adds the guard
+that keeps Tasks 16-19 honest. **No behaviour changes**: only string literals move.
+
+**Files:**
+- Modify: `src/lessons/01-hello-world.ts`, `src/lessons/02-direct.ts`, `src/lessons/03-fanout.ts`, `src/lessons/04-topic.ts`, `src/lessons/05-headers.ts`, `src/lessons/06-competing-consumers.ts`
+- Modify: `src/lessons/registry.ts` (the `LESSON_GROUPS` labels only)
+- Modify: `src/ui/LessonSidebar/LessonSidebar.tsx`, `src/ui/Transport/Transport.tsx`, `src/ui/Inspector/Inspector.tsx`, `src/ui/App.tsx`
+- Create: `src/lessons/language.test.ts`
+- Do NOT touch: `src/engine/**` (its journal text is asserted on by tests and is not
+  presentation), `src/lessons/__snapshots__/` beyond the regeneration Step 4 requires.
+
+**Interfaces:**
+- Consumes: `LESSONS` from `src/lessons/registry`
+- Produces: nothing new. Every lesson id, node id, `data-testid`, and `aria-label` value
+  keeps its exact current string — those are selectors, not copy.
+
+**What stays English inside Vietnamese prose.** Copy the term list from Global
+Constraints. In particular a sentence reads like: `Exchange kiểu *fanout* sao chép mọi
+message tới tất cả queue đã bind, bỏ qua routing key.` — Vietnamese connective tissue,
+English nouns.
+
+**Translation rules:**
+1. Never translate anything inside backticks. `` `order.eu.*` ``, `` `x-match` ``,
+   `` `prefetch: 1` `` stay byte-identical.
+2. Keep the existing markdown structure: same number of narrative steps, same `at`
+   values, same `highlight` arrays, same paragraph breaks, same bold/italic/code spans in
+   the same places. Only the human-language words change.
+3. `LESSON_GROUPS` labels become: `basics` → `Cơ bản`, `reliability` → `Độ tin cậy`,
+   `dlx` → `Dead-letter & retry`, `patterns` → `Pattern nâng cao`.
+4. UI strings: `Restart` → `Chạy lại`, `Play` → `Chạy`, `Pause` → `Tạm dừng`,
+   `Step` → `Bước`, `Sandbox (coming soon)` → `Sandbox (sắp có)`, `Metrics` → `Chỉ số`,
+   `Event log` → `Nhật ký sự kiện`, `Config · <id>` → `Cấu hình · <id>`,
+   `No configuration for this node.` → `Node này không có cấu hình.`,
+   `Lesson not found.` → `Không tìm thấy bài học.`,
+   `Run halted: <reason>` → `Đã dừng: <reason>` (the reason itself comes from the engine
+   and stays English), `unlimited` in the prefetch row → `không giới hạn`.
+   The sidebar heading `RabbitMQ Visualizer` is a product name — leave it.
+   The `NodeConfig` `<dt>` labels (`kind`, `depth`, `ttl`, `max-length`, `dead-letter`,
+   `max-priority`, `queue`, `prefetch`, `ack mode`, `unacked`, `processing`, `nack rate`)
+   are AMQP property names — leave them English. Same for the `Object.entries(state.metrics)`
+   keys, which come from the engine.
+   `aria-label="scrub"` and `aria-label="speed"` are test selectors — leave them.
+
+- [ ] **Step 1: Write the failing language guard**
+
+`src/lessons/language.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { LESSONS, LESSON_GROUPS } from './registry'
+
+/** Any Vietnamese letter carrying a diacritic. */
+const VIETNAMESE = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i
+
+/**
+ * Untranslated English prose reveals itself through function words that have no
+ * Vietnamese homograph. Checked outside code spans, because a lesson may legitimately
+ * quote English inside backticks.
+ */
+const ENGLISH_FUNCTION_WORDS = /\b(the|and|with|that|which|from|into|because|however)\b/i
+
+function stripCode(text: string): string {
+  return text.replace(/`[^`]*`/g, ' ')
+}
+
+describe('reader-facing copy is Vietnamese', () => {
+  it.each(LESSONS.map((l) => [l.id, l] as const))('%s', (_id, lesson) => {
+    // Prose, not individual titles: a title like "Fanout exchange" is legitimately all
+    // English terms, so requiring a diacritic per title would distort the copy. Bodies
+    // are full sentences and always carry Vietnamese connective tissue.
+    const prose = lesson.narrative.map((s) => s.body).join('\n')
+    expect(prose).toMatch(VIETNAMESE)
+    expect(lesson.summary).toMatch(VIETNAMESE)
+
+    for (const step of lesson.narrative) {
+      expect(stripCode(step.body), `${lesson.id} @${step.at} body`).not.toMatch(
+        ENGLISH_FUNCTION_WORDS,
+      )
+      expect(stripCode(step.title), `${lesson.id} @${step.at} title`).not.toMatch(
+        ENGLISH_FUNCTION_WORDS,
+      )
+    }
+
+    for (const cp of lesson.checkpoints ?? []) {
+      expect(cp.question).toMatch(VIETNAMESE)
+      expect(cp.explanation).toMatch(VIETNAMESE)
+      expect(stripCode(cp.explanation), `${lesson.id} checkpoint`).not.toMatch(
+        ENGLISH_FUNCTION_WORDS,
+      )
+    }
+  })
+
+  it('labels the lesson groups in Vietnamese', () => {
+    // 'Dead-letter & retry' is a term, not prose, so it is exempt from the diacritic
+    // rule; the others must carry one.
+    const labels = LESSON_GROUPS.map((g) => g.label)
+    expect(labels).toContain('Cơ bản')
+    expect(labels).toContain('Độ tin cậy')
+    expect(labels).toContain('Pattern nâng cao')
+  })
+})
+```
+
+- [ ] **Step 2: Run it to confirm failure**
+
+Run: `npm test -- src/lessons/language.test.ts`
+Expected: FAIL on every lesson — the bodies are English and contain `the`/`and`.
+
+- [ ] **Step 3: Translate the six lesson files and the group labels**
+
+Rewrite the `summary`, `title`, and every `narrative` step's `title` and `body` (and any
+`checkpoints`) in Vietnamese per the rules above. Leave `topology`, `script`, `seed`,
+`durationMs`, `at`, and `highlight` byte-identical.
+
+- [ ] **Step 4: Run the full suite and refresh snapshots deliberately**
+
+Run: `npm test`
+`src/lessons/__snapshots__/` may hold lesson copy. If a snapshot fails, **read the diff
+first** and confirm the only change is human-language wording — a changed node id, `at`,
+or journal line means the translation touched behaviour and must be reverted. Then
+`npm test -- -u` and commit the regenerated snapshot alongside.
+
+Also run `npm run typecheck` (bare `tsc --noEmit` is a no-op in this repo — the root
+`tsconfig.json` is references-only).
+
+- [ ] **Step 5: Translate the UI strings**
+
+Apply the Step-4 string table in `LessonSidebar.tsx`, `Transport.tsx`, `Inspector.tsx`,
+and `App.tsx`. Run `npm test` again: existing UI tests select by `data-testid` and
+`aria-label`, both unchanged, so they must stay green. If a UI test asserts on English
+button text, update that assertion to the Vietnamese string — that is the test tracking
+the product, not the product bending to the test.
+
+- [ ] **Step 6: Verify visually**
+
+Run `npm run dev`, open lessons 1 and 4. Expected: sidebar groups read `Cơ bản` /
+`Độ tin cậy` / `Dead-letter & retry` / `Pattern nâng cao`, transport reads
+`Chạy lại` / `Chạy` / `Bước`, and the inspector narrative is Vietnamese prose with
+`order.eu.*` still rendered as a code span.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/lessons src/ui
+git commit -m "feat: translate lesson and UI copy to Vietnamese"
+```
+
+---
+
 ## Task 16: Reliability and dead-lettering lessons 7 through 13
+
+**Language:** every `title`, `summary`, narrative `title`/`body`, and checkpoint below is
+written in **Vietnamese**, with RabbitMQ and programming terms left in English exactly as
+Global Constraints specifies. The narrative beats described in this task are written in
+English here as *specifications of what to say*, not as copy to paste. `src/lessons/language.test.ts`
+(Task 15b) enforces this and will fail the task otherwise.
 
 **Files:**
 - Create: `src/lessons/07-ack-modes.ts`, `src/lessons/08-prefetch.ts`, `src/lessons/09-nack-requeue.ts`, `src/lessons/10-confirms.ts`, `src/lessons/11-dlx.ts`, `src/lessons/12-ttl-maxlen.ts`, `src/lessons/13-retry-backoff.ts`, `src/lessons/reliability.test.ts`
@@ -4946,6 +5118,10 @@ git commit -m "feat: add reliability and dead-lettering lessons"
 ---
 
 ## Task 17: Pattern lessons 14 through 17
+
+**Language:** same rule as Task 16 — every `title`, `summary`, narrative `title`/`body`,
+and checkpoint is written in **Vietnamese** with RabbitMQ and programming terms left in
+English. The narrative beats below specify what to say, not the words to paste.
 
 **Files:**
 - Create: `src/lessons/14-rpc.ts`, `src/lessons/15-priority.ts`, `src/lessons/16-delayed.ts`, `src/lessons/17-quorum.ts`, `src/lessons/patterns.test.ts`
