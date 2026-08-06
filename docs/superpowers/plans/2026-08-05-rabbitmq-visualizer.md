@@ -3012,14 +3012,65 @@ export function createSimulation(options: SimulationOptions): Simulation {
 }
 ```
 
-- [ ] **Step 7: Run the whole engine suite**
+- [ ] **Step 7: Cover `pushAll` and prove the guard stops a non-zero-TTL cycle**
+
+Task 3 shipped `pushAll` without a dedicated test and this task leans on it in three places. Add to `src/engine/clock.test.ts`:
+
+```ts
+it('pushAll keeps ordering across a batch pushed at once', () => {
+  const s = pushAll(createScheduler(), [
+    { at: 300, seq: 1, type: 'publish', payload: {} },
+    { at: 100, seq: 2, type: 'publish', payload: {} },
+    { at: 300, seq: 0, type: 'publish', payload: {} },
+    { at: 200, seq: 3, type: 'publish', payload: {} },
+  ])
+  const drained = popDue(s, 1000)
+  expect(drained.events.map((e) => [e.at, e.seq])).toEqual([[100, 2], [200, 3], [300, 0], [300, 1]])
+})
+
+it('pushAll on an empty batch returns an equivalent scheduler', () => {
+  const s = pushAll(createScheduler(), [{ at: 50, seq: 1, type: 'publish', payload: {} }])
+  expect(peekTime(pushAll(s, []))).toBe(50)
+})
+```
+
+`validateTopology` only rejects the **zero**-TTL dead-letter cycle. A cycle with a non-zero TTL is legal, advances time, and grows `deathTrail` and `x-death-count` linearly forever — Lesson 13 builds exactly this shape, so the runtime guard is the only thing standing between a mistyped lesson and a hung tab. Prove it actually fires. Add to `src/engine/index.test.ts`:
+
+```ts
+it('halts a non-zero-TTL dead-letter cycle instead of running forever', () => {
+  const cycle: Topology = {
+    publishers: [{ id: 'p1', label: 'P' }],
+    exchanges: [{ id: 'ex', label: 'X', type: 'direct' }],
+    queues: [{ id: 'q1', label: 'Q', messageTtlMs: 10, deadLetterExchange: 'ex' }],
+    consumers: [],
+    bindings: [
+      { id: 'b1', exchangeId: 'ex', destinationId: 'q1', destinationKind: 'queue', routingKey: 'go' },
+    ],
+  }
+  const sim = createSimulation({
+    topology: cycle,
+    seed: 1,
+    script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'loop' }],
+  })
+  sim.advanceTo(60 * 60 * 1000)
+  const snap = sim.snapshot()
+  expect(snap.halted).toBeDefined()
+  expect(snap.halted!.reason).toContain('event ceiling')
+  expect(snap.journal.length).toBeLessThanOrEqual(MAX_JOURNAL)
+})
+```
+
+Run: `npx vitest run src/engine/clock.test.ts src/engine/index.test.ts`
+Expected: PASS. If this test hangs instead of halting, the guard is not wired into the dispatch loop — fix that, do not raise the ceiling.
+
+- [ ] **Step 8: Run the whole engine suite**
 
 Run: `npm test -- src/engine`
 Expected: PASS, including 6 validation tests and 7 simulation tests.
 
 If the replay test fails, the cause is almost always a reducer that read ambient state or mutated its input. Re-check that every reducer returns fresh objects.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/engine
