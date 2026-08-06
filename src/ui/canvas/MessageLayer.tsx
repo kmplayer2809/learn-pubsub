@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import type { EngineState } from '../../engine'
 import { pointOnPath, progressOf, TONE_FILL } from './geometry'
 
@@ -17,10 +17,31 @@ export function MessageLayer({ state }: { state: EngineState }) {
   const [particles, setParticles] = useState<Particle[]>([])
   const [transform, setTransform] = useState('none')
 
+  // React Flow's viewport transform changes on pan/zoom without producing a
+  // new EngineState (most importantly, while the simulation is paused - the
+  // exact moment a user pans/zooms to inspect what's happening). This effect
+  // is intentionally independent of `state` so it can't go stale: it reads
+  // the viewport once on mount and then reacts to the DOM itself changing,
+  // rather than polling or waiting for a tick that may never come.
   useEffect(() => {
     const viewport = document.querySelector<HTMLElement>('.react-flow__viewport')
-    setTransform(viewport?.style.transform || 'none')
+    if (!viewport) return
 
+    setTransform(viewport.style.transform || 'none')
+
+    const observer = new MutationObserver(() => {
+      setTransform(viewport.style.transform || 'none')
+    })
+    observer.observe(viewport, { attributes: true, attributeFilter: ['style'] })
+    return () => observer.disconnect()
+  }, [])
+
+  // useLayoutEffect (not useEffect): this reads already-painted DOM (edge
+  // path geometry) and writes particle positions that must appear in the
+  // same frame as the nodes/edges they're tracking. useEffect would defer
+  // this to a second, post-paint pass - particles visibly lagging the nodes
+  // by one frame and forcing an extra render each animation-frame tick.
+  useLayoutEffect(() => {
     const next: Particle[] = []
     for (const flight of state.inFlight) {
       const selector = `.react-flow__edge[data-id="${flight.edgeId}"] path.react-flow__edge-path`

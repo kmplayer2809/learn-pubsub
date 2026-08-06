@@ -70,6 +70,36 @@ describe('MessageLayer', () => {
     expect(group).not.toBeNull()
   })
 
+  it('follows the viewport transform when it changes with no new EngineState (pan/zoom while paused)', async () => {
+    document.body.innerHTML = `
+      <div class="react-flow__viewport" style="transform: translate(0px, 0px) scale(1)">
+        <div class="react-flow__edge" data-id="a->b">
+          <path class="react-flow__edge-path" />
+        </div>
+      </div>
+    `
+    stubPathGeometry('.react-flow__edge[data-id="a->b"] path.react-flow__edge-path')
+
+    // Same state object is reused below to prove the overlay reacts to the
+    // viewport itself, not to a new EngineState (the app never produces one
+    // while paused, which is exactly when a user pans/zooms to inspect).
+    const state = makeState([{ messageId: 'm1', edgeId: 'a->b', fromT: 1000, toT: 1600, tone: 'sky' }], 1300)
+
+    const { container } = render(<MessageLayer state={state} />)
+
+    await waitFor(() => {
+      expect(container.querySelector('g[style*="translate(0px, 0px) scale(1)"]')).not.toBeNull()
+    })
+
+    const viewport = document.querySelector<HTMLElement>('.react-flow__viewport')
+    if (!viewport) throw new Error('test setup: viewport missing')
+    viewport.style.transform = 'translate(200px, 75px) scale(2)'
+
+    await waitFor(() => {
+      expect(container.querySelector('g[style*="translate(200px, 75px) scale(2)"]')).not.toBeNull()
+    })
+  })
+
   it('skips a particle silently when its edge path is not yet painted', async () => {
     document.body.innerHTML = '' // React Flow has not rendered any edges yet
     const state = makeState(
