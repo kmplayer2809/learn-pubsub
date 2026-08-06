@@ -17,7 +17,7 @@
 - Package manager: `npm`.
 - Test runner: `vitest`. Every task ends green before commit.
 - Commit after every task using Conventional Commits (`feat:`, `test:`, `chore:`).
-- **Language: all reader-facing copy is Vietnamese.** Lesson `title`, `summary`, every
+- **Language: all reader-facing copy is Vietnamese.** Lesson `summary`, every
   `NarrativeStep.title` and `.body`, every `Checkpoint.question`, `.options` and
   `.explanation`, every `LESSON_GROUPS` label, and every UI string (buttons, headings,
   `aria-label`, empty states) are written in Vietnamese. RabbitMQ and programming terms
@@ -30,6 +30,14 @@
   values, node ids, or anything inside backticks. Journal/event-log text emitted by
   `src/engine/**` stays English — the engine is not a presentation layer and tests assert
   on its substrings.
+- **Lesson-level `title` is exempt and stays English** when it is the bare name of the
+  thing being taught: `Direct exchange`, `Topic exchange`, `Competing consumers`,
+  `Publisher confirms`, `Dead-letter exchange`, `RPC`, `Quorum vs classic`, and the
+  canonical tutorial name `Hello world`. The sidebar is a technical index; a lesson title
+  is the term itself, and the reader needs to recognise it in RabbitMQ's own docs. This
+  exemption covers lesson `title` ONLY — `summary`, narrative step `title` and `body`, and
+  every checkpoint field are Vietnamese prose with English terms embedded, per the rule
+  above. `src/lessons/language.test.ts` encodes exactly this split.
 
 ---
 
@@ -4868,6 +4876,15 @@ describe('reader-facing copy is Vietnamese', () => {
     const prose = lesson.narrative.map((s) => s.body).join('\n')
     expect(prose).toMatch(VIETNAMESE)
     expect(lesson.summary).toMatch(VIETNAMESE)
+    expect(stripCode(lesson.summary), `${lesson.id} summary`).not.toMatch(
+      ENGLISH_FUNCTION_WORDS,
+    )
+
+    // Each body individually, not just the joined blob: one Vietnamese word in step 1
+    // must not vouch for three untranslated steps after it.
+    for (const step of lesson.narrative) {
+      expect(step.body, `${lesson.id} @${step.at} body`).toMatch(VIETNAMESE)
+    }
 
     for (const step of lesson.narrative) {
       expect(stripCode(step.body), `${lesson.id} @${step.at} body`).not.toMatch(
@@ -4881,9 +4898,13 @@ describe('reader-facing copy is Vietnamese', () => {
     for (const cp of lesson.checkpoints ?? []) {
       expect(cp.question).toMatch(VIETNAMESE)
       expect(cp.explanation).toMatch(VIETNAMESE)
-      expect(stripCode(cp.explanation), `${lesson.id} checkpoint`).not.toMatch(
-        ENGLISH_FUNCTION_WORDS,
-      )
+      for (const text of [cp.question, cp.explanation, ...cp.options]) {
+        expect(stripCode(text), `${lesson.id} checkpoint: ${text}`).not.toMatch(
+          ENGLISH_FUNCTION_WORDS,
+        )
+      }
+      // Options are short and may legitimately be a bare term ("Fanout exchange"), so
+      // they are held to the forbidden-word rule but not to the diacritic rule.
     }
   })
 
@@ -4905,9 +4926,10 @@ Expected: FAIL on every lesson — the bodies are English and contain `the`/`and
 
 - [ ] **Step 3: Translate the six lesson files and the group labels**
 
-Rewrite the `summary`, `title`, and every `narrative` step's `title` and `body` (and any
-`checkpoints`) in Vietnamese per the rules above. Leave `topology`, `script`, `seed`,
-`durationMs`, `at`, and `highlight` byte-identical.
+Rewrite the `summary` and every `narrative` step's `title` and `body` (and any
+`checkpoints`, including their `options`) in Vietnamese per the rules above. Leave the
+lesson-level `title` in English per the exemption in Global Constraints, and leave
+`topology`, `script`, `seed`, `durationMs`, `at`, and `highlight` byte-identical.
 
 - [ ] **Step 4: Run the full suite and refresh snapshots deliberately**
 
