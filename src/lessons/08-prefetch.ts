@@ -1,0 +1,93 @@
+import type { Lesson } from './types'
+
+export const prefetchQos: Lesson = {
+  id: '08-prefetch',
+  group: 'reliability',
+  title: 'Prefetch & QoS',
+  summary: 'Prefetch không giới hạn để một consumer ôm trọn queue; prefetch 1 chia đều công việc.',
+  seed: 8,
+  durationMs: 20_000,
+  topology: {
+    publishers: [{ id: 'p1', label: 'Publisher', position: { x: 40, y: 220 } }],
+    exchanges: [{ id: 'ex', label: 'Fanout exchange', type: 'fanout', position: { x: 260, y: 220 } }],
+    queues: [
+      { id: 'greedy-q', label: 'greedy-q', kind: 'classic', position: { x: 480, y: 80 } },
+      { id: 'fair-q', label: 'fair-q', kind: 'classic', position: { x: 480, y: 380 } },
+    ],
+    consumers: [
+      {
+        id: 'greedy',
+        label: 'Greedy consumer',
+        queueId: 'greedy-q',
+        prefetch: 0,
+        autoAck: false,
+        processingMs: 1200,
+        jitterMs: 600,
+        nackRate: 0,
+        requeueOnNack: true,
+        position: { x: 700, y: 80 },
+      },
+      {
+        id: 'fair-a',
+        label: 'Fair consumer A',
+        queueId: 'fair-q',
+        prefetch: 1,
+        autoAck: false,
+        processingMs: 1200,
+        jitterMs: 600,
+        nackRate: 0,
+        requeueOnNack: true,
+        position: { x: 700, y: 320 },
+      },
+      {
+        id: 'fair-b',
+        label: 'Fair consumer B',
+        queueId: 'fair-q',
+        prefetch: 1,
+        autoAck: false,
+        processingMs: 1200,
+        jitterMs: 600,
+        nackRate: 0,
+        requeueOnNack: true,
+        position: { x: 700, y: 440 },
+      },
+    ],
+    bindings: [
+      { id: 'b1', exchangeId: 'ex', destinationId: 'greedy-q', destinationKind: 'queue' },
+      { id: 'b2', exchangeId: 'ex', destinationId: 'fair-q', destinationKind: 'queue' },
+    ],
+  },
+  script: Array.from({ length: 12 }, (_, i) => ({
+    at: i * 200,
+    publisherId: 'p1',
+    exchangeId: 'ex',
+    routingKey: 'job',
+    body: `Job ${i + 1}`,
+  })),
+  narrative: [
+    {
+      at: 0,
+      title: 'Cùng một nhịp publish, hai chính sách prefetch khác nhau',
+      body: '`greedy` khai báo `prefetch: 0` — không giới hạn. `fair-a` và `fair-b` đều khai báo `prefetch: 1`. Publisher bơm mười hai message liên tiếp, cách nhau 200ms, để cả hai queue nhận cùng một áp lực.',
+      highlight: ['greedy-q', 'fair-q'],
+    },
+    {
+      at: 3000,
+      title: '`greedy` ôm trọn queue chỉ trong vài giây',
+      body: 'Vì `prefetch: 0`, `greedy` không bị chặn bởi số message chưa ack — nó nhận message mới ngay khi có, kể cả khi những message trước còn đang xử lý dở. Queue `greedy-q` gần như rỗng rất nhanh, nhưng bản thân `greedy` lại giữ một chồng message chưa ack.',
+      highlight: ['greedy'],
+    },
+    {
+      at: 9000,
+      title: 'Ôm hết queue không giúp xử lý nhanh hơn',
+      body: 'Dù `greedy-q` trống sớm, `greedy` vẫn phải xử lý tuần tự từng message một, mất `processingMs` cho mỗi message y hệt `fair-a` hay `fair-b`. Rỗng queue chỉ có nghĩa là message đã bị lấy đi, không có nghĩa là đã xử lý xong.',
+      highlight: ['greedy', 'greedy-q'],
+    },
+    {
+      at: 14000,
+      title: '`prefetch: 1` giữ message lại cho bất kỳ consumer nào rảnh',
+      body: 'Vì `fair-a` và `fair-b` chỉ được giữ đúng một message chưa ack, phần message còn lại vẫn nằm trong `fair-q`, sẵn sàng cho bất kỳ ai trong hai consumer rảnh trước. Đây chính là cơ chế khiến việc thêm consumer thực sự tăng throughput — thay vì để một consumer ôm hết việc như `greedy`.',
+      highlight: ['fair-q', 'fair-a', 'fair-b'],
+    },
+  ],
+}
