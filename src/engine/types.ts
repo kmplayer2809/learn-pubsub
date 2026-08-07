@@ -149,6 +149,14 @@ export interface QueuedMessage {
 
 export interface Metrics {
   published: number
+  /**
+   * Routing *hops*, not messages and not destinations. applyRoute increments this
+   * once per `route` event it handles, so a message fanned out to three queues by
+   * one exchange counts 1, while a message crossing an exchange-to-exchange binding
+   * counts once per exchange it passes through — an e2e diamond reports `routed 3`
+   * for `published 1`. None of the 17 lessons uses an exchange-to-exchange binding,
+   * but sandboxStore.addBinding creates one whenever the drag target is an exchange.
+   */
   routed: number
   dropped: number
   delivered: number

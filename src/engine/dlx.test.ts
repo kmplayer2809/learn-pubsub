@@ -78,6 +78,31 @@ describe('deadLetter', () => {
     expect(carried.redeliveryCount).toBe(0)
   })
 
+  it('puts the rewritten message on the wire, not the pre-death one', () => {
+    // The in-flight panel reads routingKey, priority and redeliveryCount straight off
+    // InFlight.message — there is nowhere else to look them up while a message is on
+    // the wire. Animating the pre-death copy showed stale values for the whole 600ms
+    // hop, exactly when a learner is watching to see what dead-lettering changed.
+    const rekeying: Topology = {
+      ...topology,
+      queues: topology.queues.map((q) =>
+        q.id === 'q1' ? { ...q, deadLetterRoutingKey: 'dead-key' } : q,
+      ),
+    }
+    const state = createEngineState(rekeying, 1)
+    const original = message('m1', { routingKey: 'go', redeliveryCount: 3 })
+    const { state: next, newEvents } = deadLetter(state, original, 'q1', 'expired')
+
+    const flight = next.inFlight.find((f) => f.edgeId === 'q1->dlx')!
+    const carried = newEvents[0]!.payload.message as Message
+    expect(flight.message).toEqual(carried)
+    expect(flight.message.routingKey).toBe('dead-key')
+    expect(flight.message.redeliveryCount).toBe(0)
+    expect(flight.message.headers['x-death-reason']).toBe('expired')
+    // The id is untouched, so clearInFlight still finds this hop on arrival.
+    expect(flight.message.id).toBe(original.id)
+  })
+
   it('drops the message when the queue has no dead-letter exchange', () => {
     const state = createEngineState(topology, 1)
     const { state: next, newEvents } = deadLetter(state, message('m1'), 'nodlx', 'rejected')

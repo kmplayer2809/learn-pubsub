@@ -53,7 +53,12 @@ export function deadLetter(
     ...state,
     metrics: { ...state.metrics, deadLettered: state.metrics.deadLettered + 1 },
   }
-  next = addInFlight(next, message, fromQueueId, target, 'rose')
+  // `carried`, not `message`: this hop is the post-death copy travelling to the
+  // dead-letter exchange, and the in-flight panel reads routing key, priority and
+  // redelivery count straight off InFlight.message. Animating the pre-death copy
+  // showed stale values for the whole hop, exactly when a learner is looking to see
+  // what dead-lettering changed. The id is untouched, so clearInFlight still matches.
+  next = addInFlight(next, carried, fromQueueId, target, 'rose')
   next = log(next, {
     at: state.now,
     type: 'deadLetter',
