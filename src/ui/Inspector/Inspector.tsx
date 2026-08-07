@@ -4,6 +4,7 @@ import type { Lesson } from '../../lessons/types'
 import { ExportDialog } from '../../sandbox/ExportDialog'
 import { useAppStore } from '../../sim/store'
 import { activeStepIndex } from './activeStep'
+import { CheckpointSection } from './CheckpointCard'
 import { vietnameseIssueMessage, vietnameseSeverityLabel } from './issueText'
 import { Markdown, MarkdownInline } from './Markdown'
 
@@ -148,6 +149,10 @@ export function Inspector({
       </section>
 
       {exportOpen && <ExportDialog topology={lesson.topology} onClose={() => setExportOpen(false)} />}
+
+      {/* Lesson-only: the sandbox has no narrative and no checkpoints, so SandboxPanel
+          deliberately does not render this the way it shares IssuesList/MetricsGrid. */}
+      <CheckpointSection lessonId={lesson.id} checkpoints={lesson.checkpoints} now={state.now} />
 
       <IssuesList issues={issues} />
 
