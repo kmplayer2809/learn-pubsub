@@ -1,6 +1,21 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { act } from 'react'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { useSandboxStore } from '../sandbox/sandboxStore'
+import { useAppStore } from '../sim/store'
 import App from './App'
+
+beforeEach(() => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useSandboxStore.getState().reset()
+})
+
+/** Ids of the canvas nodes currently wearing the narrative-highlight outline. */
+function highlightedNodeIds(): string[] {
+  return [...document.querySelectorAll('.outline-fuchsia-400')]
+    .map((el) => el.closest('.react-flow__node')?.getAttribute('data-id') ?? '')
+    .sort()
+}
 
 describe('App', () => {
   it('renders all three columns with the first lesson selected', () => {
@@ -14,5 +29,60 @@ describe('App', () => {
   it('shows a play button in the transport bar', () => {
     render(<App />)
     expect(screen.getByTestId('play-pause').textContent).toBe('Chạy')
+  })
+
+  it('emphasises the nodes the active narrative step names', () => {
+    // 01-hello-world's first step (at 0) highlights the publisher and the default
+    // exchange; nothing else on the canvas may pick the emphasis up.
+    render(<App />)
+    expect(highlightedNodeIds()).toEqual(['default', 'p1'])
+  })
+
+  it('moves the emphasis when the run advances into the next narrative step', () => {
+    // Step 2 (at 2400) is about the queue buffering, and highlights `hello` alone.
+    render(<App />)
+    act(() => useAppStore.getState().seek(2500))
+    expect(highlightedNodeIds()).toEqual(['hello'])
+  })
+
+  it('emphasises nothing in the sandbox, which has no narrative', () => {
+    // Deliberately reusing the ids 01-hello-world's first step highlights. `lessonId`
+    // still points at that lesson while the sandbox is open, so an App that forgot to
+    // gate the highlight on `sandbox` would light these two up.
+    useSandboxStore.setState(
+      {
+        topology: {
+          publishers: [{ id: 'p1', label: 'p1', position: { x: 0, y: 0 } }],
+          exchanges: [{ id: 'default', label: 'default', type: 'direct', position: { x: 120, y: 0 } }],
+          queues: [],
+          consumers: [],
+          bindings: [],
+        },
+        script: [],
+      },
+      false,
+    )
+    act(() => useAppStore.getState().openSandbox())
+    render(<App />)
+
+    expect(document.querySelectorAll('.react-flow__node')).toHaveLength(2)
+    expect(highlightedNodeIds()).toEqual([])
+  })
+
+  it('reveals the lesson checkpoint only once the run reaches it', () => {
+    // 01-hello-world's single checkpoint sits at 6000ms.
+    render(<App />)
+    expect(screen.queryByTestId('checkpoints')).toBeNull()
+
+    act(() => useAppStore.getState().seek(6500))
+    expect(screen.getByTestId('checkpoints')).toBeTruthy()
+    expect(screen.getByText(/Nếu consumer ngừng ack/)).toBeTruthy()
+  })
+
+  it('never shows a checkpoint in the sandbox', () => {
+    act(() => useAppStore.getState().openSandbox())
+    render(<App />)
+    act(() => useAppStore.getState().seek(30_000))
+    expect(screen.queryByTestId('checkpoints')).toBeNull()
   })
 })
