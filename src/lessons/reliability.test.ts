@@ -84,9 +84,52 @@ describe('12 ttl and max-length', () => {
 
 describe('13 retry with backoff', () => {
   it('sends failures through the delay queue and back to the main queue', () => {
+    // The old version asserted only that more than one deadLetter happened and that
+    // the run did not halt — it never checked that anything came back, which is the
+    // entire retry loop the test is named after.
     const state = run('13-retry-backoff')
-    const trail = state.journal.filter((j) => j.type === 'deadLetter')
-    expect(trail.length).toBeGreaterThan(1)
     expect(state.halted).toBeUndefined()
+
+    const enqueuesIn = (queueId: string) =>
+      state.journal.filter((j) => j.type === 'enqueue' && j.nodeId === queueId)
+
+    const visits = new Map<string, number>()
+    for (const entry of enqueuesIn('work')) {
+      visits.set(entry.messageId!, (visits.get(entry.messageId!) ?? 0) + 1)
+    }
+    // Four orders are published; a message entering `work` more than once got there
+    // by completing the work -> retry-ex -> retry-1s -> main-ex -> work round trip.
+    const returned = [...visits.entries()].filter(([, n]) => n > 1).map(([id]) => id)
+    expect(returned.length).toBeGreaterThan(0)
+
+    for (const id of returned) {
+      // Rejected out of `work`...
+      expect(
+        state.journal.some(
+          (j) => j.type === 'deadLetter' && j.messageId === id && j.text.includes('rejected'),
+        ),
+      ).toBe(true)
+      // ...parked in the delay queue...
+      expect(enqueuesIn('retry-1s').some((j) => j.messageId === id)).toBe(true)
+      // ...and released by its TTL, not by a consumer (retry-1s has none).
+      expect(
+        state.journal.some(
+          (j) => j.type === 'deadLetter' && j.messageId === id && j.text.includes('expired'),
+        ),
+      ).toBe(true)
+    }
+
+    // Every order that made it out is confirmed exactly once, and nothing is lost:
+    // an order not yet acked when the window closes is still going round the loop,
+    // which is the lesson's own closing point (nothing stops a retry but luck).
+    const acked = state.journal.filter((j) => j.type === 'ack').map((j) => j.messageId)
+    expect(new Set(acked).size).toBe(acked.length)
+    expect(acked.length).toBeGreaterThanOrEqual(3)
+
+    const published = state.journal.filter((j) => j.type === 'publish').map((j) => j.messageId)
+    expect(published).toHaveLength(4)
+    for (const id of published.filter((p) => !acked.includes(p))) {
+      expect(returned).toContain(id)
+    }
   })
 })

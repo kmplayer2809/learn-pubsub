@@ -27,6 +27,37 @@ describe('every lesson', () => {
     expect(runLesson(id)).toEqual(runLesson(id))
   })
 
+  it.each(LESSONS.map((l) => [l.id, l] as const))(
+    '%s produces the same journal in small steps as in one jump',
+    (_id, lesson) => {
+      // The property the UI actually relies on and nothing else covered: the rAF
+      // loop calls advanceTo at whatever granularity the frame rate produces, and
+      // seek() replays from zero in one call. If the two disagree, the journal a
+      // learner reads depends on their frame rate.
+      const build = () =>
+        createSimulation({
+          topology: lesson.topology,
+          script: lesson.script,
+          failures: lesson.failures,
+          seed: lesson.seed,
+        })
+      const end = lesson.durationMs + 20_000
+      const compact = (sim: ReturnType<typeof build>) =>
+        sim.snapshot().journal.map((j) => `${j.at} ${j.type} ${j.text}`)
+
+      const stepped = build()
+      // 37ms: deliberately not a divisor of TRAVEL_MS or any lesson timestamp, so
+      // steps land between events rather than neatly on them.
+      for (let t = 0; t <= end; t += 37) stepped.advanceTo(t)
+      stepped.advanceTo(end)
+
+      const jumped = build()
+      jumped.advanceTo(end)
+
+      expect(compact(stepped)).toEqual(compact(jumped))
+    },
+  )
+
   it.each(LESSONS.map((l) => [l.id, l] as const))('%s confirms every publish', (_id, lesson) => {
     // Lesson 10 teaches that a confirm is the broker answering every publish, so
     // any lesson where the two counters disagree contradicts it in the metrics

@@ -46,9 +46,29 @@ describe('04 topic exchange', () => {
 
 describe('05 headers exchange', () => {
   it('honours x-match all versus any and drops an unmatched message', () => {
+    // `acked > 0` was true no matter which x-match mode the exchange applied, so it
+    // could not distinguish `all` from `any` — the lesson. Per-queue counts can:
+    //
+    //   m1 {format: pdf, kind: report} -> pdf-reports (all: both match),
+    //                                     anything-pdf (any: format),
+    //                                     csv-or-report (any: kind)
+    //   m2 {format: pdf}              -> anything-pdf only; pdf-reports requires
+    //                                    BOTH headers, so `all` must reject it
+    //   m3 {format: csv}              -> csv-or-report only
+    //   m4 {kind: invoice}            -> nothing, dropped
     const state = run('05-headers')
+    const ackedBy = (id: string) =>
+      state.journal.filter((j) => j.type === 'ack' && j.nodeId === id).map((j) => j.messageId)
+
+    // The whole point of `all`: exactly one message carries both headers.
+    expect(ackedBy('c-pdf-reports')).toEqual(['m1'])
+    // `any` on a single header takes both pdf messages.
+    expect(ackedBy('c-anything-pdf')).toEqual(['m1', 'm2'])
+    // `any` across two criteria takes a match on either one.
+    expect(ackedBy('c-csv-or-report')).toEqual(['m1', 'm3'])
+
     expect(state.metrics.dropped).toBe(1)
-    expect(state.metrics.acked).toBeGreaterThan(0)
+    expect(state.metrics.acked).toBe(5)
   })
 })
 
