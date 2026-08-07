@@ -106,13 +106,21 @@ describe('canvas invariants that later tasks depend on', () => {
   )
 
   it.each(LESSONS.map((l) => [l.id, l] as const))(
-    '%s: draws no consumer->exchange edge the engine never travels',
+    '%s: draws no edge that is neither declared in the topology nor actually travelled',
     (_id, currentLesson) => {
       // The invariant above is one-directional: it catches edges that are travelled
-      // but not drawn, and stays green no matter how many edges are invented. A
-      // cross-product heuristic exploited exactly that, fabricating up to four of
-      // eleven edges on 11-dlx. A consumer only publishes when it answers an RPC, so
-      // every consumer->exchange edge must correspond to real traffic.
+      // but not drawn, and stays green no matter how many edges are invented. Two
+      // cross-product heuristics exploited exactly that — the consumer one fabricated
+      // four of eleven edges on 11-dlx, and the publisher one survived that fix and
+      // still fabricated `p1->main-ex` on 16-delayed, whose whole point is that
+      // `main-ex` is reachable ONLY by dead-lettering.
+      //
+      // This covers every edge family at once rather than one at a time. An edge is
+      // legitimate if the topology declares it (a binding, a consumer's queue, a
+      // dead-letter link) — those are drawn whether or not this lesson's script
+      // happens to exercise them, which is correct: 13-retry-backoff really does
+      // bind `retry-ex->parking-lot` and never sends anything down it. Every OTHER
+      // edge is inferred, so it must correspond to traffic that actually happened.
       const sim = createSimulation({
         topology: currentLesson.topology,
         script: currentLesson.script,
@@ -125,13 +133,35 @@ describe('canvas invariants that later tasks depend on', () => {
         for (const flight of sim.snapshot().inFlight) travelled.add(flight.edgeId)
       }
 
-      const consumerIds = new Set(currentLesson.topology.consumers.map((c) => c.id))
-      const exchangeIds = new Set(currentLesson.topology.exchanges.map((e) => e.id))
+      const declared = new Set<string>()
+      for (const b of currentLesson.topology.bindings) declared.add(`${b.exchangeId}->${b.destinationId}`)
+      for (const c of currentLesson.topology.consumers) declared.add(`${c.queueId}->${c.id}`)
+      for (const q of currentLesson.topology.queues) {
+        if (q.deadLetterExchange) declared.add(`${q.id}->${q.deadLetterExchange}`)
+      }
+
       const drawn = toFlowEdges(currentLesson.topology, currentLesson.script)
-      const replyEdges = drawn.filter((e) => consumerIds.has(e.source) && exchangeIds.has(e.target))
-      expect(replyEdges.filter((e) => !travelled.has(e.id)).map((e) => e.id)).toEqual([])
+      const fabricated = drawn.filter((e) => !declared.has(e.id) && !travelled.has(e.id))
+      expect(fabricated.map((e) => e.id)).toEqual([])
     },
   )
+
+  it('draws only the exchanges a publisher actually publishes to', () => {
+    const delayed = LESSONS.find((l) => l.id === '16-delayed')!
+    const ids = toFlowEdges(delayed.topology, delayed.script).map((e) => e.id)
+    // `p1` publishes to `delay-ex` only. `main-ex` is reachable exclusively by
+    // dead-lettering out of `delay-5s`, and drawing a solid publisher arrow into it
+    // contradicts the lesson standing next to it.
+    expect(ids).toContain('p1->delay-ex')
+    expect(ids).not.toContain('p1->main-ex')
+  })
+
+  it('falls back to the binding heuristic for a publisher with no scripted actions', () => {
+    // A node just dropped on the Sandbox canvas has published nothing yet. It still
+    // needs an edge, or it floats disconnected and the user cannot see what it feeds.
+    const ids = toFlowEdges(lesson.topology, []).map((e) => e.id)
+    expect(ids).toContain('p1->default')
+  })
 
   it('draws the rpc reply edge for the consumer that actually answers', () => {
     const rpc = LESSONS.find((l) => l.id === '14-rpc')!

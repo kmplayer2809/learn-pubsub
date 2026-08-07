@@ -62,10 +62,23 @@ function edge(source: string, target: string, label?: string, dashed = false): E
 export function toFlowEdges(topology: Topology, script: ScriptedAction[] = []): Edge[] {
   const edges: Edge[] = []
 
-  // Publishers connect to every exchange a script could target; the topology
-  // does not model that link explicitly, so connect each publisher to each exchange
-  // that has at least one binding.
+  // The topology never models publisher -> exchange, so it has to be inferred. The
+  // script says exactly which exchanges a publisher targets, and using it instead of
+  // a publisher x exchange cross-product matters pedagogically: the cross-product drew
+  // a solid `p1->main-ex` on 16-delayed while the entire lesson is that `main-ex` is
+  // reachable ONLY by dead-lettering, plus `p1->dlx` on 11/12 (the publisher does not
+  // publish into a dead-letter exchange) and `client->replies` on 14 (the client does
+  // not publish its own replies).
+  //
+  // The old heuristic survives for a publisher with no scripted actions — a node just
+  // dropped on the Sandbox canvas — so it still shows what it could feed rather than
+  // floating disconnected.
   for (const p of topology.publishers) {
+    const targets = new Set(script.filter((a) => a.publisherId === p.id).map((a) => a.exchangeId))
+    if (targets.size > 0) {
+      for (const exchangeId of targets) edges.push(edge(p.id, exchangeId))
+      continue
+    }
     for (const e of topology.exchanges) {
       if (topology.bindings.some((b) => b.exchangeId === e.id)) edges.push(edge(p.id, e.id))
     }
