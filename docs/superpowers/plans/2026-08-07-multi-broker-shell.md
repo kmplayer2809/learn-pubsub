@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Behaviour must not change in this plan.** Every one of the 322 existing tests stays green from the first commit to the last. This plan moves and generalises code; it does not rewrite RabbitMQ behaviour, lesson content, or copy.
+- **Behaviour must not change in this plan.** Every one of the 397 existing tests stays green from the first commit to the last. This plan moves and generalises code; it does not rewrite RabbitMQ behaviour, lesson content, or copy.
 - **Typecheck command is `npm run typecheck`** (runs `tsc -b`). Never `npx tsc --noEmit` — the root `tsconfig.json` is project-references only and compiles zero files, so it exits 0 regardless of errors.
 - **Determinism contract holds:** no `Math.random`, `Date.now`, `new Date`, `setTimeout`, `setInterval`, `performance.now`, no `document.`/`window.`/`process.`, no dynamic `import(`/`require(`, and no imports of `react`, `zustand`, or `@xyflow/react` anywhere under `src/shell/kernel/**` or `src/brokers/*/engine/**` (excluding `*.test.ts`).
 - **User-facing copy is Vietnamese**; RabbitMQ/Redis/programming terms stay English. New UI strings in this plan follow that rule.
@@ -109,7 +109,7 @@ Expected: exit 0, no output. If a path is still wrong, `tsc` names the exact fil
 - [ ] **Step 5: Run the full suite**
 
 Run: `npm test`
-Expected: all tests pass, same count as before the move (322).
+Expected: all tests pass, same count as before the move (397).
 
 - [ ] **Step 6: Lint**
 
@@ -196,7 +196,7 @@ Repeat typecheck until it exits 0.
 - [ ] **Step 5: Run the suite**
 
 Run: `npm test`
-Expected: 322 passing, unchanged.
+Expected: 397 passing, unchanged.
 
 - [ ] **Step 6: Lint and commit**
 
@@ -698,7 +698,7 @@ export { MAX_EVENTS_PER_RUN, MAX_JOURNAL, type Simulation } from '../../../shell
 - [ ] **Step 7: Run the full suite**
 
 Run: `npm test`
-Expected: all 322+ pass. The engine's own `index.test.ts`, `simulation.test.ts`, and the lesson determinism/snapshot tests are the proof that the extraction changed no behaviour — a snapshot diff here means the loop was altered, not merely moved.
+Expected: all 397+ pass. The engine's own `index.test.ts`, `simulation.test.ts`, and the lesson determinism/snapshot tests are the proof that the extraction changed no behaviour — a snapshot diff here means the loop was altered, not merely moved.
 
 - [ ] **Step 8: Typecheck, lint, commit**
 
@@ -1774,7 +1774,7 @@ git commit -m "docs: describe the multi-broker structure and how to add a broker
 
 After Task 12, all of the following must hold:
 
-- `npm test` — every test passes, including the pre-existing 322.
+- `npm test` — every test passes, including the pre-existing 397.
 - `npm run typecheck` — exit 0.
 - `npm run lint` — exit 0.
 - `npm run build` — exit 0.
