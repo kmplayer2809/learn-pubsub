@@ -1,3 +1,4 @@
+import type { EngineState, ValidationIssue } from '../../brokers/rabbitmq/engine'
 import { getLesson } from '../../brokers/rabbitmq/lessons/registry'
 import { SandboxPanel } from '../../brokers/rabbitmq/sandbox/SandboxPanel'
 import { useSandboxStore } from '../../brokers/rabbitmq/sandbox/sandboxStore'
@@ -20,7 +21,12 @@ export default function App() {
   const sandbox = useAppStore((s) => s.sandbox)
   const lessonId = useAppStore((s) => s.lessonId)
   const lesson = getLesson(lessonId)
-  const { state, issues, stepOnce } = useSimulation()
+  // useSimulation now returns the broker-agnostic KernelState/ValidationIssueBase; App.tsx
+  // is still RabbitMQ-only until Tasks 10-11 wire it through the broker abstraction, so it
+  // casts back to the concrete types at its own boundary rather than at every call site.
+  const { state: rawState, issues: rawIssues, stepOnce } = useSimulation()
+  const state = rawState as EngineState
+  const issues = rawIssues as ValidationIssue[]
   const sandboxTopology = useSandboxStore((s) => s.topology)
   const sandboxScript = useSandboxStore((s) => s.script)
 

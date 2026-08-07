@@ -5,6 +5,7 @@ import * as engineModule from '../brokers/rabbitmq/engine'
 import { LESSONS } from '../brokers/rabbitmq/lessons/registry'
 import type { Lesson } from '../brokers/rabbitmq/lessons/types'
 import { useSandboxStore } from '../brokers/rabbitmq/sandbox/sandboxStore'
+import type { KernelState } from './kernel/types'
 import { useAppStore } from './store'
 import { useSimulation } from './useSimulation'
 
@@ -90,8 +91,10 @@ function advanceFrame(ms: number) {
   })
 }
 
-function cloneJournal(state: EngineState) {
-  return JSON.parse(JSON.stringify(state.journal)) as EngineState['journal']
+// useSimulation now returns the broker-agnostic KernelState; this helper only ever
+// touches `.journal`, which every broker's state has, so it does not need EngineState.
+function cloneJournal(state: KernelState) {
+  return JSON.parse(JSON.stringify(state.journal)) as KernelState['journal']
 }
 
 describe('useSimulation', () => {
@@ -311,7 +314,9 @@ describe('useSimulation', () => {
 
     const virtualTimeAtPublish = useAppStore.getState().virtualTime
     expect(virtualTimeAtPublish).toBeGreaterThan(0)
-    expect(result.current.state.metrics.published).toBe(0)
+    // .metrics is RabbitMQ-specific, not part of the broker-agnostic KernelState
+    // useSimulation now returns; cast at the point of use, same as App.tsx does.
+    expect((result.current.state as EngineState).metrics.published).toBe(0)
 
     act(() => {
       useSandboxStore.getState().publish({
@@ -323,9 +328,35 @@ describe('useSimulation', () => {
       })
     })
 
-    expect(result.current.state.metrics.published).toBe(1)
+    expect((result.current.state as EngineState).metrics.published).toBe(1)
     expect(result.current.state.journal.some((j) => j.text.includes('published'))).toBe(true)
 
     unmount()
+  })
+
+  it('builds the simulation from the active broker module, not a hard-coded engine', () => {
+    const { result } = renderHook(() => useSimulation())
+    // 01-hello-world publishes at 0, 1500, 3000, 4500 — advancing past the first two
+    // must show the module's own engine having produced journal entries.
+    act(() => useAppStore.getState().seek(2000))
+    expect(result.current.state.journal.length).toBeGreaterThan(0)
+    expect(result.current.state.now).toBe(2000)
+  })
+
+  it('rebuilds when the broker changes', () => {
+    const { result } = renderHook(() => useSimulation())
+    act(() => useAppStore.getState().seek(4000))
+    const journalAtT4000 = cloneJournal(result.current.state)
+    expect(journalAtT4000.length).toBeGreaterThan(1)
+
+    act(() => useAppStore.getState().setBroker('rabbitmq'))
+    expect(result.current.state.now).toBe(0)
+    // Not an empty journal: hello-world's own script publishes a message AT t=0 (see the
+    // fixture comment above), and the kernel drains every event with `at <= upTo`, so a
+    // fresh build advanced to virtualTime 0 always processes it — the same thing a plain
+    // mount at t=0 does. What proves the rebuild actually happened is that the multi-entry
+    // journal built up through t=4000 has been discarded down to just that one entry.
+    expect(result.current.state.journal.length).toBe(1)
+    expect(result.current.state.journal[0]?.at).toBe(0)
   })
 })

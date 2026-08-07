@@ -29,8 +29,17 @@ export interface BrokerModule<S extends KernelState, T, A, I extends ValidationI
 
 export interface BrokerSandbox<S extends KernelState, T, A, I extends ValidationIssueBase> {
   Panel: ComponentType<{ state: S; issues: I[] }>
-  useTopology(): T
-  useScript(): A[]
+  /**
+   * Plain reads, not hooks: `getTopology`/`getScript` + `subscribe` are meant to be driven
+   * through `useSyncExternalStore` by whoever consumes them (see `shell/useSimulation.ts`).
+   * That keeps the *number* of hooks called at the call site fixed regardless of which
+   * broker is active or whether it has a sandbox at all — a broker-authored hook (e.g. a
+   * bound Zustand selector) is free to call a different number of primitive hooks
+   * internally, which a plain getter can't do.
+   */
+  getTopology(): T
+  getScript(): A[]
+  subscribe(onStoreChange: () => void): () => void
   reset(): void
   maxEvents: number
   transportDurationMs: number

@@ -59,8 +59,9 @@ export const rabbitmq: BrokerModule<EngineState, Topology, ScriptedAction, Valid
   issueText,
   sandbox: {
     Panel: SandboxPanel,
-    useTopology: () => useSandboxStore((s) => s.topology),
-    useScript: () => useSandboxStore((s) => s.script),
+    getTopology: () => useSandboxStore.getState().topology,
+    getScript: () => useSandboxStore.getState().script,
+    subscribe: (onStoreChange) => useSandboxStore.subscribe(onStoreChange),
     reset: () => useSandboxStore.getState().reset(),
     maxEvents: SANDBOX_MAX_EVENTS,
     transportDurationMs: SANDBOX_TRANSPORT_DURATION_MS,
