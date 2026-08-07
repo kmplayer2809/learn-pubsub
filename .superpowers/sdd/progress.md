@@ -347,3 +347,33 @@ Task 19: complete (commit d4a3d04). 322 tests / 30 files, typecheck clean.
   review and superpowers:finishing-a-development-branch.
   If the Task 17 completion notification arrives DURING the pause, record its result in
   this ledger and stop there. The user asked to pause; do not roll on into Task 16c.
+
+Task 20: complete (commit 342db9c). Final pass + README.
+  Controller executed this inline, not via subagent: the dispatched agent died on a
+  session limit AFTER writing files but BEFORE committing, so the working tree already
+  held its items 1-4. Verified each rather than trusting it.
+  1. Auto-ack divergence: measured lesson 07 directly — delivered 9 / acked 7; the auto
+     consumer takes 4 deliveries but only 3 acks because m1 is lost at the 2000ms crash.
+     Agent's narrative rewording is accurate. BUT it left the engine's own journal line
+     saying "in-flight message lost because auto-ack already confirmed it", which
+     contradicts both the corrected narrative and the acked counter beside it. Also false
+     when the consumer is idle: nothing in state tracks whether an auto-ack consumer was
+     mid-processing, so that branch fires on every auto-ack crash. Controller reworded it.
+  2. Loanword pass: grep for hàng đợi / định tuyến / thông điệp / người tiêu thụ /
+     nhà xuất bản / bộ đệm across non-test src is now empty.
+  3. oxlint Fast Refresh warning gone — `npm run lint` is silent.
+  4. `arguments: {}` no longer emitted; confirmed by reading the live export output.
+  5. Copy button VERIFIED (was the open item from Task 19). Stubbed writeText and clicked
+     the real button: passes 661 chars matching the <pre> exactly, label goes
+     "Sao chép đoạn code này" -> "Đã sao chép" -> back after 1.5s. Found and fixed a real
+     defect while doing it — the catch was silent, so a rejected write (insecure context,
+     e.g. plain HTTP on a LAN IP) left the button inert with no feedback. Now shows a
+     failure label; both paths measured in the browser.
+  6. README written. `npm run build` succeeds — 478.57 kB js / 30.10 kB css, first time a
+     production build has been exercised. Controller corrected one wrong instruction in it:
+     it said "Kéo thanh Sandbox" (drag) when the sidebar control is a click button.
+     Its "322 test trên 30 file" claim checked and accurate.
+
+REMAINING: final whole-branch review (still owes proper coverage of Task 17's 58cf9f9 —
+that task's formal reviewer was never dispatched), then
+superpowers:finishing-a-development-branch.
