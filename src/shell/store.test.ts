@@ -44,3 +44,38 @@ describe('app store', () => {
     expect([...SPEEDS].sort((a, b) => a - b)).toEqual(SPEEDS)
   })
 })
+
+describe('broker selection', () => {
+  beforeEach(() => useAppStore.setState(useAppStore.getInitialState(), true))
+
+  it('starts on the default broker and its default lesson', () => {
+    expect(useAppStore.getState().brokerId).toBe('rabbitmq')
+    expect(useAppStore.getState().lessonId).toBe('01-hello-world')
+  })
+
+  it('switching broker selects that broker default lesson and leaves the sandbox', () => {
+    useAppStore.getState().openSandbox()
+    useAppStore.getState().setBroker('rabbitmq')
+    const s = useAppStore.getState()
+    expect(s.brokerId).toBe('rabbitmq')
+    expect(s.lessonId).toBe('01-hello-world')
+    expect(s.sandbox).toBe(false)
+  })
+
+  it('switching broker rewinds the transport and forces a replay', () => {
+    useAppStore.getState().seek(5000)
+    useAppStore.getState().play()
+    const before = useAppStore.getState().replayToken
+    useAppStore.getState().setBroker('rabbitmq')
+    const s = useAppStore.getState()
+    expect(s.virtualTime).toBe(0)
+    expect(s.playing).toBe(false)
+    expect(s.selectedNodeId).toBeUndefined()
+    expect(s.replayToken).toBe(before + 1)
+  })
+
+  it('ignores an unknown broker id rather than stranding the app on a missing module', () => {
+    useAppStore.getState().setBroker('kafka')
+    expect(useAppStore.getState().brokerId).toBe('rabbitmq')
+  })
+})
