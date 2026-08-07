@@ -1,5 +1,5 @@
 import { log, scheduleEvent } from './broker'
-import type { ApplyResult, EngineState, Message, NodeId, QueuedMessage, SimEvent } from './types'
+import type { AmqpEvent, ApplyResult, EngineState, Message, NodeId, QueuedMessage } from './types'
 
 /**
  * Inserts ahead of every strictly lower priority entry and behind equals, so
@@ -34,7 +34,7 @@ export function requeueByPriority(
   return [...queue.slice(0, index), incoming, ...queue.slice(index)]
 }
 
-export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyResult {
+export function applyConsumerCrash(state: EngineState, event: AmqpEvent): ApplyResult {
   const consumerId = event.payload.consumerId as NodeId
   const held = (event.payload.heldMessages as Message[]) ?? []
   const consumer = state.topology.consumers.find((c) => c.id === consumerId)
@@ -99,7 +99,7 @@ export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyRe
   return { state: afterSchedule, newEvents: [dispatchEvent] }
 }
 
-export function applyConsumerRecover(state: EngineState, event: SimEvent): ApplyResult {
+export function applyConsumerRecover(state: EngineState, event: AmqpEvent): ApplyResult {
   const consumerId = event.payload.consumerId as NodeId
   const consumer = state.topology.consumers.find((c) => c.id === consumerId)
 
@@ -123,7 +123,7 @@ export function buildReplyEvents(
   state: EngineState,
   message: Message,
   consumerId: NodeId,
-): [SimEvent[], EngineState] {
+): [AmqpEvent[], EngineState] {
   if (!message.replyTo) return [[], state]
   const [replyEvent, next] = scheduleEvent(state, state.now, 'publish', {
     publisherId: consumerId,

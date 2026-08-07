@@ -1,8 +1,8 @@
 import { buildReplyEvents, requeueByPriority } from './advanced'
 import { addInFlight, clearInFlight, edgeId, log, scheduleEvent, TRAVEL_MS } from './broker'
 import { deadLetter } from './dlx'
-import { nextFloat } from './rng'
-import type { ApplyResult, ConsumerSpec, EngineState, Message, NodeId, SimEvent } from './types'
+import type { AmqpEvent, ApplyResult, ConsumerSpec, EngineState, Message, NodeId } from './types'
+import { nextFloat } from '../../../shell/kernel/rng'
 
 /** Consumers bound to the queue that are neither crashed nor at their prefetch ceiling. */
 export function eligibleConsumers(state: EngineState, queueId: NodeId): ConsumerSpec[] {
@@ -21,7 +21,7 @@ function takeHead(state: EngineState, queueId: NodeId): [Message | undefined, En
   return [head.message, { ...state, queues: { ...state.queues, [queueId]: queue.slice(1) } }]
 }
 
-export function applyDispatch(state: EngineState, event: SimEvent): ApplyResult {
+export function applyDispatch(state: EngineState, event: AmqpEvent): ApplyResult {
   const queueId = event.payload.queueId as NodeId
   const candidates = eligibleConsumers(state, queueId)
   if (candidates.length === 0) return { state, newEvents: [] }
@@ -59,7 +59,7 @@ export function applyDispatch(state: EngineState, event: SimEvent): ApplyResult 
   return { state: afterSchedule, newEvents: [deliverEvent] }
 }
 
-export function applyDeliver(state: EngineState, event: SimEvent): ApplyResult {
+export function applyDeliver(state: EngineState, event: AmqpEvent): ApplyResult {
   const message = event.payload.message as Message
   const queueId = event.payload.queueId as NodeId
   const consumerId = event.payload.consumerId as NodeId
@@ -108,7 +108,7 @@ export function applyDeliver(state: EngineState, event: SimEvent): ApplyResult {
   return { state: afterSchedule, newEvents: [doneEvent] }
 }
 
-export function applyConsumeDone(state: EngineState, event: SimEvent): ApplyResult {
+export function applyConsumeDone(state: EngineState, event: AmqpEvent): ApplyResult {
   const message = event.payload.message as Message
   const queueId = event.payload.queueId as NodeId
   const consumerId = event.payload.consumerId as NodeId
@@ -145,7 +145,7 @@ function releaseUnacked(state: EngineState, consumerId: NodeId, messageId: strin
   return { ...state, unacked: { ...state.unacked, [consumerId]: held.filter((m) => m.id !== messageId) } }
 }
 
-export function applyAck(state: EngineState, event: SimEvent): ApplyResult {
+export function applyAck(state: EngineState, event: AmqpEvent): ApplyResult {
   const messageId = (event.payload.messageId as string) ?? (event.payload.message as Message).id
   const consumerId = event.payload.consumerId as NodeId
   const queueId = event.payload.queueId as NodeId
@@ -161,7 +161,7 @@ export function applyAck(state: EngineState, event: SimEvent): ApplyResult {
   })
 
   const message = event.payload.message as Message | undefined
-  let replyEvents: SimEvent[] = []
+  let replyEvents: AmqpEvent[] = []
   if (message) {
     const [events, afterReply] = buildReplyEvents(next, message, consumerId)
     replyEvents = events
@@ -172,7 +172,7 @@ export function applyAck(state: EngineState, event: SimEvent): ApplyResult {
   return { state: afterSchedule, newEvents: [...replyEvents, dispatchEvent] }
 }
 
-export function applyNack(state: EngineState, event: SimEvent): ApplyResult {
+export function applyNack(state: EngineState, event: AmqpEvent): ApplyResult {
   const message = event.payload.message as Message | undefined
   const messageId = (event.payload.messageId as string) ?? message?.id ?? ''
   const consumerId = event.payload.consumerId as NodeId

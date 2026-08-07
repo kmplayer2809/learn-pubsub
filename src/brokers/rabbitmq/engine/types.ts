@@ -1,4 +1,6 @@
-import type { RngState } from './rng'
+import type { InFlight, JournalEntry, KernelState, SimEvent } from '../../../shell/kernel/types'
+export type { InFlight, JournalEntry }
+export type AmqpEvent = SimEvent<SimEventType>
 
 export type ExchangeType = 'direct' | 'fanout' | 'topic' | 'headers'
 export type QueueKind = 'classic' | 'quorum'
@@ -116,17 +118,8 @@ export type SimEventType =
   | 'consumerRecover'
   | 'confirm'
 
-export interface SimEvent {
-  /** Virtual milliseconds at which this event fires. */
-  at: number
-  /** Tie-break so equal timestamps stay deterministic. */
-  seq: number
-  type: SimEventType
-  payload: Record<string, unknown>
-}
-
 /** A message currently animating along an edge. */
-export interface InFlight {
+export interface AmqpInFlight {
   /**
    * The whole message, not its id. An in-flight message has already been removed
    * from its queue and has not yet landed in `unacked`, so this record is the ONLY
@@ -168,19 +161,7 @@ export interface Metrics {
   confirmed: number
 }
 
-export interface JournalEntry {
-  at: number
-  type: SimEventType | 'guard' | 'validation'
-  /** Human-readable line rendered in the inspector's event log. */
-  text: string
-  nodeId?: NodeId
-  messageId?: string
-}
-
-export interface EngineState {
-  now: number
-  seq: number
-  rng: RngState
+export interface EngineState extends KernelState {
   topology: Topology
   /** Queue id to its ordered messages. */
   queues: Record<NodeId, QueuedMessage[]>
@@ -199,11 +180,8 @@ export interface EngineState {
    * message to the same consumer.
    */
   roundRobin: Record<NodeId, number>
-  inFlight: InFlight[]
+  inFlight: AmqpInFlight[]
   metrics: Metrics
-  journal: JournalEntry[]
-  /** Set when a runaway guard halts the run. */
-  halted?: { reason: string }
   /** Consumer ids that are currently crashed and not consuming. */
   crashed: NodeId[]
   /**
@@ -220,5 +198,5 @@ export interface EngineState {
 
 export interface ApplyResult {
   state: EngineState
-  newEvents: SimEvent[]
+  newEvents: AmqpEvent[]
 }

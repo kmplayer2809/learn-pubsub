@@ -1,13 +1,14 @@
 import { applyConsumerCrash, applyConsumerRecover } from './advanced'
 import { applyConfirm, applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
-import { createScheduler, peekTime, popDue, pushAll, type Scheduler } from './clock'
 import { applyAck, applyConsumeDone, applyDeliver, applyDispatch, applyNack } from './delivery'
 import { applyDeadLetter, applyTtlExpire } from './dlx'
-import type { ApplyResult, EngineState, NodeId, SimEvent, Topology } from './types'
+import type { AmqpEvent, ApplyResult, EngineState, NodeId, Topology } from './types'
+import { createScheduler, peekTime, popDue, pushAll, type Scheduler } from '../../../shell/kernel/clock'
 import { validateTopology, type ValidationIssue, type ValidationIssueCode } from './validate'
 
 export * from './types'
 export { validateTopology, type ValidationIssue, type ValidationIssueCode }
+export { createRng, nextFloat, nextInt, type RngState } from '../../../shell/kernel/rng'
 
 export const MAX_EVENTS_PER_RUN = 200_000
 export const MAX_JOURNAL = 5_000
@@ -59,7 +60,7 @@ export interface Simulation {
 // routes via a 'route' event instead — but applyDeadLetter exists with the right
 // shape, so it is wired here rather than left orphaned behind a no-op stub.
 // 'retryBackoff' has no reducer yet in Tasks 5-8; it is reserved for a later task.
-const REDUCERS: Record<SimEvent['type'], (s: EngineState, e: SimEvent) => ApplyResult> = {
+const REDUCERS: Record<AmqpEvent['type'], (s: EngineState, e: AmqpEvent) => ApplyResult> = {
   publish: applyPublish,
   route: applyRoute,
   enqueue: applyEnqueue,
@@ -76,9 +77,9 @@ const REDUCERS: Record<SimEvent['type'], (s: EngineState, e: SimEvent) => ApplyR
   confirm: applyConfirm,
 }
 
-function seedEvents(options: SimulationOptions): SimEvent[] {
+function seedEvents(options: SimulationOptions): AmqpEvent[] {
   let seq = 0
-  const publishes = options.script.map<SimEvent>((action) => ({
+  const publishes = options.script.map<AmqpEvent>((action) => ({
     at: action.at,
     seq: seq++,
     type: 'publish',
@@ -96,7 +97,7 @@ function seedEvents(options: SimulationOptions): SimEvent[] {
     },
   }))
 
-  const failures = (options.failures ?? []).map<SimEvent>((failure) => ({
+  const failures = (options.failures ?? []).map<AmqpEvent>((failure) => ({
     at: failure.at,
     seq: seq++,
     type: failure.kind === 'crash' ? 'consumerCrash' : 'consumerRecover',
@@ -122,7 +123,7 @@ export function createSimulation(options: SimulationOptions): Simulation {
 
   // Crash events need the messages the consumer currently holds, which is only
   // knowable at apply time — so the reducer reads them from live state here.
-  function enrich(event: SimEvent, current: EngineState): SimEvent {
+  function enrich(event: AmqpEvent, current: EngineState): AmqpEvent {
     if (event.type !== 'consumerCrash') return event
     const consumerId = event.payload.consumerId as NodeId
     // state.unacked holds whole messages, so this is a straight read. Never
@@ -145,7 +146,10 @@ export function createSimulation(options: SimulationOptions): Simulation {
       // generated mid-batch.
       const nextTime = peekTime(scheduler)
       if (nextTime === undefined || nextTime > upTo) return
-      const [due, rest] = popDue(scheduler, nextTime)
+      // The scheduler is generic over SimEvent's default `string` type param, but
+      // this engine only ever pushes AmqpEvent onto it (seedEvents, REDUCERS'
+      // newEvents), so every event popped back off is safely an AmqpEvent.
+      const [due, rest] = popDue(scheduler, nextTime) as [AmqpEvent[], Scheduler]
       scheduler = rest
       for (const event of due) {
         // The ceiling counts events processed across the whole run, and this check

@@ -1,5 +1,5 @@
 import { addInFlight, log, scheduleEvent, TRAVEL_MS } from './broker'
-import type { ApplyResult, EngineState, Message, NodeId, QueueSpec, SimEvent } from './types'
+import type { AmqpEvent, ApplyResult, EngineState, Message, NodeId, QueueSpec } from './types'
 
 export type DeathReason = 'rejected' | 'expired' | 'maxlen'
 
@@ -76,7 +76,7 @@ export function deadLetter(
   return { state: afterSchedule, newEvents: [routeEvent] }
 }
 
-export function applyTtlExpire(state: EngineState, event: SimEvent): ApplyResult {
+export function applyTtlExpire(state: EngineState, event: AmqpEvent): ApplyResult {
   const messageId = event.payload.messageId as string
   const queueId = event.payload.queueId as NodeId
   const queue = state.queues[queueId] ?? []
@@ -108,7 +108,7 @@ export function applyTtlExpire(state: EngineState, event: SimEvent): ApplyResult
   return deadLetter(without, queue[index]!.message, queueId, 'expired')
 }
 
-export function applyDeadLetter(state: EngineState, event: SimEvent): ApplyResult {
+export function applyDeadLetter(state: EngineState, event: AmqpEvent): ApplyResult {
   const message = event.payload.message as Message
   const fromQueueId = event.payload.queueId as NodeId
   const reason = (event.payload.reason as DeathReason) ?? 'rejected'

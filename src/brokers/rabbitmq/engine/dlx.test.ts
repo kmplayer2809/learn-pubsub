@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
 import { createSimulation } from './index'
 import { applyTtlExpire, deadLetter, effectiveTtl } from './dlx'
-import type { EngineState, Message, QueueSpec, SimEvent, Topology } from './types'
+import type { AmqpEvent, EngineState, Message, QueueSpec, Topology } from './types'
 
 const queue = (over: Partial<QueueSpec> & { id: string }): QueueSpec => ({
   label: over.id,
@@ -43,7 +43,7 @@ const message = (id: string, over: Partial<Message> = {}): Message => ({
 })
 
 function publishInto(state: EngineState, body: string): EngineState {
-  const pub: SimEvent = {
+  const pub: AmqpEvent = {
     at: state.now,
     seq: 0,
     type: 'publish',
@@ -160,7 +160,7 @@ describe('applyTtlExpire', () => {
     // used to claim the opposite; this test is what makes that claim checkable.
     const slow = message('slow', { expirationMs: 9000 })
     const fast = message('fast', { expirationMs: 1000 })
-    const enqueue = (m: Message, at: number): SimEvent => ({
+    const enqueue = (m: Message, at: number): AmqpEvent => ({
       at,
       seq: 0,
       type: 'enqueue',

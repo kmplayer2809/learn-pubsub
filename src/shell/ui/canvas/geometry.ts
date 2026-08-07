@@ -1,6 +1,6 @@
-import type { InFlight } from '../../../brokers/rabbitmq/engine'
+import type { AmqpInFlight } from '../../../brokers/rabbitmq/engine'
 
-export function progressOf(flight: InFlight, now: number): number {
+export function progressOf(flight: AmqpInFlight, now: number): number {
   const span = flight.toT - flight.fromT
   if (span <= 0) return 1
   const raw = (now - flight.fromT) / span

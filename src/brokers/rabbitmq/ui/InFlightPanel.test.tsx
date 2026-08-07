@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { EngineState, InFlight, Message } from '../engine'
+import type { AmqpInFlight, EngineState, Message } from '../engine'
 import { InFlightPanel } from './InFlightPanel'
 
 function message(over: Partial<Message> = {}): Message {
@@ -18,11 +18,11 @@ function message(over: Partial<Message> = {}): Message {
   }
 }
 
-function flight(over: Partial<InFlight> = {}): InFlight {
+function flight(over: Partial<AmqpInFlight> = {}): AmqpInFlight {
   return { message: message(), edgeId: 'ex->orders', fromT: 0, toT: 1000, tone: 'sky', ...over }
 }
 
-function state(inFlight: InFlight[], now = 500): EngineState {
+function state(inFlight: AmqpInFlight[], now = 500): EngineState {
   return { now, inFlight } as unknown as EngineState
 }
 

@@ -1,17 +1,17 @@
 import { insertByPriority } from './advanced'
 import { deadLetter, effectiveTtl } from './dlx'
-import { createRng } from './rng'
 import { resolveDestinations } from './routing'
 import type {
+  AmqpEvent,
   ApplyResult,
   EngineState,
   JournalEntry,
   Message,
   NodeId,
   QueuedMessage,
-  SimEvent,
   Topology,
 } from './types'
+import { createRng } from '../../../shell/kernel/rng'
 
 /** Virtual milliseconds a message spends animating along one edge. */
 export const TRAVEL_MS = 600
@@ -76,9 +76,9 @@ export function nextSeq(state: EngineState): [number, EngineState] {
 export function scheduleEvent(
   state: EngineState,
   at: number,
-  type: SimEvent['type'],
+  type: AmqpEvent['type'],
   payload: Record<string, unknown>,
-): [SimEvent, EngineState] {
+): [AmqpEvent, EngineState] {
   const [seq, next] = nextSeq(state)
   return [{ at, seq, type, payload }, next]
 }
@@ -106,7 +106,7 @@ export function clearInFlight(state: EngineState, messageId: string, edge: strin
   }
 }
 
-export function applyPublish(state: EngineState, event: SimEvent): ApplyResult {
+export function applyPublish(state: EngineState, event: AmqpEvent): ApplyResult {
   const publisherId = event.payload.publisherId as NodeId
   const exchangeId = event.payload.exchangeId as NodeId
   const counter = state.messageCounter + 1
@@ -149,7 +149,7 @@ export function applyPublish(state: EngineState, event: SimEvent): ApplyResult {
   return { state: afterSchedule, newEvents: [routeEvent] }
 }
 
-export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
+export function applyRoute(state: EngineState, event: AmqpEvent): ApplyResult {
   const message = event.payload.message as Message
   const exchangeId = event.payload.exchangeId as NodeId
   const fromId = event.payload.fromId as NodeId
@@ -172,7 +172,7 @@ export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
   const isPublishHop =
     state.topology.publishers.some((p) => p.id === fromId) ||
     state.topology.consumers.some((c) => c.id === fromId)
-  function withConfirm(state: EngineState, hasDurablePair: boolean): [EngineState, SimEvent[]] {
+  function withConfirm(state: EngineState, hasDurablePair: boolean): [EngineState, AmqpEvent[]] {
     if (!isPublishHop) return [state, []]
     const delay = message.persistent && hasDurablePair ? CONFIRM_PERSISTENT_MS : CONFIRM_MS
     const [confirmEvent, after] = scheduleEvent(state, state.now + delay, 'confirm', {
@@ -211,7 +211,7 @@ export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
     return { state: afterConfirm, newEvents: confirmEvents }
   }
 
-  const events: SimEvent[] = []
+  const events: AmqpEvent[] = []
   for (const binding of hits) {
     next = addInFlight(next, message, exchangeId, binding.destinationId, tone)
     if (binding.destinationKind === 'exchange') {
@@ -256,7 +256,7 @@ export function applyRoute(state: EngineState, event: SimEvent): ApplyResult {
   return { state: afterConfirm, newEvents: events }
 }
 
-export function applyConfirm(state: EngineState, event: SimEvent): ApplyResult {
+export function applyConfirm(state: EngineState, event: AmqpEvent): ApplyResult {
   const messageId = event.payload.messageId as string
   const publisherId = event.payload.publisherId as NodeId
 
@@ -273,7 +273,7 @@ export function applyConfirm(state: EngineState, event: SimEvent): ApplyResult {
   }
 }
 
-export function applyEnqueue(state: EngineState, event: SimEvent): ApplyResult {
+export function applyEnqueue(state: EngineState, event: AmqpEvent): ApplyResult {
   const message = event.payload.message as Message
   const queueId = event.payload.queueId as NodeId
   const fromId = event.payload.fromId as NodeId
@@ -288,7 +288,7 @@ export function applyEnqueue(state: EngineState, event: SimEvent): ApplyResult {
     queues: { ...next.queues, [queueId]: insertByPriority(existing, entry, spec?.maxPriority) },
   }
 
-  const events: SimEvent[] = []
+  const events: AmqpEvent[] = []
 
   // drop-head overflow: the oldest message leaves to make room for the new one
   if (spec?.maxLength !== undefined) {

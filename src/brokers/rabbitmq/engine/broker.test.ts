@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
-import type { SimEvent, Topology } from './types'
+import type { AmqpEvent, Topology } from './types'
 
 const topology: Topology = {
   publishers: [{ id: 'p1', label: 'API', position: { x: 0, y: 0 } }],
@@ -16,7 +16,7 @@ const topology: Topology = {
   ],
 }
 
-const publishEvent = (routingKey: string): SimEvent => ({
+const publishEvent = (routingKey: string): AmqpEvent => ({
   at: 0,
   seq: 0,
   type: 'publish',

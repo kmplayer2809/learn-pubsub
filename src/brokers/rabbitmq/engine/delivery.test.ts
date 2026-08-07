@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
 import { applyAck, applyConsumeDone, applyDeliver, applyDispatch, applyNack, eligibleConsumers } from './delivery'
 import { createSimulation } from './index'
-import type { ApplyResult, ConsumerSpec, EngineState, Message, SimEvent, Topology } from './types'
+import type { AmqpEvent, ApplyResult, ConsumerSpec, EngineState, Message, Topology } from './types'
 
 const message = (id: string, over: Partial<Message> = {}): Message => ({
   id,
@@ -44,7 +44,7 @@ const topo = (consumers: ConsumerSpec[]): Topology => ({
 function seedQueue(state: EngineState, n: number): EngineState {
   let s = state
   for (let i = 0; i < n; i++) {
-    const pub: SimEvent = {
+    const pub: AmqpEvent = {
       at: 0,
       seq: 0,
       type: 'publish',
@@ -118,7 +118,7 @@ describe('applyDispatch', () => {
       ),
       6,
     )
-    const dispatch: SimEvent = { at: 0, seq: 0, type: 'dispatch', payload: { queueId: 'q1' } }
+    const dispatch: AmqpEvent = { at: 0, seq: 0, type: 'dispatch', payload: { queueId: 'q1' } }
     let current = state
     for (let i = 0; i < 6; i++) {
       current = applyDispatch(current, dispatch).state

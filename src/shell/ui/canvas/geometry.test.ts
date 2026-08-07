@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { progressOf } from './geometry'
-import type { InFlight, Message } from '../../../brokers/rabbitmq/engine'
+import type { AmqpInFlight, Message } from '../../../brokers/rabbitmq/engine'
 
 const message: Message = {
   id: 'm1',
@@ -14,7 +14,7 @@ const message: Message = {
   persistent: false,
 }
 
-const flight = (fromT: number, toT: number): InFlight => ({
+const flight = (fromT: number, toT: number): AmqpInFlight => ({
   message,
   edgeId: 'a->b',
   fromT,
