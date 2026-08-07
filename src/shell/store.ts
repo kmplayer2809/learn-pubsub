@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { BROKERS, DEFAULT_BROKER_ID, getBroker } from '../brokers/registry'
+import { BROKER_CATALOG, DEFAULT_BROKER_ID, catalogEntry } from '../brokers/catalog'
 
 export const SPEEDS = [0.25, 0.5, 1, 2, 4] as const
 export type Speed = (typeof SPEEDS)[number]
@@ -27,14 +27,8 @@ export interface AppState {
 }
 
 export const useAppStore = create<AppState>((set, get) => {
-  // Safely handle potential circular dependency during testing
-  let brokerId = DEFAULT_BROKER_ID
-  let lessonId = '01-hello-world' // Fallback default
-  try {
-    lessonId = getBroker(DEFAULT_BROKER_ID).defaultLessonId
-  } catch {
-    // If getBroker fails (circular dependency during module load), use fallback
-  }
+  const brokerId = DEFAULT_BROKER_ID
+  const lessonId = catalogEntry(DEFAULT_BROKER_ID).defaultLessonId
 
   return {
     brokerId,
@@ -48,20 +42,16 @@ export const useAppStore = create<AppState>((set, get) => {
     setBroker(id) {
       // An unknown id would leave the shell rendering a module that does not exist.
       // Ignoring it keeps a stale persisted value or a bad deep link harmless.
-      try {
-        if (!BROKERS.some((b) => b.id === id)) return
-        set((s) => ({
-          brokerId: id,
-          lessonId: getBroker(id).defaultLessonId,
-          sandbox: false,
-          playing: false,
-          virtualTime: 0,
-          selectedNodeId: undefined,
-          replayToken: s.replayToken + 1,
-        }))
-      } catch {
-        // Handle circular dependency during testing
-      }
+      if (!BROKER_CATALOG.some((b) => b.id === id)) return
+      set((s) => ({
+        brokerId: id,
+        lessonId: catalogEntry(id).defaultLessonId,
+        sandbox: false,
+        playing: false,
+        virtualTime: 0,
+        selectedNodeId: undefined,
+        replayToken: s.replayToken + 1,
+      }))
     },
 
     setLesson(id) {

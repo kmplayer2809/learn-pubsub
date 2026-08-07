@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BROKERS, DEFAULT_BROKER_ID, getBroker } from './registry'
+import { BROKER_CATALOG } from './catalog'
 
 describe('broker registry', () => {
   it('lists RabbitMQ', () => {
@@ -25,6 +26,21 @@ describe('broker registry', () => {
     for (const broker of BROKERS) {
       const groups = new Set(broker.lessonGroups.map((g) => g.id))
       for (const lesson of broker.lessons) expect(groups.has(lesson.group)).toBe(true)
+    }
+  })
+
+  it('agrees with the broker catalog in both directions', () => {
+    for (const entry of BROKER_CATALOG) {
+      const module = BROKERS.find((b) => b.id === entry.id)
+      expect(module, `catalog entry ${entry.id} has no matching module in BROKERS`).toBeDefined()
+      expect(module!.label).toBe(entry.label)
+      expect(module!.defaultLessonId).toBe(entry.defaultLessonId)
+    }
+    for (const module of BROKERS) {
+      const entry = BROKER_CATALOG.find((b) => b.id === module.id)
+      expect(entry, `module ${module.id} has no matching entry in BROKER_CATALOG`).toBeDefined()
+      expect(entry!.label).toBe(module.label)
+      expect(entry!.defaultLessonId).toBe(module.defaultLessonId)
     }
   })
 })
