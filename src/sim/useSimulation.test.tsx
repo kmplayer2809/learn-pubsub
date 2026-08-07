@@ -4,7 +4,7 @@ import type { EngineState, Simulation, Topology } from '../engine'
 import * as engineModule from '../engine'
 import { LESSONS } from '../lessons/registry'
 import type { Lesson } from '../lessons/types'
-import { emptyTopology, useSandboxStore } from '../sandbox/sandboxStore'
+import { useSandboxStore } from '../sandbox/sandboxStore'
 import { useAppStore } from './store'
 import { useSimulation } from './useSimulation'
 
@@ -55,7 +55,9 @@ let nowMs = 0
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
-  useSandboxStore.setState({ topology: emptyTopology(), script: [], generator: undefined }, false)
+  // reset() clears the derived script plus both of its sources; setting `script`
+  // alone would leave a previous test's manual publishes in manualScript.
+  useSandboxStore.getState().reset()
   frameCallbacks = []
   nowMs = 0
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {

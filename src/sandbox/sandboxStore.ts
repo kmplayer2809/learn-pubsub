@@ -19,7 +19,17 @@ export function emptyTopology(): Topology {
 
 interface SandboxState {
   topology: Topology
+  /**
+   * Everything the simulation should run, in time order. Derived: it is always
+   * `manualScript` merged with `generatorScript`, never written to directly.
+   * Kept as its own field because App and useSimulation read it on every render
+   * and rebuild the engine when its identity changes.
+   */
   script: ScriptedAction[]
+  /** Messages the user published by hand. Survives every generator change. */
+  manualScript: ScriptedAction[]
+  /** Expansion of the current generator. Emptied, not merged away, at rate 0. */
+  generatorScript: ScriptedAction[]
   generator?: Generator
   addNode(kind: SandboxNodeKind, position: { x: number; y: number }): void
   updateNode(id: string, patch: Record<string, unknown>): void
@@ -37,9 +47,50 @@ interface SandboxState {
 let counter = 0
 const mintId = (kind: string) => `${kind}-${++counter}`
 
+/**
+ * Lifts the id counter above every id already present in a restored topology.
+ * The counter lives in module scope and is reset by a page reload, but `load()`
+ * restores ids minted by an earlier session — so without this, the very next
+ * addNode re-mints `publisher-1` and two nodes share an id. Self-healing, so it
+ * also repairs saves written before the counter was tracked at all.
+ */
+function seedCounterFrom(topology: Topology): void {
+  const ids = [
+    ...topology.publishers,
+    ...topology.exchanges,
+    ...topology.queues,
+    ...topology.consumers,
+    ...topology.bindings,
+  ].map((n) => Number(n.id.split('-').pop()) || 0)
+  counter = Math.max(counter, ...ids, 0)
+}
+
+/** Merges the two script sources into the single time-ordered list the engine runs. */
+function mergeScript(manual: ScriptedAction[], generated: ScriptedAction[]): ScriptedAction[] {
+  return [...manual, ...generated].sort((a, b) => a.at - b.at)
+}
+
+function expandGenerator(generator: Generator, publisherId: string): ScriptedAction[] {
+  // Rate 0 means "no generator actions", not "no script": the rate slider calls
+  // setGenerator on every step including 0, and treating that as an empty script
+  // silently deleted everything the user had published by hand.
+  if (generator.ratePerSecond <= 0) return []
+  const intervalMs = 1000 / generator.ratePerSecond
+  const count = Math.floor(GENERATOR_HORIZON_S * generator.ratePerSecond)
+  return Array.from({ length: count }, (_, i) => ({
+    at: Math.round(i * intervalMs),
+    publisherId,
+    exchangeId: generator.exchangeId,
+    routingKey: generator.routingKey,
+    body: `generated-${i}`,
+  }))
+}
+
 export const useSandboxStore = create<SandboxState>((set, get) => ({
   topology: emptyTopology(),
   script: [],
+  manualScript: [],
+  generatorScript: [],
 
   addNode(kind, position) {
     const id = mintId(kind)
@@ -149,26 +200,33 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   },
 
   publish(action) {
-    set((s) => ({ script: [...s.script, action] }))
+    set((s) => {
+      const manualScript = [...s.manualScript, action]
+      return { manualScript, script: mergeScript(manualScript, s.generatorScript) }
+    })
   },
 
   setGenerator(generator) {
-    const intervalMs = 1000 / generator.ratePerSecond
-    const count = Math.floor(GENERATOR_HORIZON_S * generator.ratePerSecond)
-    const script = Array.from({ length: count }, (_, i) => ({
-      at: Math.round(i * intervalMs),
-      publisherId: get().topology.publishers[0]?.id ?? 'p1',
-      exchangeId: generator.exchangeId,
-      routingKey: generator.routingKey,
-      body: `generated-${i}`,
-    }))
-    set({ generator, script })
+    // Generator actions live in their own list. Replacing the whole script here
+    // meant touching the rate slider at all discarded every message the user had
+    // published by hand, with no warning and no undo.
+    const generatorScript = expandGenerator(generator, get().topology.publishers[0]?.id ?? 'p1')
+    set((s) => ({ generator, generatorScript, script: mergeScript(s.manualScript, generatorScript) }))
   },
 
   save() {
+    const s = get()
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ topology: get().topology, script: get().script }),
+      JSON.stringify({
+        topology: s.topology,
+        // `script` stays in the blob for older readers; `manualScript` and
+        // `generator` are what a restore actually rebuilds from, so a saved
+        // generator does not come back baked into the manual publishes.
+        script: s.script,
+        manualScript: s.manualScript,
+        generator: s.generator,
+      }),
     )
   },
 
@@ -176,15 +234,39 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return
     try {
-      const parsed = JSON.parse(raw) as { topology?: Topology; script?: ScriptedAction[] }
+      const parsed = JSON.parse(raw) as {
+        topology?: Topology
+        script?: ScriptedAction[]
+        manualScript?: ScriptedAction[]
+        generator?: Generator
+      }
       if (!parsed.topology || !Array.isArray(parsed.topology.queues)) throw new Error('bad shape')
-      set({ topology: parsed.topology, script: parsed.script ?? [] })
+      // A blob written before manualScript existed only has the merged script.
+      const manualScript = parsed.manualScript ?? parsed.script ?? []
+      const generator = parsed.generator
+      const generatorScript = generator
+        ? expandGenerator(generator, parsed.topology.publishers[0]?.id ?? 'p1')
+        : []
+      seedCounterFrom(parsed.topology)
+      set({
+        topology: parsed.topology,
+        manualScript,
+        generatorScript,
+        generator,
+        script: mergeScript(manualScript, generatorScript),
+      })
     } catch {
-      set({ topology: emptyTopology(), script: [] })
+      set({ topology: emptyTopology(), script: [], manualScript: [], generatorScript: [], generator: undefined })
     }
   },
 
   reset() {
-    set({ topology: emptyTopology(), script: [], generator: undefined })
+    set({
+      topology: emptyTopology(),
+      script: [],
+      manualScript: [],
+      generatorScript: [],
+      generator: undefined,
+    })
   },
 }))

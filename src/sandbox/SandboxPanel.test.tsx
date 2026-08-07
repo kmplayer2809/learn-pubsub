@@ -36,7 +36,9 @@ function engineState(over: Partial<EngineState> = {}): EngineState {
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
-  useSandboxStore.setState({ topology: emptyTopology(), script: [], generator: undefined }, false)
+  // reset() clears the derived script plus both of its sources; setting `script`
+  // alone would leave a previous test's manual publishes in manualScript.
+  useSandboxStore.getState().reset()
 })
 
 describe('SandboxPanel', () => {
