@@ -31,7 +31,7 @@ export function useSimulation(): SimulationView {
   const sandboxTopology = useSandboxStore((s) => s.topology)
   const sandboxScript = useSandboxStore((s) => s.script)
 
-  const simRef = useRef<Simulation | null>(null)
+  const simRef = useRef<(Simulation<EngineState> & { readonly issues: ValidationIssue[] }) | null>(null)
   const [view, setView] = useState<SimulationView | null>(null)
 
   // Build (or rebuild) the engine. replayToken changes on seek-backwards and

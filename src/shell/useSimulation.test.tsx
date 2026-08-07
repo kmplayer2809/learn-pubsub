@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { EngineState, Simulation, Topology } from '../brokers/rabbitmq/engine'
+import type { EngineState, Simulation, Topology, ValidationIssue } from '../brokers/rabbitmq/engine'
 import * as engineModule from '../brokers/rabbitmq/engine'
 import { LESSONS } from '../brokers/rabbitmq/lessons/registry'
 import type { Lesson } from '../brokers/rabbitmq/lessons/types'
@@ -138,7 +138,7 @@ describe('useSimulation', () => {
     const haltAtOrAfter = 150
     let now = 0
     let halted = false
-    const fakeSim: Simulation = {
+    const fakeSim: Simulation<EngineState> & { readonly issues: ValidationIssue[] } = {
       advanceTo(t) {
         now = t
         if (t >= haltAtOrAfter) halted = true
