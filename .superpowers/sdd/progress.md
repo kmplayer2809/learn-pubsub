@@ -422,3 +422,30 @@ I6 (checkpoints + narrative.highlight authored on all 17 lessons, tested, transl
   documented in the README — and rendered by NOTHING) was a plan gap, not an
   implementation defect. USER DECIDED: render both. Dispatched as Task 21, brief at
   .superpowers/sdd/task-21-brief.md.
+
+Task 21: complete (a44aa20..b124e7e, 3 commits). Renders checkpoints + narrative.highlight,
+  closing the I6 plan gap. 395 tests / 32 files; typecheck, lint, build clean.
+  Highlight is `outline-dashed outline-2 outline-offset-4 outline-fuchsia-400` — a shape
+  and hue no node kind uses, held 4px off the border so selected+highlighted reads as both
+  (Tailwind ring-* shares one box-shadow slot, so a second ring would overwrite selection).
+  CONTROLLER VERIFIED EVERY BEHAVIOUR LIVE, not from the report:
+  - hidden at 2s, visible at 7s; highlight tracks the step (0s: p1+default, 9s: c1)
+  - a wrong answer marks itself, ALSO flags the right one ("· Đáp án đúng"), shows
+    "Chưa đúng" + explanation, and disables all three options
+  - scrub back to 2s hides it; forward to 7s brings it back UNANSWERED
+  - switching lesson and returning also resets it
+  NOTE FOR ANYONE RE-TESTING THIS IN A BROWSER: drive it with awaits between steps. My
+  first pass read the DOM synchronously after clicking, React batched, and every assertion
+  came back false — the same stale-DOM trap that produced the retracted node-position
+  false alarm earlier in this build. Not an app bug.
+  Timing mattered: c664dde (M5) had just rewritten lesson 16's checkpoint, which until then
+  marked as "correct" an answer the engine visibly disproves. Rendering the quizzes before
+  that fix would have shipped a lesson contradicting its own simulation.
+
+STATUS: all 21 tasks complete. Remaining: superpowers:finishing-a-development-branch.
+  CAVEAT TO CARRY FORWARD: the final review covered 9fae127..a6f88ff. The 10 commits after
+  it (fix wave 8ee109a..25af7e4, task 21 a44aa20..b124e7e) carry only controller
+  verification — no second-party review. The fix wave touched core engine correctness
+  (delivery.ts, advanced.ts, dlx.ts, validate.ts). Each defect was independently
+  reproduced before the fix and re-probed after, and all 17 lesson journals and metrics
+  are byte-identical across the wave, but a reviewer has not seen that diff.
