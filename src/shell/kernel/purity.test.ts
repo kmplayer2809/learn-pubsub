@@ -1,8 +1,7 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const ENGINE_DIR = join(process.cwd(), 'src/brokers/rabbitmq/engine')
 const FORBIDDEN = [
   /from ['"]react['"]/,
   /from ['"]zustand['"]/,
@@ -29,13 +28,30 @@ function sourceFiles(dir: string): string[] {
   })
 }
 
+/** The kernel plus every broker's engine directory, discovered rather than listed. */
+function pureDirs(): string[] {
+  const brokersDir = join(process.cwd(), 'src/brokers')
+  const engines = readdirSync(brokersDir)
+    .map((broker) => join(brokersDir, broker, 'engine'))
+    .filter((dir) => existsSync(dir) && statSync(dir).isDirectory())
+  return [join(process.cwd(), 'src/shell/kernel'), ...engines]
+}
+
 describe('engine purity', () => {
+  it('covers the kernel and every broker engine', () => {
+    const dirs = pureDirs()
+    expect(dirs.some((d) => d.endsWith('src/shell/kernel'))).toBe(true)
+    expect(dirs.some((d) => d.endsWith('rabbitmq/engine'))).toBe(true)
+  })
+
   it('imports no UI library and uses no ambient time or randomness', () => {
     const offences: string[] = []
-    for (const file of sourceFiles(ENGINE_DIR)) {
-      const text = readFileSync(file, 'utf8')
-      for (const pattern of FORBIDDEN) {
-        if (pattern.test(text)) offences.push(`${file} matched ${pattern}`)
+    for (const dir of pureDirs()) {
+      for (const file of sourceFiles(dir)) {
+        const text = readFileSync(file, 'utf8')
+        for (const pattern of FORBIDDEN) {
+          if (pattern.test(text)) offences.push(`${file} matched ${pattern}`)
+        }
       }
     }
     expect(offences).toEqual([])
