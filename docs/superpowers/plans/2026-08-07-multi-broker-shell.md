@@ -22,6 +22,59 @@
 
 ---
 
+## Amendment (2026-08-08): the store must not import the broker registry
+
+Task 8's review found a real import cycle:
+`store.ts -> registry.ts -> rabbitmq/index.ts -> SandboxPanel.tsx -> Inspector.tsx -> store.ts`.
+Reading `DEFAULT_BROKER_ID` while that cycle is unresolved yields `undefined`
+rather than throwing, so `brokerId` silently initialised to `undefined` whenever
+something imported `registry.ts` first. A `try/catch` cannot fix this: nothing is
+thrown, and whether the wrong branch runs depends on module evaluation order,
+which differs between Vite dev, the production bundle, and Vitest.
+
+The cycle is broken by splitting the broker *catalog* — the plain data the shell
+needs before any component exists — out of the module that pulls in components:
+
+`src/brokers/catalog.ts` (imports nothing but types):
+
+```ts
+/**
+ * Plain broker facts the shell needs at module-evaluation time. This file must
+ * never import a component, an engine, or `registry.ts` — importing any of them
+ * would recreate the cycle this file exists to break.
+ */
+export interface BrokerCatalogEntry {
+  id: string
+  label: string
+  defaultLessonId: string
+}
+
+export const BROKER_CATALOG: BrokerCatalogEntry[] = [
+  { id: 'rabbitmq', label: 'RabbitMQ', defaultLessonId: '01-hello-world' },
+]
+
+export const DEFAULT_BROKER_ID = 'rabbitmq'
+
+export function catalogEntry(id: string): BrokerCatalogEntry {
+  return BROKER_CATALOG.find((b) => b.id === id)
+    ?? BROKER_CATALOG.find((b) => b.id === DEFAULT_BROKER_ID)!
+}
+```
+
+Consequences, which supersede the corresponding text in Tasks 7, 8, and 11:
+
+- `src/shell/store.ts` imports **only** `./brokers/catalog`, never `registry.ts`.
+  Its initial `lessonId` is `catalogEntry(DEFAULT_BROKER_ID).defaultLessonId` and
+  `setBroker` validates against `BROKER_CATALOG`. No `try/catch`, no fallback
+  literals: with the cycle gone there is nothing to fall back from.
+- `src/brokers/registry.ts` re-exports `DEFAULT_BROKER_ID` from the catalog rather
+  than declaring its own, so there is one definition.
+- `src/brokers/registry.test.ts` gains a case asserting the two agree — every
+  catalog entry has a module with the same `label` and `defaultLessonId`, and
+  every module has a catalog entry. That test is what keeps the split honest.
+- `BrokerSwitcher` (Task 11) may render from either; prefer `BROKERS` so it shows
+  what is actually loadable.
+
 ## File Structure
 
 | Path | Responsibility |
