@@ -90,8 +90,34 @@ describe('toAmqplib against real lesson topologies', () => {
     expect(code).toContain("'x-dead-letter-exchange': 'main-ex'")
     expect(code).toContain("'x-dead-letter-routing-key': 'order'")
     // The worker rejects without requeue; the parking-lot inspector requeues.
-    expect(code).toContain('channel.nack(message, false, false)')
-    expect(code).toContain('channel.nack(message, false, true)')
+    // Each acks and nacks on its own channel, the one its prefetch was set on.
+    expect(code).toContain('channel_worker.nack(message, false, false)')
+    expect(code).toContain('channel_parking_inspector.nack(message, false, true)')
+  })
+
+  it('08-prefetch: gives each consumer its own channel so prefetch values cannot overwrite each other', () => {
+    // prefetch is a channel-level setting in amqplib. Emitting several
+    // `channel.prefetch(n)` calls on one shared channel means the last value
+    // silently wins for every consumer, so exported 08-prefetch code would not
+    // reproduce the one thing 08-prefetch teaches: greedy runs at prefetch 0
+    // while fair-a and fair-b run at prefetch 1.
+    const code = toAmqplib(getLesson('08-prefetch')!.topology)
+    const consumeLines = code.split('\n').filter((l) => l.includes('.consume('))
+    expect(consumeLines).toHaveLength(3)
+
+    const channelOf = (line: string) => line.trim().match(/await (\w+)\.consume\(/)![1]
+    const channels = consumeLines.map(channelOf)
+    expect(new Set(channels).size).toBe(channels.length)
+
+    // Each consumer's prefetch must be set on the channel that consumer uses.
+    for (const [queueId, prefetch] of [
+      ["'greedy-q'", 0],
+      ["'fair-q'", 1],
+    ] as const) {
+      for (const line of consumeLines.filter((l) => l.includes(queueId))) {
+        expect(code).toContain(`await ${channelOf(line)}.prefetch(${prefetch})`)
+      }
+    }
   })
 
   it('15-priority: emits x-max-priority for the queue declaring maxPriority', () => {

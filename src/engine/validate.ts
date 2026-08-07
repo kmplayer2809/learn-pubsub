@@ -1,3 +1,4 @@
+import { TRAVEL_MS } from './broker'
 import type { NodeId, Topology } from './types'
 
 /**
@@ -11,7 +12,7 @@ export type ValidationIssueCode =
   | 'binding-missing-exchange'
   | 'binding-missing-destination'
   | 'dead-letter-exchange-missing'
-  | 'zero-ttl-dead-letter-cycle'
+  | 'short-ttl-dead-letter-cycle'
   | 'queue-unreachable'
   | 'consumer-missing-queue'
 
@@ -45,7 +46,7 @@ export type ValidationIssue =
       deadLetterExchange: NodeId
     })
   | (ValidationIssueBase & {
-      code: 'zero-ttl-dead-letter-cycle'
+      code: 'short-ttl-dead-letter-cycle'
       queueId: NodeId
       queueLabel: string
     })
@@ -103,8 +104,19 @@ export function validateTopology(topology: Topology): ValidationIssue[] {
       })
     }
 
-    // A zero TTL plus a dead-letter exchange that routes back here loops without advancing time.
-    if (queue.messageTtlMs === 0 && queue.deadLetterExchange) {
+    // A queue whose dead-letter exchange routes straight back into it re-expires
+    // its own messages forever. The check used to require a TTL of exactly 0; a TTL
+    // of 1 loops just as hard and produced no issue at all, so the run simply ran
+    // until the event ceiling halted it with nothing explaining why. TRAVEL_MS is the
+    // cost of a single routing hop, so any TTL below it expires the message again
+    // before it has finished moving. At or above one hop the same shape is the
+    // legitimate retry-with-backoff pattern lesson 13 teaches, so it is left alone
+    // and the ceiling stays as the backstop.
+    if (
+      queue.messageTtlMs !== undefined &&
+      queue.messageTtlMs < TRAVEL_MS &&
+      queue.deadLetterExchange
+    ) {
       const returns = topology.bindings.some(
         (b) =>
           b.exchangeId === queue.deadLetterExchange &&
@@ -113,10 +125,14 @@ export function validateTopology(topology: Topology): ValidationIssue[] {
       )
       if (returns) {
         issues.push({
-          code: 'zero-ttl-dead-letter-cycle',
+          code: 'short-ttl-dead-letter-cycle',
           nodeId: queue.id,
-          severity: 'error',
-          message: `queue ${queue.label} forms a zero-TTL dead-letter cycle; the run would never advance`,
+          // Deliberately a warning rather than an error. An error is fatal in
+          // createSimulation and refuses to run the topology at all; a warning lets
+          // the run proceed and trip the event ceiling, so the user sees both the
+          // named cause and its effect. The ceiling stays the backstop.
+          severity: 'warning',
+          message: `queue ${queue.label} forms a dead-letter cycle with a TTL shorter than one routing hop; the run loops until the event ceiling halts it`,
           queueId: queue.id,
           queueLabel: queue.label,
         })

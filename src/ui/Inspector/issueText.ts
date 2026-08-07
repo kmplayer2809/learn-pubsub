@@ -23,8 +23,8 @@ export function vietnameseIssueMessage(issue: ValidationIssue): string {
       return `binding ${issue.bindingId} trỏ tới ${issue.destinationId}, nhưng node đó không tồn tại`
     case 'dead-letter-exchange-missing':
       return `queue ${issue.queueLabel} dead-letter sang ${issue.deadLetterExchange}, nhưng exchange đó không tồn tại`
-    case 'zero-ttl-dead-letter-cycle':
-      return `queue ${issue.queueLabel} tạo thành một vòng lặp dead-letter với TTL bằng 0, khiến mô phỏng không bao giờ tiến được`
+    case 'short-ttl-dead-letter-cycle':
+      return `queue ${issue.queueLabel} tạo thành một vòng lặp dead-letter với TTL ngắn hơn một lần route, nên mô phỏng cứ lặp lại cho tới khi bị chặn`
     case 'queue-unreachable':
       return `queue ${issue.queueLabel} chưa có binding nào, nên không message nào tới được`
     case 'consumer-missing-queue':

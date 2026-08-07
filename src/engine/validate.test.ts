@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { TRAVEL_MS } from './broker'
 import { validateTopology } from './validate'
 import type { Topology } from './types'
 
@@ -34,16 +35,47 @@ describe('validateTopology', () => {
     expect(validateTopology(broken).some((i) => i.message.includes('nope'))).toBe(true)
   })
 
-  it('flags a zero-ttl dead-letter cycle that would never advance time', () => {
-    const looping: Topology = {
+  it('flags a dead-letter cycle whose ttl is shorter than one routing hop, not only a ttl of exactly 0', () => {
+    const looping = (messageTtlMs: number): Topology => ({
       ...base,
-      queues: [{ ...base.queues[0]!, messageTtlMs: 0, deadLetterExchange: 'ex' }],
+      queues: [{ ...base.queues[0]!, messageTtlMs, deadLetterExchange: 'ex' }],
       bindings: [
         { id: 'b1', exchangeId: 'ex', destinationId: 'q1', destinationKind: 'queue', routingKey: 'go' },
       ],
+    })
+
+    // A ttl of 1 loops exactly as hard as a ttl of 0 and used to produce no issue
+    // at all — the run just cycled until the event ceiling halted it, with nothing
+    // telling the user why. TRAVEL_MS is the cost of one hop, so anything under it
+    // re-expires faster than the message can leave.
+    for (const ttl of [0, 1, TRAVEL_MS - 1]) {
+      const issues = validateTopology(looping(ttl))
+      expect(issues.some((i) => i.code === 'short-ttl-dead-letter-cycle')).toBe(true)
+      expect(issues.some((i) => i.message.toLowerCase().includes('cycle'))).toBe(true)
     }
-    const issues = validateTopology(looping)
-    expect(issues.some((i) => i.message.toLowerCase().includes('cycle'))).toBe(true)
+
+    // At or above one hop the pattern is a legitimate retry-with-backoff loop.
+    expect(
+      validateTopology(looping(TRAVEL_MS)).some((i) => i.code === 'short-ttl-dead-letter-cycle'),
+    ).toBe(false)
+  })
+
+  it('leaves a queue with a short ttl alone when nothing routes back into it', () => {
+    // A short TTL is only a problem when the dead-letter exchange feeds the same
+    // queue again. Dead-lettering somewhere else is an ordinary expiry pattern.
+    const noCycle: Topology = {
+      ...base,
+      exchanges: [...base.exchanges, { id: 'dlx', label: 'dlx', type: 'fanout', position: { x: 200, y: 200 } }],
+      queues: [
+        { ...base.queues[0]!, messageTtlMs: 1, deadLetterExchange: 'dlx' },
+        { id: 'dead', label: 'dead', kind: 'classic', position: { x: 400, y: 200 } },
+      ],
+      bindings: [
+        ...base.bindings,
+        { id: 'b2', exchangeId: 'dlx', destinationId: 'dead', destinationKind: 'queue' },
+      ],
+    }
+    expect(validateTopology(noCycle).some((i) => i.code === 'short-ttl-dead-letter-cycle')).toBe(false)
   })
 
   it('warns about a queue no message can reach', () => {

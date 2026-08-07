@@ -21,6 +21,15 @@ function bindingArguments(binding: BindingSpec): string {
   return `, { ${entries.join(', ')} }`
 }
 
+/**
+ * A JavaScript identifier for a consumer's own channel. Node ids come from the
+ * Sandbox (`consumer-3`) or a lesson (`parking-inspector`), so every character
+ * that cannot appear in an identifier is folded to an underscore.
+ */
+function consumerChannelName(consumerId: string): string {
+  return `channel_${consumerId.replace(/[^A-Za-z0-9_$]/g, '_')}`
+}
+
 export function toAmqplib(topology: Topology): string {
   const lines: string[] = [
     "import amqp from 'amqplib'",
@@ -55,8 +64,21 @@ export function toAmqplib(topology: Topology): string {
   }
   lines.push('')
 
+  const consumerChannels: string[] = []
   for (const consumer of topology.consumers) {
-    lines.push(`  await channel.prefetch(${consumer.prefetch})`, `  await channel.consume('${consumer.queueId}', async (message) => {`, '    if (!message) return')
+    // One channel per consumer. `prefetch` in amqplib is a CHANNEL-level setting,
+    // so emitting several `channel.prefetch(n)` calls against one shared channel
+    // silently applies the last value to every consumer — exported 08-prefetch code
+    // would run all three consumers at the same prefetch and reproduce none of what
+    // the lesson demonstrates.
+    const channelVar = consumerChannelName(consumer.id)
+    consumerChannels.push(channelVar)
+    lines.push(
+      `  const ${channelVar} = await connection.createChannel()`,
+      `  await ${channelVar}.prefetch(${consumer.prefetch})`,
+      `  await ${channelVar}.consume('${consumer.queueId}', async (message) => {`,
+      '    if (!message) return',
+    )
     if (consumer.autoAck) {
       // noAck: true means the broker already considers the message delivered the
       // instant it's sent — calling channel.ack/nack on it is invalid and throws
@@ -72,15 +94,15 @@ export function toAmqplib(topology: Topology): string {
       lines.push(
         '    try {',
         `      // handle ${consumer.label}`,
-        '      channel.ack(message)',
+        `      ${channelVar}.ack(message)`,
         '    } catch (error) {',
-        `      channel.nack(message, false, ${consumer.requeueOnNack})`,
+        `      ${channelVar}.nack(message, false, ${consumer.requeueOnNack})`,
         '    }',
       )
     }
     lines.push(`  }, { noAck: ${consumer.autoAck} })`, '')
   }
 
-  lines.push('  return { connection, channel }', '}')
+  lines.push(`  return { connection, channel, consumerChannels: [${consumerChannels.join(', ')}] }`, '}')
   return lines.join('\n')
 }
