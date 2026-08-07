@@ -125,6 +125,42 @@ describe('applyTtlExpire', () => {
     expect(next.metrics.expired).toBe(0)
   })
 
+  it('expires each message on its own timer, not only the one at the head of the queue', () => {
+    // A real classic queue only checks expiry at its head, so a short-TTL message
+    // sitting behind a long-TTL one waits for the head to leave — head-of-line
+    // blocking. This engine schedules an independent ttlExpire per enqueue
+    // (broker.ts applyEnqueue), so position in the queue does not affect when a
+    // message expires. Lesson 16's narrative and checkpoint say exactly this, and
+    // used to claim the opposite; this test is what makes that claim checkable.
+    const slow = message('slow', { expirationMs: 9000 })
+    const fast = message('fast', { expirationMs: 1000 })
+    const enqueue = (m: Message, at: number): SimEvent => ({
+      at,
+      seq: 0,
+      type: 'enqueue',
+      payload: { message: m, queueId: 'q1', fromId: 'ex' },
+    })
+
+    const base = createEngineState(topology, 1)
+    const first = applyEnqueue({ ...base, now: 0 }, enqueue(slow, 0))
+    const second = applyEnqueue({ ...first.state, now: 100 }, enqueue(fast, 100))
+
+    // q1 declares messageTtlMs 2000, and effectiveTtl takes the smaller of the two,
+    // so `slow` expires at 2000 while `fast` carries its own 1000 and expires at 1100.
+    const ttlEvents = [...first.newEvents, ...second.newEvents].filter((e) => e.type === 'ttlExpire')
+    expect(ttlEvents.map((e) => `${e.payload.messageId}@${e.at}`)).toEqual(['slow@2000', 'fast@1100'])
+
+    // The message behind the head leaves first, while the head is still queued.
+    const expired = applyTtlExpire({ ...second.state, now: 1100 }, {
+      at: 1100,
+      seq: 0,
+      type: 'ttlExpire',
+      payload: { messageId: 'fast', queueId: 'q1', enqueuedAt: 100 },
+    })
+    expect(expired.state.queues.q1!.map((q) => q.message.id)).toEqual(['slow'])
+    expect(expired.state.metrics.deadLettered).toBe(1)
+  })
+
   it('removes only the enqueue it matched when the queue holds two copies of one id', () => {
     // An exchange-to-exchange diamond legitimately lands the same message id in one
     // queue twice, as a real broker would. The lookup already keys on enqueuedAt;

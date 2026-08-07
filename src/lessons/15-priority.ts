@@ -57,7 +57,7 @@ export const priorityQueue: Lesson = {
     {
       at: 9000,
       title: 'Priority bằng nhau vẫn giữ nguyên tắc đến trước phục vụ trước',
-      body: 'Giữa các message cùng priority — như ba message priority 0 là Job 2, Job 3, Job 5 — queue không xáo trộn thứ tự giữa chúng. Priority chỉ phá vỡ nguyên tắc FIFO giữa các mức priority khác nhau, không phải trong cùng một mức.',
+      body: 'Giữa các message cùng priority — như bốn message priority 0 còn đang chờ là Job 2, Job 3, Job 5 và Job 7 — queue không xáo trộn thứ tự giữa chúng. Priority chỉ phá vỡ nguyên tắc FIFO giữa các mức priority khác nhau, không phải trong cùng một mức.',
       highlight: ['jobs', 'worker'],
     },
     {

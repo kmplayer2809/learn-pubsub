@@ -78,23 +78,23 @@ export const delayedMessage: Lesson = {
     },
     {
       at: 15000,
-      title: 'Cái giá phải trả là head-of-line blocking',
-      body: 'Một queue chỉ xét hết hạn ở đầu của nó. Nếu một message ở đầu mang TTL dài hơn message ngay sau nó, message phía sau — dù đáng lẽ hết hạn sớm hơn — vẫn phải chờ message đứng trước nó rời đi. Đây là cái giá của việc dùng TTL cộng DLX làm delay primitive: nó không phải một timer độc lập cho từng message.',
+      title: 'Trên RabbitMQ thật, cái giá phải trả là head-of-line blocking',
+      body: 'Một classic queue thật chỉ xét hết hạn ở đầu của nó. Nếu message đứng đầu mang TTL dài hơn message ngay sau nó, message phía sau — dù đáng lẽ hết hạn sớm hơn — vẫn phải chờ message đứng trước rời đi. Mô phỏng này không tái hiện chi tiết đó: nó đặt cho mỗi message một `ttlExpire` riêng, nên ở đây mỗi message hết hạn theo đồng hồ của chính nó, bất kể vị trí trong queue. Hãy nhớ giới hạn này khi mang TTL cộng DLX ra dùng làm delay primitive ngoài production.',
       highlight: ['delay-5s'],
     },
   ],
   checkpoints: [
     {
       at: 17000,
-      question: 'Nếu message thứ hai mang một `messageTtlMs` riêng ngắn hơn message đầu tiên trong cùng `delay-5s`, điều gì đúng với hành vi head-of-line blocking của queue?',
+      question: 'Nếu message thứ hai trong `delay-5s` mang một TTL riêng ngắn hơn message đứng đầu, mô phỏng này xử lý khác một classic queue thật ở điểm nào?',
       options: [
-        'Message thứ hai luôn hết hạn đúng lúc nó cần, bất kể message đứng trước',
-        'Message thứ hai có thể phải chờ message đứng đầu queue rời đi trước, dù bản thân nó đáng lẽ hết hạn sớm hơn',
-        'Queue tự động sắp xếp lại theo TTL còn lại ngắn nhất',
+        'Không khác gì: cả hai đều cho message thứ hai hết hạn ngay khi tới hạn của nó',
+        'Mô phỏng cho mỗi message một timer riêng nên message thứ hai hết hạn đúng hạn; một classic queue thật chỉ xét ở đầu queue, nên message đó có thể phải chờ message đứng trước rời đi',
+        'Không khác gì: cả hai đều sắp xếp lại queue theo TTL còn lại ngắn nhất',
       ],
       answerIndex: 1,
       explanation:
-        'RabbitMQ chỉ kiểm tra hết hạn ở đầu queue. Một message TTL ngắn nằm phía sau một message TTL dài hơn vẫn phải chờ tới lượt, đó chính là head-of-line blocking của cách dùng TTL làm delay primitive.',
+        'Mô phỏng đặt một `ttlExpire` riêng cho mỗi message, nên vị trí trong queue không ảnh hưởng tới thời điểm hết hạn. RabbitMQ thật chỉ kiểm tra hết hạn ở đầu một classic queue — đó chính là head-of-line blocking, một giới hạn mô phỏng này không tái hiện.',
     },
   ],
 }
