@@ -377,3 +377,48 @@ Task 20: complete (commit 342db9c). Final pass + README.
 REMAINING: final whole-branch review (still owes proper coverage of Task 17's 58cf9f9 —
 that task's formal reviewer was never dispatched), then
 superpowers:finishing-a-development-branch.
+
+=== FINAL WHOLE-BRANCH REVIEW (9fae127..a6f88ff, 77 commits) ===
+  Verdict: "with fixes" — 1 Critical, 6 Important, 11 Minor. Full text in
+  .superpowers/sdd/final-review.md (gitignored). Reviewer reproduced every finding in a
+  throwaway worktree; checkout/index/HEAD untouched.
+  Controller INDEPENDENTLY REPRODUCED the four load-bearing findings before dispatching
+  any fix — do not take the review on trust, and do not re-litigate these:
+  - C1 (delivery.ts): crash in the 600ms dispatch->deliver window requeues AND delivers.
+    Measured crash@1500 alone: delivered+acked while crashed, message still queued
+    (depth 1). With recover@5000: acks=["m1","m1"] — one publish acked TWICE.
+  - I1 (advanced.ts): crash requeued but scheduled no dispatch. Measured two consumers on
+    one queue, slow one crashes: sim drains to nextEventTime()===undefined with depth 1,
+    acked 0, and a healthy idle sibling never offered the work.
+  - I2 (toFlow.ts): the publisher x exchange cross-product still fabricated edges —
+    exactly 5, measured: 11-dlx p1->dlx, 12-ttl-maxlen p1->dlx, 13-retry-backoff
+    p1->retry-ex, 14-rpc client->replies, 16-delayed p1->main-ex. 0414e1d had fixed only
+    the CONSUMER half and added a converse invariant covering only consumer edges. Second
+    time a one-directional assertion hid a fabricated-edge bug on this branch.
+  - I5 (dlx.ts): applyTtlExpire finds by (id, enqueuedAt) — the comment above it explains
+    why — then deletes by id alone. Confirmed by inspection.
+
+Fix wave: complete (8ee109a..25af7e4, 7 commits). 354 tests / 30 files, typecheck, lint,
+  build all clean. Controller re-probed C1/I1/I2 after the fix: no duplicate acks, no
+  ghost inFlight, idle sibling picks up at 5600, zero fabricated edges. All 17 lesson
+  journals AND metrics byte-identical before vs after the whole wave; snapshot untouched.
+  Fixed: C1, I1, I2, I3, I4, I5, M2, M3, M4, M5, M7, M8, M10, M11.
+  NOT fixed, deliberately:
+  - M1 ((at, seq) not a total order). Fixer implemented it, measured it, REVERTED it:
+    the event log reorders on lessons 06/08/11/15 (42 lines, pure permutation, identical
+    metrics) and NOTHING in the suite detects it. Determinism holds today so this is
+    latent risk only. Wants its own reviewed commit — do not fold it into another wave.
+  - M6 (load() shape check), M9 (sandbox store rebuilds lesson sim): left, judged
+    out-of-scope/unreachable.
+  WATCH: M2 dropped `messageTtlMs: 0` from a fatal validation error to a warning, so a
+  topology that used to refuse to run now runs and trips the runaway ceiling. That is the
+  review's stated intent, but it removes an existing hard block — verify before merge.
+  Both open questions answered with evidence: the e2e double-confirm guard is correct
+  (published 1 / confirmed 1 through an e2e diamond), and the runaway guard must be KEPT —
+  its premise was wrong, the ceiling accumulates across the whole run and a
+  `messageTtlMs: 1` dead-letter cycle raises no validation issue at all.
+
+I6 (checkpoints + narrative.highlight authored on all 17 lessons, tested, translated,
+  documented in the README — and rendered by NOTHING) was a plan gap, not an
+  implementation defect. USER DECIDED: render both. Dispatched as Task 21, brief at
+  .superpowers/sdd/task-21-brief.md.
