@@ -22,6 +22,63 @@
 
 ---
 
+## Amendment (2026-08-08): no hooks in the BrokerModule contract
+
+Task 9's implementation and review superseded the sandbox-accessor design in
+Tasks 7, 9, 10, and 11. The plan originally had `BrokerSandbox` expose hooks —
+`useTopology()`, `useScript()`, `useEditing(topology)` — and had the shell call
+them behind `broker.sandbox?....` with a `NO_SANDBOX` / `NO_EDITING` fallback.
+
+That is unsound. React requires the hook count and order to be stable across
+renders of the same component instance; it does not care that switching brokers
+will rebuild the tree. `useRabbitEditing` calls three hooks and `NO_EDITING`
+calls none, so selecting a broker without a sandbox changes the hook count of a
+mounted component. The plan's justification ("a broker change already forces a
+full rebuild") argued the wrong thing.
+
+**The contract carries no hooks.** `BrokerSandbox` exposes plain functions:
+
+```ts
+export interface BrokerSandbox<S extends KernelState, T, A, I extends ValidationIssueBase> {
+  Panel: ComponentType<{ state: S; issues: I[] }>
+  getTopology(): T
+  getScript(): A[]
+  /** Zustand's subscribe: registers a listener, returns the unsubscribe. */
+  subscribe(onStoreChange: () => void): () => void
+  reset(): void
+  maxEvents: number
+  transportDurationMs: number
+  /** Canvas edit handlers. Plain functions, not hooks: they are event handlers
+   *  and read the broker's store through getState() when they fire. */
+  editing: {
+    onNodesChange(topology: T, changes: NodeChange[]): void
+    onConnect(topology: T, connection: Connection): void
+  }
+}
+```
+
+The shell reads sandbox state through exactly one `useSyncExternalStore` call per
+value, at a fixed call site, so the hook count never varies.
+
+**Every `getSnapshot` must return a stable reference.** `useSyncExternalStore`
+compares snapshots with `Object.is`, so a `getSnapshot` returning a fresh object
+or array literal re-renders forever. The no-sandbox fallback therefore returns
+module-scope constants (`EMPTY_SCRIPT`, `undefined`), never literals. This bug
+shipped once in Task 9 and was caught only because a reviewer looked for it;
+`src/shell/useSimulation.test.tsx` now carries a regression test that blanks the
+registered module's `sandbox` and asserts the hook settles.
+
+Consequences for the remaining tasks:
+
+- **Task 10:** `CanvasView` must not call `broker.sandbox?.useEditing(topology)`.
+  It calls `broker.sandbox?.editing.onNodesChange` / `.onConnect` inside its own
+  `useCallback`s, or passes them straight to React Flow. `NO_EDITING` disappears.
+  `src/brokers/rabbitmq/ui/editing.ts` becomes plain functions taking the topology
+  and reading `useSandboxStore.getState()`.
+- **Task 10:** `App` takes sandbox topology/script from `useSimulation`'s own
+  resolution rather than calling accessors itself, so it gains no new hook.
+- **Task 11:** unchanged; the switcher touches no sandbox accessor.
+
 ## Amendment (2026-08-08): the store must not import the broker registry
 
 Task 8's review found a real import cycle:
