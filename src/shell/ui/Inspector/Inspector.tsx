@@ -3,7 +3,7 @@ import type { EngineState, JournalEntry, Metrics, ValidationIssue } from '../../
 import type { Lesson } from '../../../brokers/rabbitmq/lessons/types'
 import { ExportDialog } from '../../../brokers/rabbitmq/sandbox/ExportDialog'
 import { useAppStore } from '../../store'
-import { activeStepIndex } from './activeStep'
+import { activeStepIndex } from '../../lesson/activeStep'
 import { CheckpointSection } from './CheckpointCard'
 import { vietnameseIssueMessage, vietnameseSeverityLabel } from '../../../brokers/rabbitmq/ui/issueText'
 import { Markdown, MarkdownInline } from './Markdown'

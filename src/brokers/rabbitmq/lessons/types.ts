@@ -1,37 +1,12 @@
 import type { ScriptedAction, ScriptedFailure, Topology } from '../engine'
+import type { Lesson as BaseLesson } from '../../../shell/lesson/types'
+
+export type { Checkpoint, NarrativeStep } from '../../../shell/lesson/types'
 
 export type LessonGroup = 'basics' | 'reliability' | 'dlx' | 'patterns'
 
-export interface NarrativeStep {
-  /** Virtual millisecond at which this step becomes the active explanation. */
-  at: number
-  title: string
-  /** Markdown body rendered in the inspector. */
-  body: string
-  /** Node ids emphasised on the canvas while this step is active. */
-  highlight?: string[]
-}
-
-export interface Checkpoint {
-  at: number
-  question: string
-  options: string[]
-  answerIndex: number
-  explanation: string
-}
-
-export interface Lesson {
-  id: string
+/** AMQP adds scripted consumer failures, which no other broker has. */
+export interface Lesson extends BaseLesson<Topology, ScriptedAction> {
   group: LessonGroup
-  title: string
-  /** One sentence shown under the title in the sidebar. */
-  summary: string
-  topology: Topology
-  script: ScriptedAction[]
   failures?: ScriptedFailure[]
-  narrative: NarrativeStep[]
-  checkpoints?: Checkpoint[]
-  seed: number
-  /** Virtual milliseconds the lesson is expected to run for. */
-  durationMs: number
 }

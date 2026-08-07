@@ -1,4 +1,4 @@
-import type { NarrativeStep } from '../../../brokers/rabbitmq/lessons/types'
+import type { NarrativeStep } from './types'
 
 export function activeStepIndex(steps: readonly NarrativeStep[], now: number): number {
   let index = 0
