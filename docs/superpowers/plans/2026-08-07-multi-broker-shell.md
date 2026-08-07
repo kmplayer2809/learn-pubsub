@@ -948,11 +948,11 @@ export interface BrokerModule<S extends KernelState, T, A, I extends ValidationI
   inFlight(state: S): InFlight[]
   StatePanel: ComponentType<{ state: S }>
   issueText(issue: I): string
-  sandbox?: BrokerSandbox<S, T, A>
+  sandbox?: BrokerSandbox<S, T, A, I>
 }
 
-export interface BrokerSandbox<S extends KernelState, T, A> {
-  Panel: ComponentType<{ state: S; issues: ValidationIssueBase[] }>
+export interface BrokerSandbox<S extends KernelState, T, A, I extends ValidationIssueBase> {
+  Panel: ComponentType<{ state: S; issues: I[] }>
   useTopology(): T
   useScript(): A[]
   reset(): void
