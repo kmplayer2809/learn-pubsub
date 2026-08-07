@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { Checkpoint } from '../../lessons/types'
+import type { Checkpoint } from '../../brokers/rabbitmq/lessons/types'
 import { CheckpointSection } from './CheckpointCard'
 
 const prefetch: Checkpoint = {

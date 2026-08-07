@@ -1,4 +1,4 @@
-import type { EngineState } from '../../engine'
+import type { EngineState } from '../../brokers/rabbitmq/engine'
 import { progressOf, TONE_FILL } from './geometry'
 
 /** `edgeId` is minted as `${from}->${to}`; the panel is the only place that reads it back. */

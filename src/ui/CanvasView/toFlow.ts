@@ -1,5 +1,5 @@
 import type { Edge, Node } from '@xyflow/react'
-import type { EngineState, ScriptedAction, Topology } from '../../engine'
+import type { EngineState, ScriptedAction, Topology } from '../../brokers/rabbitmq/engine'
 
 /**
  * `highlight` carries the active narrative step's `NarrativeStep.highlight` ids, so the

@@ -1,4 +1,4 @@
-import { LESSON_GROUPS, lessonsByGroup } from '../../lessons/registry'
+import { LESSON_GROUPS, lessonsByGroup } from '../../brokers/rabbitmq/lessons/registry'
 import { useAppStore } from '../../sim/store'
 
 export function LessonSidebar() {

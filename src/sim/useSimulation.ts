@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { createSimulation, type EngineState, type Simulation, type ValidationIssue } from '../engine'
-import { getLesson } from '../lessons/registry'
-import { useSandboxStore } from '../sandbox/sandboxStore'
+import { createSimulation, type EngineState, type Simulation, type ValidationIssue } from '../brokers/rabbitmq/engine'
+import { getLesson } from '../brokers/rabbitmq/lessons/registry'
+import { useSandboxStore } from '../brokers/rabbitmq/sandbox/sandboxStore'
 import { useAppStore } from './store'
 
 export interface SimulationView {

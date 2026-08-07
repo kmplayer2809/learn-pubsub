@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { EngineState, ValidationIssue } from '../engine'
-import { useAppStore } from '../sim/store'
+import { useAppStore } from '../../../sim/store'
 import { SandboxPanel } from './SandboxPanel'
 import { emptyTopology, useSandboxStore } from './sandboxStore'
 

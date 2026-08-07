@@ -1,4 +1,4 @@
-import type { ValidationIssue } from '../../engine'
+import type { ValidationIssue } from '../../brokers/rabbitmq/engine'
 
 /**
  * Vietnamese rendering for every `ValidationIssue` shape the engine can

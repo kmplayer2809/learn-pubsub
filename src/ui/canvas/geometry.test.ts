@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { progressOf } from './geometry'
-import type { InFlight, Message } from '../../engine'
+import type { InFlight, Message } from '../../brokers/rabbitmq/engine'
 
 const message: Message = {
   id: 'm1',

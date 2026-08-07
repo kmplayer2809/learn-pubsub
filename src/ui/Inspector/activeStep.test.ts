@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { activeStepIndex } from './activeStep'
-import type { NarrativeStep } from '../../lessons/types'
+import type { NarrativeStep } from '../../brokers/rabbitmq/lessons/types'
 
 const steps: NarrativeStep[] = [
   { at: 0, title: 'a', body: '' },

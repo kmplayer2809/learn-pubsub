@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateTopology, type Topology, type ValidationIssue, type ValidationIssueCode } from '../../engine'
+import { validateTopology, type Topology, type ValidationIssue, type ValidationIssueCode } from '../../brokers/rabbitmq/engine'
 import { vietnameseIssueMessage, vietnameseSeverityLabel } from './issueText'
 
 // Every code the engine can currently produce (src/engine/validate.ts). Kept

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const ENGINE_DIR = join(process.cwd(), 'src/engine')
+const ENGINE_DIR = join(process.cwd(), 'src/brokers/rabbitmq/engine')
 const FORBIDDEN = [
   /from ['"]react['"]/,
   /from ['"]zustand['"]/,
