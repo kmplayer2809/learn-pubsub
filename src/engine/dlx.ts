@@ -86,7 +86,14 @@ export function applyTtlExpire(state: EngineState, event: SimEvent): ApplyResult
 
   const without: EngineState = {
     ...state,
-    queues: { ...state.queues, [queueId]: queue.filter((q) => q.message.id !== messageId) },
+    // Remove the exact entry the lookup above matched, not every copy sharing the
+    // id: an exchange-to-exchange fan-in can legitimately put the same message in
+    // one queue twice, and filtering on the id alone deleted both while
+    // dead-lettering and counting only one.
+    queues: {
+      ...state.queues,
+      [queueId]: queue.filter((q) => !(q.message.id === messageId && q.enqueuedAt === enqueuedAt)),
+    },
     metrics: { ...state.metrics, expired: state.metrics.expired + 1 },
   }
   return deadLetter(without, entry.message, queueId, 'expired')

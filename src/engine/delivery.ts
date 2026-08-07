@@ -51,6 +51,10 @@ export function applyDispatch(state: EngineState, event: SimEvent): ApplyResult 
     message,
     queueId,
     consumerId: consumer.id,
+    // Stamped here, not read at arrival: the message spends TRAVEL_MS on the wire,
+    // and a crash inside that window requeues it. applyDeliver compares against the
+    // live epoch and drops the hop, or the message is both requeued and acked.
+    epoch: state.crashEpoch[consumer.id] ?? 0,
   })
   return { state: afterSchedule, newEvents: [deliverEvent] }
 }
@@ -61,6 +65,22 @@ export function applyDeliver(state: EngineState, event: SimEvent): ApplyResult {
   const consumerId = event.payload.consumerId as NodeId
   const consumer = state.topology.consumers.find((c) => c.id === consumerId)
   if (!consumer) return { state, newEvents: [] }
+
+  // The consumer crashed between dispatch and arrival. applyConsumerCrash already
+  // requeued the message (manual ack) or destroyed it (auto ack), so delivering it
+  // now would hand a crashed consumer work the broker has already taken back — and
+  // on the manual path the requeued copy is acked a second time after redelivery.
+  //
+  // The in-flight particle for this hop is deliberately NOT cleared here: the crash
+  // that moved the epoch already removed every flight ending at this consumer
+  // (advanced.ts applyConsumerCrash), so clearing again is at best a no-op — and at
+  // worst wrong, because clearInFlight matches on message id plus edge id alone and
+  // would wipe a *newer* hop of the same message if the consumer crashed and
+  // recovered within a single TRAVEL_MS interval.
+  const epoch = (event.payload.epoch as number) ?? 0
+  if (epoch !== (state.crashEpoch[consumerId] ?? 0)) {
+    return { state, newEvents: [] }
+  }
 
   let next = clearInFlight(state, message.id, edgeId(queueId, consumerId))
   next = { ...next, metrics: { ...next.metrics, delivered: next.metrics.delivered + 1 } }

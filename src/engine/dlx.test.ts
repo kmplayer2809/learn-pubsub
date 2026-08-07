@@ -125,6 +125,29 @@ describe('applyTtlExpire', () => {
     expect(next.metrics.expired).toBe(0)
   })
 
+  it('removes only the enqueue it matched when the queue holds two copies of one id', () => {
+    // An exchange-to-exchange diamond legitimately lands the same message id in one
+    // queue twice, as a real broker would. The lookup already keys on enqueuedAt;
+    // the removal must too, or the second copy vanishes with no dead-letter line
+    // and no metric — silent message loss.
+    let state = createEngineState(topology, 1)
+    state = publishInto(state, 'a')
+    const first = state.queues.q1![0]!
+    const second = { message: first.message, enqueuedAt: first.enqueuedAt + 100 }
+    const twice: EngineState = { ...state, queues: { ...state.queues, q1: [first, second] } }
+
+    const { state: next } = applyTtlExpire({ ...twice, now: 2000 }, {
+      at: 2000,
+      seq: 0,
+      type: 'ttlExpire',
+      payload: { messageId: first.message.id, queueId: 'q1', enqueuedAt: first.enqueuedAt },
+    })
+
+    expect(next.queues.q1).toHaveLength(1)
+    expect(next.queues.q1![0]!.enqueuedAt).toBe(second.enqueuedAt)
+    expect(next.metrics.expired).toBe(1)
+  })
+
   it('ignores a stale TTL from a previous stay after the message cycles back', () => {
     let state = createEngineState(topology, 1)
     state = publishInto(state, 'a')

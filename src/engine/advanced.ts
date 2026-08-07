@@ -47,7 +47,9 @@ export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyRe
     inFlight: state.inFlight.filter((f) => !f.edgeId.endsWith(`->${consumerId}`)),
   }
 
+  let requeued = false
   if (consumer && held.length > 0 && !consumer.autoAck) {
+    requeued = true
     const spec = state.topology.queues.find((q) => q.id === consumer.queueId)
     // Fold from the right so that after each insert-ahead-of-equals the held
     // messages end up in their original order rather than reversed.
@@ -85,7 +87,16 @@ export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyRe
     })
   }
 
-  return { state: next, newEvents: [] }
+  // Requeued work has to be offered to whoever is still alive. Nothing else
+  // re-dispatches this queue — an idle sibling consumer is only woken by an
+  // enqueue, an ack, a nack, or a recover — so without this the messages wait
+  // for the *crashed* consumer to come back, which is the opposite of what
+  // competing consumers are for. Mirrors applyConsumerRecover below.
+  if (!requeued || !consumer) return { state: next, newEvents: [] }
+  const [dispatchEvent, afterSchedule] = scheduleEvent(next, state.now, 'dispatch', {
+    queueId: consumer.queueId,
+  })
+  return { state: afterSchedule, newEvents: [dispatchEvent] }
 }
 
 export function applyConsumerRecover(state: EngineState, event: SimEvent): ApplyResult {

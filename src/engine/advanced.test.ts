@@ -108,7 +108,7 @@ describe('applyConsumerCrash', () => {
       queues: { q1: [entry('m2', 0)] },
     }
     const held = new Map([['m1', message('m1')]])
-    const { state: next } = applyConsumerCrash(
+    const { state: next, newEvents } = applyConsumerCrash(
       { ...state, journal: [] },
       { at: 0, seq: 0, type: 'consumerCrash', payload: { consumerId: 'c1', heldMessages: [...held.values()] } },
     )
@@ -116,6 +116,21 @@ describe('applyConsumerCrash', () => {
     expect(next.unacked.c1).toEqual([])
     expect(next.queues.q1!.map((q) => q.message.id)).toEqual(['m1', 'm2'])
     expect(next.queues.q1![0]!.message.redeliveryCount).toBe(1)
+    // Requeued work has to be offered to whoever is left. Nothing else re-dispatches
+    // the queue, so without this the messages wait for the crashed consumer to recover.
+    expect(newEvents.map((e) => e.type)).toEqual(['dispatch'])
+    expect(newEvents[0]!.payload.queueId).toBe('q1')
+  })
+
+  it('does not re-dispatch when the crash requeued nothing', () => {
+    const base = createEngineState(topology, 1)
+    const { newEvents } = applyConsumerCrash(base, {
+      at: 0,
+      seq: 0,
+      type: 'consumerCrash',
+      payload: { consumerId: 'c1', heldMessages: [] },
+    })
+    expect(newEvents).toEqual([])
   })
 
   it('does not let a held low-priority message jump ahead of a waiting high-priority one on a priority queue', () => {

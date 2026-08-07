@@ -262,6 +262,78 @@ describe('a crash cancels the work it interrupted', () => {
     expect(state.metrics.acked).toBe(1)
   })
 
+  it('hands work requeued by a crash to a healthy sibling consumer', () => {
+    // The single most important thing competing consumers are for. c1 takes the
+    // message and is still holding it when it dies; c2 is idle on the same queue
+    // and must be offered the requeued message without waiting for c1 to recover.
+    const sim = createSimulation({
+      topology: topo([
+        consumer({ id: 'c1', processingMs: 10_000 }),
+        consumer({ id: 'c2', processingMs: 500 }),
+      ]),
+      script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'job' }],
+      failures: [{ at: 3000, consumerId: 'c1', kind: 'crash' }],
+      seed: 1,
+    })
+    sim.advanceTo(30_000)
+    const state = sim.snapshot()
+
+    expect(state.queues.q1).toHaveLength(0)
+    expect(state.metrics.acked).toBe(1)
+    expect(state.journal.filter((j) => j.type === 'ack').map((j) => j.nodeId)).toEqual(['c2'])
+    // Nothing left to run: the sim drained because the work was done, not stalled.
+    expect(sim.nextEventTime()).toBeUndefined()
+  })
+
+  it('drops a delivery whose consumer crashed while the message was still on the wire', () => {
+    // The dispatch -> deliver window, not the deliver -> consumeDone one. With
+    // TRAVEL_MS = 600 the message dispatches at t=1200 and lands at t=1800, so a
+    // crash at t=1500 catches it mid-hop: applyConsumerCrash requeues it, and the
+    // pending deliver must not also hand it to the crashed consumer. Without the
+    // epoch guard on `deliver` the requeued copy is redelivered after recovery and
+    // the same message is acked twice.
+    const sim = createSimulation({
+      topology: topo([consumer({ id: 'c1', processingMs: 1000 })]),
+      script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'job' }],
+      failures: [
+        { at: 1500, consumerId: 'c1', kind: 'crash' },
+        { at: 5000, consumerId: 'c1', kind: 'recover' },
+      ],
+      seed: 1,
+    })
+    sim.advanceTo(20_000)
+    const state = sim.snapshot()
+
+    const acked = state.journal.filter((j) => j.type === 'ack').map((j) => j.messageId)
+    expect(new Set(acked).size).toBe(acked.length)
+    expect(acked).toEqual(['m1'])
+    expect(state.metrics.acked).toBe(1)
+    // One real delivery, after recovery. The interrupted hop never arrived.
+    expect(state.metrics.delivered).toBe(1)
+    expect(state.journal.filter((j) => j.type === 'deliver')).toHaveLength(1)
+    expect(state.queues.q1).toHaveLength(0)
+  })
+
+  it('leaves a mid-flight message queued and un-delivered when the consumer never recovers', () => {
+    // Same window as above with no recover, so nothing later reuses the q1->c1 edge.
+    // That makes both halves observable: the delivery must never land on the crashed
+    // consumer, and the particle for the abandoned hop must not stay on the canvas.
+    const sim = createSimulation({
+      topology: topo([consumer({ id: 'c1', processingMs: 1000 })]),
+      script: [{ at: 0, publisherId: 'p1', exchangeId: 'ex', routingKey: 'go', body: 'job' }],
+      failures: [{ at: 1500, consumerId: 'c1', kind: 'crash' }],
+      seed: 1,
+    })
+    sim.advanceTo(20_000)
+    const state = sim.snapshot()
+
+    expect(state.metrics.delivered).toBe(0)
+    expect(state.metrics.acked).toBe(0)
+    // Requeued and waiting for a consumer that never comes back.
+    expect(state.queues.q1).toHaveLength(1)
+    expect(state.inFlight).toEqual([])
+  })
+
   it('does not ack an auto-ack consumer whose work the crash destroyed', () => {
     // Same pipeline timing as above: delivery lands at t=1800, the stale consumeDone
     // would fire at t=2800, so a crash at t=2000 lands mid-work.
