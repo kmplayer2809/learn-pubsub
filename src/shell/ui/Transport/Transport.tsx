@@ -1,4 +1,4 @@
-import { SPEEDS, useAppStore, type Speed } from '../../sim/store'
+import { SPEEDS, useAppStore, type Speed } from '../../store'
 
 export function Transport({ durationMs, onStep }: { durationMs: number; onStep(): void }) {
   const playing = useAppStore((s) => s.playing)

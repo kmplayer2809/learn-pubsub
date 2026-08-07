@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { EngineState, InFlight, Message } from '../../brokers/rabbitmq/engine'
+import type { EngineState, InFlight, Message } from '../engine'
 import { InFlightPanel } from './InFlightPanel'
 
 function message(over: Partial<Message> = {}): Message {

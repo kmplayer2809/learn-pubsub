@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react'
-import type { EngineState } from '../../brokers/rabbitmq/engine'
+import type { EngineState } from '../../../brokers/rabbitmq/engine'
 import { pointOnPath, progressOf, TONE_FILL } from './geometry'
 
 interface Particle {

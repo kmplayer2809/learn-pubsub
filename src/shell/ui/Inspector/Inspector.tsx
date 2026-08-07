@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import type { EngineState, JournalEntry, Metrics, ValidationIssue } from '../../brokers/rabbitmq/engine'
-import type { Lesson } from '../../brokers/rabbitmq/lessons/types'
-import { ExportDialog } from '../../brokers/rabbitmq/sandbox/ExportDialog'
-import { useAppStore } from '../../sim/store'
+import type { EngineState, JournalEntry, Metrics, ValidationIssue } from '../../../brokers/rabbitmq/engine'
+import type { Lesson } from '../../../brokers/rabbitmq/lessons/types'
+import { ExportDialog } from '../../../brokers/rabbitmq/sandbox/ExportDialog'
+import { useAppStore } from '../../store'
 import { activeStepIndex } from './activeStep'
 import { CheckpointSection } from './CheckpointCard'
-import { vietnameseIssueMessage, vietnameseSeverityLabel } from './issueText'
+import { vietnameseIssueMessage, vietnameseSeverityLabel } from '../../../brokers/rabbitmq/ui/issueText'
 import { Markdown, MarkdownInline } from './Markdown'
 
 function NodeConfig({ lesson, state, nodeId }: { lesson: Lesson; state: EngineState; nodeId: string }) {

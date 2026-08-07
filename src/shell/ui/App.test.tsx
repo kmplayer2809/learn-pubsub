@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import { act } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useSandboxStore } from '../brokers/rabbitmq/sandbox/sandboxStore'
-import { useAppStore } from '../sim/store'
+import { useSandboxStore } from '../../brokers/rabbitmq/sandbox/sandboxStore'
+import { useAppStore } from '../store'
 import App from './App'
 
 beforeEach(() => {

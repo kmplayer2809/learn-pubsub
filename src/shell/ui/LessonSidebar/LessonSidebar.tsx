@@ -1,5 +1,5 @@
-import { LESSON_GROUPS, lessonsByGroup } from '../../brokers/rabbitmq/lessons/registry'
-import { useAppStore } from '../../sim/store'
+import { LESSON_GROUPS, lessonsByGroup } from '../../../brokers/rabbitmq/lessons/registry'
+import { useAppStore } from '../../store'
 
 export function LessonSidebar() {
   const lessonId = useAppStore((s) => s.lessonId)

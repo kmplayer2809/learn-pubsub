@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createSimulation } from '../../brokers/rabbitmq/engine'
-import { LESSONS } from '../../brokers/rabbitmq/lessons/registry'
+import { createSimulation } from '../engine'
+import { LESSONS } from '../lessons/registry'
 import { toFlowEdges, toFlowNodes } from './toFlow'
 
 const lesson = LESSONS[0]!

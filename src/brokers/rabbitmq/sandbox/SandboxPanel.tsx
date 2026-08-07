@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import type { EngineState, Topology, ValidationIssue } from '../engine'
-import { EventLog, HaltedBanner, IssuesList, MetricsGrid } from '../../../ui/Inspector/Inspector'
-import { useAppStore } from '../../../sim/store'
+import { EventLog, HaltedBanner, IssuesList, MetricsGrid } from '../../../shell/ui/Inspector/Inspector'
+import { useAppStore } from '../../../shell/store'
 import { ExportDialog } from './ExportDialog'
 import { type SandboxNodeKind, useSandboxStore } from './sandboxStore'
 

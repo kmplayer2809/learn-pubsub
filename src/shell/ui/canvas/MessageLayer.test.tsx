@@ -1,6 +1,6 @@
 import { render, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { EngineState, Message } from '../../brokers/rabbitmq/engine'
+import type { EngineState, Message } from '../../../brokers/rabbitmq/engine'
 import { MessageLayer } from './MessageLayer'
 
 const message: Message = {

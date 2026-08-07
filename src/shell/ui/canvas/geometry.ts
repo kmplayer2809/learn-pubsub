@@ -1,4 +1,4 @@
-import type { InFlight } from '../../brokers/rabbitmq/engine'
+import type { InFlight } from '../../../brokers/rabbitmq/engine'
 
 export function progressOf(flight: InFlight, now: number): number {
   const span = flight.toT - flight.fromT

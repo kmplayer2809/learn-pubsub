@@ -1,12 +1,12 @@
 import { Background, Controls, ReactFlow, type Connection, type Node, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useCallback, useMemo } from 'react'
-import type { EngineState, ScriptedAction, Topology } from '../../brokers/rabbitmq/engine'
-import { useSandboxStore } from '../../brokers/rabbitmq/sandbox/sandboxStore'
-import { useAppStore } from '../../sim/store'
+import type { EngineState, ScriptedAction, Topology } from '../../../brokers/rabbitmq/engine'
+import { useSandboxStore } from '../../../brokers/rabbitmq/sandbox/sandboxStore'
+import { useAppStore } from '../../store'
 import { MessageLayer } from '../canvas/MessageLayer'
-import { ConsumerNode, ExchangeNode, PublisherNode, QueueNode } from './nodes'
-import { toFlowEdges, toFlowNodes } from './toFlow'
+import { ConsumerNode, ExchangeNode, PublisherNode, QueueNode } from '../../../brokers/rabbitmq/ui/nodes'
+import { toFlowEdges, toFlowNodes } from '../../../brokers/rabbitmq/ui/toFlow'
 
 // Defined here rather than exported from nodes.tsx: mixing a components-only
 // file with a plain object export breaks React Fast Refresh for that file.
