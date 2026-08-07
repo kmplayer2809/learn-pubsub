@@ -73,9 +73,3 @@ export function ConsumerNode({ data, selected }: NodeProps) {
   )
 }
 
-export const nodeTypes = {
-  publisher: PublisherNode,
-  exchange: ExchangeNode,
-  queue: QueueNode,
-  consumer: ConsumerNode,
-}

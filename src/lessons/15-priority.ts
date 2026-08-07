@@ -39,25 +39,25 @@ export const priorityQueue: Lesson = {
     {
       at: 0,
       title: '`jobs` khai báo `maxPriority: 10`',
-      body: 'Tám message được publish liên tiếp, cách nhau 200ms, với priority `0, 0, 0, 9, 0, 5, 0, 9`. `worker` chỉ có `prefetch: 1` và mất 1500ms cho mỗi message — chậm hơn nhiều so với nhịp publish, nên hàng đợi kịp phình ra trước khi `worker` rảnh trở lại.',
+      body: 'Tám message được publish liên tiếp, cách nhau 200ms, với priority `0, 0, 0, 9, 0, 5, 0, 9`. `worker` chỉ có `prefetch: 1` và mất 1500ms cho mỗi message — chậm hơn nhiều so với nhịp publish, nên queue kịp phình ra trước khi `worker` rảnh trở lại.',
       highlight: ['jobs', 'worker'],
     },
     {
       at: 2200,
-      title: 'Message đầu tiên đã đi trước khi hàng đợi kịp sắp xếp',
+      title: 'Message đầu tiên đã đi trước khi queue kịp sắp xếp',
       body: 'Job 1 được giao ngay khi `worker` còn rảnh, trước khi bất kỳ message priority cao nào xuất hiện. Priority không thể cứu message nào đã rời khỏi `jobs` — nó chỉ tác động lên những gì còn nằm chờ.',
       highlight: ['jobs'],
     },
     {
       at: 4200,
       title: 'Priority 9 vượt lên trước cả message tới sớm hơn',
-      body: 'Trong lúc `worker` bận với Job 1, `jobs` nhận thêm Job 2, 3, 4, 5, 6, 7, 8. Job 4 mang priority 9 nên được chèn lên đầu hàng đợi, vượt qua Job 2 và Job 3 dù hai message đó tới trước nó rất lâu. Job 8, cũng priority 9, xếp ngay sau Job 4.',
+      body: 'Trong lúc `worker` bận với Job 1, `jobs` nhận thêm Job 2, 3, 4, 5, 6, 7, 8. Job 4 mang priority 9 nên được chèn lên đầu queue, vượt qua Job 2 và Job 3 dù hai message đó tới trước nó rất lâu. Job 8, cũng priority 9, xếp ngay sau Job 4.',
       highlight: ['jobs'],
     },
     {
       at: 9000,
       title: 'Priority bằng nhau vẫn giữ nguyên tắc đến trước phục vụ trước',
-      body: 'Giữa các message cùng priority — như ba message priority 0 là Job 2, Job 3, Job 5 — hàng đợi không xáo trộn thứ tự giữa chúng. Priority chỉ phá vỡ nguyên tắc FIFO giữa các mức priority khác nhau, không phải trong cùng một mức.',
+      body: 'Giữa các message cùng priority — như ba message priority 0 là Job 2, Job 3, Job 5 — queue không xáo trộn thứ tự giữa chúng. Priority chỉ phá vỡ nguyên tắc FIFO giữa các mức priority khác nhau, không phải trong cùng một mức.',
       highlight: ['jobs', 'worker'],
     },
     {

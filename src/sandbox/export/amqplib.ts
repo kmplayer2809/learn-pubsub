@@ -1,11 +1,12 @@
 import type { BindingSpec, QueueSpec, Topology } from '../../engine'
 import { queueArgumentEntries } from './queueArguments'
 
-function queueArguments(queue: QueueSpec | undefined): string {
+/** Renders the `arguments:` line for a queue, or '' when it has none to declare. */
+function queueArgumentsLine(queue: QueueSpec | undefined): string {
   const entries = queueArgumentEntries(queue)
-  if (entries.length === 0) return '{}'
+  if (entries.length === 0) return ''
   const lines = entries.map((entry) => `      ${entry},`)
-  return `{\n${lines.join('\n')}\n    }`
+  return `\n    arguments: {\n${lines.join('\n')}\n    },`
 }
 
 /**
@@ -40,8 +41,7 @@ export function toAmqplib(topology: Topology): string {
   for (const queue of topology.queues) {
     lines.push(
       `  await channel.assertQueue('${queue.id}', {`,
-      `    durable: ${queue.durable ?? false},`,
-      `    arguments: ${queueArguments(queue)},`,
+      `    durable: ${queue.durable ?? false},${queueArgumentsLine(queue)}`,
       '  })',
     )
   }

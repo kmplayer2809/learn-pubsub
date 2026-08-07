@@ -18,7 +18,7 @@ const TABS: { key: ExportTarget; label: string }[] = [
  */
 export function ExportDialog({ topology, onClose }: { topology: Topology; onClose: () => void }) {
   const [tab, setTab] = useState<ExportTarget>('amqplib')
-  const [copied, setCopied] = useState(false)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -32,14 +32,18 @@ export function ExportDialog({ topology, onClose }: { topology: Topology; onClos
     topology.exchanges.length === 0 && topology.queues.length === 0 && topology.consumers.length === 0
   const code = tab === 'amqplib' ? toAmqplib(topology) : toNestjs(topology)
 
+  // `navigator.clipboard` only exists in a secure context, so serving this build
+  // over plain HTTP on a LAN address makes writeText reject. Swallowing that left
+  // the button looking inert with no explanation, so a failure says so and points
+  // the user at the code they can still select by hand.
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(code)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
+      setCopyState('copied')
     } catch {
-      setCopied(false)
+      setCopyState('failed')
     }
+    window.setTimeout(() => setCopyState('idle'), 1500)
   }
 
   return (
@@ -106,7 +110,11 @@ export function ExportDialog({ topology, onClose }: { topology: Topology; onClos
             disabled={isEmpty}
             className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent"
           >
-            {copied ? 'Đã sao chép' : 'Sao chép đoạn code này'}
+            {copyState === 'copied'
+              ? 'Đã sao chép'
+              : copyState === 'failed'
+                ? 'Không sao chép được — hãy bôi đen đoạn code ở trên'
+                : 'Sao chép đoạn code này'}
           </button>
         </div>
       </div>

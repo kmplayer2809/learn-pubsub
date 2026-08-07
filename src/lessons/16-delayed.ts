@@ -60,7 +60,7 @@ export const delayedMessage: Lesson = {
     },
     {
       at: 2500,
-      title: '`delay-5s` là một cái đồng hồ đếm ngược, không phải hàng đợi công việc',
+      title: '`delay-5s` là một cái đồng hồ đếm ngược, không phải queue công việc',
       body: 'Cả ba message đang nằm trong `delay-5s`, mỗi message mang `messageTtlMs: 5000` riêng của nó. Không consumer nào tới lấy — thứ duy nhất khiến chúng rời khỏi đây là hết hạn TTL, không phải bị tiêu thụ.',
       highlight: ['delay-5s'],
     },
@@ -79,7 +79,7 @@ export const delayedMessage: Lesson = {
     {
       at: 15000,
       title: 'Cái giá phải trả là head-of-line blocking',
-      body: 'Một queue chỉ xét hết hạn ở đầu hàng đợi. Nếu một message ở đầu mang TTL dài hơn message ngay sau nó, message phía sau — dù đáng lẽ hết hạn sớm hơn — vẫn phải chờ message đứng trước nó rời đi. Đây là cái giá của việc dùng TTL cộng DLX làm delay primitive: nó không phải một timer độc lập cho từng message.',
+      body: 'Một queue chỉ xét hết hạn ở đầu của nó. Nếu một message ở đầu mang TTL dài hơn message ngay sau nó, message phía sau — dù đáng lẽ hết hạn sớm hơn — vẫn phải chờ message đứng trước nó rời đi. Đây là cái giá của việc dùng TTL cộng DLX làm delay primitive: nó không phải một timer độc lập cho từng message.',
       highlight: ['delay-5s'],
     },
   ],
@@ -89,7 +89,7 @@ export const delayedMessage: Lesson = {
       question: 'Nếu message thứ hai mang một `messageTtlMs` riêng ngắn hơn message đầu tiên trong cùng `delay-5s`, điều gì đúng với hành vi head-of-line blocking của queue?',
       options: [
         'Message thứ hai luôn hết hạn đúng lúc nó cần, bất kể message đứng trước',
-        'Message thứ hai có thể phải chờ message đứng đầu hàng đợi rời đi trước, dù bản thân nó đáng lẽ hết hạn sớm hơn',
+        'Message thứ hai có thể phải chờ message đứng đầu queue rời đi trước, dù bản thân nó đáng lẽ hết hạn sớm hơn',
         'Queue tự động sắp xếp lại theo TTL còn lại ngắn nhất',
       ],
       answerIndex: 1,

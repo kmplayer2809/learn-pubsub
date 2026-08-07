@@ -4,7 +4,7 @@ export const dlxBasics: Lesson = {
   id: '11-dlx',
   group: 'dlx',
   title: 'Dead-letter exchange',
-  summary: 'Reject không requeue định tuyến message sang dead-letter exchange thay vì xóa mất.',
+  summary: 'Reject không requeue route message sang dead-letter exchange thay vì xóa mất.',
   seed: 11,
   durationMs: 16_000,
   topology: {
@@ -70,7 +70,7 @@ export const dlxBasics: Lesson = {
     },
     {
       at: 3200,
-      title: 'Reject không requeue định tuyến sang dead-letter exchange',
+      title: 'Reject không requeue route sang dead-letter exchange',
       body: 'Thay vì biến mất, một message bị reject mà không requeue được chuyển sang `dlx` — chính exchange được khai báo là dead-letter exchange của `work`. Đây không phải một cơ chế bí ẩn, nó chỉ là một route bổ sung khi requeue bị tắt.',
       highlight: ['work', 'dlx'],
     },

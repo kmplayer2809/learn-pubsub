@@ -5,8 +5,17 @@ import type { EngineState, ScriptedAction, Topology } from '../../engine'
 import { useSandboxStore } from '../../sandbox/sandboxStore'
 import { useAppStore } from '../../sim/store'
 import { MessageLayer } from '../canvas/MessageLayer'
-import { nodeTypes } from './nodes'
+import { ConsumerNode, ExchangeNode, PublisherNode, QueueNode } from './nodes'
 import { toFlowEdges, toFlowNodes } from './toFlow'
+
+// Defined here rather than exported from nodes.tsx: mixing a components-only
+// file with a plain object export breaks React Fast Refresh for that file.
+const nodeTypes = {
+  publisher: PublisherNode,
+  exchange: ExchangeNode,
+  queue: QueueNode,
+  consumer: ConsumerNode,
+}
 
 export function CanvasView({
   topology,

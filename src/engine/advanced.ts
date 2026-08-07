@@ -71,8 +71,15 @@ export function applyConsumerCrash(state: EngineState, event: SimEvent): ApplyRe
     next = log(next, {
       at: state.now,
       type: 'consumerCrash',
+      // Deliberately does not claim the message was acked. This engine acks an
+      // auto-ack message at consumeDone, not at delivery, so a crash mid-processing
+      // leaves `acked` un-incremented for it — lesson 07's narrative says exactly
+      // that, and the older wording ("auto-ack already confirmed it") contradicted
+      // the metrics panel sitting next to it. The line also has to stay true when
+      // the consumer was idle: no state tracks whether an auto-ack consumer was
+      // mid-processing, so it states the rule rather than asserting a lost message.
       text: consumer?.autoAck
-        ? `${consumerId} crashed; in-flight message lost because auto-ack already confirmed it`
+        ? `${consumerId} crashed; auto-ack holds nothing unacked, so anything mid-processing is lost`
         : `${consumerId} crashed with nothing unacked`,
       nodeId: consumerId,
     })

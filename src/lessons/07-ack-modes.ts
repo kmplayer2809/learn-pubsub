@@ -68,7 +68,7 @@ export const ackModes: Lesson = {
     {
       at: 2000,
       title: 'Cả hai consumer cùng crash lúc đang xử lý dở',
-      body: 'Ở mốc này, `auto` không hề giữ message nào chưa ack — broker đã coi message là xác nhận xong ngay khi giao, nên chẳng có gì để requeue. `manual` thì khác: message nó đang xử lý dở vẫn nằm trong bảng unacked, và crash lập tức trả message đó về đầu `manual-q`.',
+      body: 'Ở mốc này, `auto` không hề giữ message nào chưa ack trong bookkeeping của broker — với auto-ack, broker không theo dõi message sau khi giao, nên chẳng có gì để requeue khi crash. Message `auto` vừa nhận chỉ đơn giản biến mất: nó đã delivered nhưng chưa xử lý xong, và `acked` cũng không tăng cho nó. `manual` thì khác: message nó đang xử lý dở vẫn nằm trong bảng unacked, và crash lập tức trả message đó về đầu `manual-q`.',
       highlight: ['auto', 'manual'],
     },
     {
