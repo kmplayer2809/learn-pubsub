@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyEnqueue, applyPublish, applyRoute, createEngineState } from './broker'
+import { createSimulation } from './index'
 import { applyTtlExpire, deadLetter, effectiveTtl } from './dlx'
 import type { EngineState, Message, QueueSpec, SimEvent, Topology } from './types'
 
@@ -237,5 +238,55 @@ describe('applyTtlExpire', () => {
     expect(next.queues.q1).toHaveLength(1)
     expect(next.metrics.expired).toBe(0)
     expect(newEvents).toEqual([])
+  })
+
+  it('expires both copies when a symmetric fan-in enqueues one message twice at the same instant', () => {
+    // `(id, enqueuedAt)` is NOT unique. Two exchange-to-exchange paths of equal
+    // length deliver the same message to the same queue in the same millisecond,
+    // so both copies share both fields. Each gets its own ttlExpire, and removing
+    // by the pair destroyed both on the first event while dead-lettering and
+    // counting only one — the second copy vanished with no journal line and no
+    // metric. This runs the whole engine rather than poking reducers, because the
+    // equal timestamps are the thing under test and only the engine produces them.
+    const topology: Topology = {
+      publishers: [{ id: 'p1', label: 'P', position: { x: 0, y: 0 } }],
+      exchanges: [
+        { id: 'root', label: 'root', type: 'direct', position: { x: 100, y: 0 } },
+        { id: 'a', label: 'a', type: 'fanout', position: { x: 200, y: 0 } },
+        { id: 'b', label: 'b', type: 'fanout', position: { x: 200, y: 100 } },
+        { id: 'dlx', label: 'dlx', type: 'fanout', position: { x: 400, y: 0 } },
+      ],
+      queues: [
+        queue({ id: 'q1', messageTtlMs: 2000, deadLetterExchange: 'dlx' }),
+        queue({ id: 'dead' }),
+      ],
+      consumers: [],
+      bindings: [
+        { id: 'r-a', exchangeId: 'root', destinationId: 'a', destinationKind: 'exchange', routingKey: 'k' },
+        { id: 'r-b', exchangeId: 'root', destinationId: 'b', destinationKind: 'exchange', routingKey: 'k' },
+        { id: 'a-q', exchangeId: 'a', destinationId: 'q1', destinationKind: 'queue', routingKey: '' },
+        { id: 'b-q', exchangeId: 'b', destinationId: 'q1', destinationKind: 'queue', routingKey: '' },
+        { id: 'd-q', exchangeId: 'dlx', destinationId: 'dead', destinationKind: 'queue', routingKey: '' },
+      ],
+    }
+    const sim = createSimulation({
+      topology,
+      script: [{ at: 0, publisherId: 'p1', exchangeId: 'root', routingKey: 'k', body: 'x' }],
+      seed: 1,
+    })
+
+    // Both copies really do land in the same millisecond — if this ever stops being
+    // true the test below still passes but no longer tests anything, so pin it.
+    sim.advanceTo(1900)
+    const queued = sim.snapshot().queues.q1!
+    expect(queued).toHaveLength(2)
+    expect(queued[0]!.enqueuedAt).toBe(queued[1]!.enqueuedAt)
+
+    sim.advanceTo(30_000)
+    const final = sim.snapshot()
+    expect(final.metrics.expired).toBe(2)
+    expect(final.metrics.deadLettered).toBe(2)
+    expect(final.queues.q1).toHaveLength(0)
+    expect(final.queues.dead).toHaveLength(2)
   })
 })

@@ -10,7 +10,7 @@ const ALL_CODES: ValidationIssueCode[] = [
   'binding-missing-exchange',
   'binding-missing-destination',
   'dead-letter-exchange-missing',
-  'short-ttl-dead-letter-cycle',
+  'self-dead-letter-cycle',
   'queue-unreachable',
   'consumer-missing-queue',
 ]
@@ -39,7 +39,7 @@ function fixtureFor(code: ValidationIssueCode): ValidationIssue {
         queueLabel: 'work',
         deadLetterExchange: 'nope',
       }
-    case 'short-ttl-dead-letter-cycle':
+    case 'self-dead-letter-cycle':
       return { code, nodeId: 'q1', severity: 'warning', message: 'english', queueId: 'q1', queueLabel: 'work' }
     case 'queue-unreachable':
       return { code, nodeId: 'q2', severity: 'warning', message: 'english', queueId: 'q2', queueLabel: 'orphan' }
@@ -76,7 +76,7 @@ describe('vietnameseIssueMessage', () => {
       'binding-missing-exchange': 'exchange',
       'binding-missing-destination': 'binding',
       'dead-letter-exchange-missing': 'dead-letter',
-      'short-ttl-dead-letter-cycle': 'TTL',
+      'self-dead-letter-cycle': 'dead-letter',
       'queue-unreachable': 'binding',
       'consumer-missing-queue': 'consumer',
     }

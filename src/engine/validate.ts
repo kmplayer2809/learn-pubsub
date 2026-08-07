@@ -1,4 +1,3 @@
-import { TRAVEL_MS } from './broker'
 import type { NodeId, Topology } from './types'
 
 /**
@@ -12,7 +11,7 @@ export type ValidationIssueCode =
   | 'binding-missing-exchange'
   | 'binding-missing-destination'
   | 'dead-letter-exchange-missing'
-  | 'short-ttl-dead-letter-cycle'
+  | 'self-dead-letter-cycle'
   | 'queue-unreachable'
   | 'consumer-missing-queue'
 
@@ -46,7 +45,7 @@ export type ValidationIssue =
       deadLetterExchange: NodeId
     })
   | (ValidationIssueBase & {
-      code: 'short-ttl-dead-letter-cycle'
+      code: 'self-dead-letter-cycle'
       queueId: NodeId
       queueLabel: string
     })
@@ -104,19 +103,20 @@ export function validateTopology(topology: Topology): ValidationIssue[] {
       })
     }
 
-    // A queue whose dead-letter exchange routes straight back into it re-expires
-    // its own messages forever. The check used to require a TTL of exactly 0; a TTL
-    // of 1 loops just as hard and produced no issue at all, so the run simply ran
-    // until the event ceiling halted it with nothing explaining why. TRAVEL_MS is the
-    // cost of a single routing hop, so any TTL below it expires the message again
-    // before it has finished moving. At or above one hop the same shape is the
-    // legitimate retry-with-backoff pattern lesson 13 teaches, so it is left alone
-    // and the ceiling stays as the backstop.
-    if (
-      queue.messageTtlMs !== undefined &&
-      queue.messageTtlMs < TRAVEL_MS &&
-      queue.deadLetterExchange
-    ) {
+    // A queue whose dead-letter exchange routes straight back into it re-expires its
+    // own messages forever, and the TTL only sets how fast. An earlier version gated
+    // this on `messageTtlMs < TRAVEL_MS`, reasoning that a shorter TTL "expires the
+    // message again before it has finished moving" — that mechanism does not exist.
+    // The TTL timer starts at enqueue, which is already after the travel, so 599 and
+    // 600 cycle identically and only one of them warned. Any TTL loops here, so the
+    // threshold is gone.
+    //
+    // This stays narrow on purpose: it fires only when the dead-letter exchange binds
+    // back to this same queue. Lesson 13's retry-with-backoff is a longer cycle
+    // (work -> retry-ex -> retry-1s -> main-ex -> work) in which no queue's own
+    // dead-letter exchange returns to it, so that lesson is untouched. Without a TTL
+    // nothing expires and the message simply waits, so a TTL is required to loop.
+    if (queue.messageTtlMs !== undefined && queue.deadLetterExchange) {
       const returns = topology.bindings.some(
         (b) =>
           b.exchangeId === queue.deadLetterExchange &&
@@ -125,14 +125,17 @@ export function validateTopology(topology: Topology): ValidationIssue[] {
       )
       if (returns) {
         issues.push({
-          code: 'short-ttl-dead-letter-cycle',
+          code: 'self-dead-letter-cycle',
           nodeId: queue.id,
           // Deliberately a warning rather than an error. An error is fatal in
           // createSimulation and refuses to run the topology at all; a warning lets
-          // the run proceed and trip the event ceiling, so the user sees both the
-          // named cause and its effect. The ceiling stays the backstop.
+          // the run proceed so the user can watch the loop happen, which is the point
+          // of a teaching tool. Says the message "keeps cycling" rather than promising
+          // the ceiling halts it: the ceiling counts events, so at low volume a single
+          // message cycles for the whole 60s the Sandbox transport reaches without ever
+          // reaching it. The ceiling is a backstop against a hung tab, not the lesson.
           severity: 'warning',
-          message: `queue ${queue.label} forms a dead-letter cycle with a TTL shorter than one routing hop; the run loops until the event ceiling halts it`,
+          message: `queue ${queue.label} dead-letters into an exchange that routes straight back to it, so an expired message keeps cycling instead of leaving`,
           queueId: queue.id,
           queueLabel: queue.label,
         })

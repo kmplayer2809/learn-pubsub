@@ -84,24 +84,28 @@ export function applyTtlExpire(state: EngineState, event: SimEvent): ApplyResult
   // dead-lettering, so a message that cycles back into this queue would be
   // killed early by the stale TTL event from its previous stay.
   const enqueuedAt = event.payload.enqueuedAt as number
-  const entry = queue.find((q) => q.message.id === messageId && q.enqueuedAt === enqueuedAt)
+  const index = queue.findIndex((q) => q.message.id === messageId && q.enqueuedAt === enqueuedAt)
 
   // The message was consumed before its TTL fired; nothing to expire.
-  if (!entry) return { state, newEvents: [] }
+  if (index === -1) return { state, newEvents: [] }
 
   const without: EngineState = {
     ...state,
-    // Remove the exact entry the lookup above matched, not every copy sharing the
-    // id: an exchange-to-exchange fan-in can legitimately put the same message in
-    // one queue twice, and filtering on the id alone deleted both while
-    // dead-lettering and counting only one.
+    // Remove exactly ONE entry — the one this event was scheduled for — not every
+    // entry matching. `(id, enqueuedAt)` is not unique: a symmetric fan-in through
+    // two exchanges reaches this queue by two paths of equal length, so both copies
+    // land in the same millisecond and share both fields. Each copy gets its own
+    // ttlExpire, so filtering on the pair still destroyed both on the first event
+    // while dead-lettering and counting only one — the second copy vanished with no
+    // journal line and no metric. Splicing by index lets the second event find and
+    // dead-letter the copy it owns.
     queues: {
       ...state.queues,
-      [queueId]: queue.filter((q) => !(q.message.id === messageId && q.enqueuedAt === enqueuedAt)),
+      [queueId]: [...queue.slice(0, index), ...queue.slice(index + 1)],
     },
     metrics: { ...state.metrics, expired: state.metrics.expired + 1 },
   }
-  return deadLetter(without, entry.message, queueId, 'expired')
+  return deadLetter(without, queue[index]!.message, queueId, 'expired')
 }
 
 export function applyDeadLetter(state: EngineState, event: SimEvent): ApplyResult {

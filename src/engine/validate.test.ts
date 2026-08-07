@@ -35,7 +35,7 @@ describe('validateTopology', () => {
     expect(validateTopology(broken).some((i) => i.message.includes('nope'))).toBe(true)
   })
 
-  it('flags a dead-letter cycle whose ttl is shorter than one routing hop, not only a ttl of exactly 0', () => {
+  it('flags a self-returning dead-letter cycle at every ttl, not only short ones', () => {
     const looping = (messageTtlMs: number): Topology => ({
       ...base,
       queues: [{ ...base.queues[0]!, messageTtlMs, deadLetterExchange: 'ex' }],
@@ -44,20 +44,48 @@ describe('validateTopology', () => {
       ],
     })
 
-    // A ttl of 1 loops exactly as hard as a ttl of 0 and used to produce no issue
-    // at all — the run just cycled until the event ceiling halted it, with nothing
-    // telling the user why. TRAVEL_MS is the cost of one hop, so anything under it
-    // re-expires faster than the message can leave.
-    for (const ttl of [0, 1, TRAVEL_MS - 1]) {
+    // The TTL only sets how fast this cycles, never whether it does. An earlier
+    // version gated on `ttl < TRAVEL_MS`, reasoning that a short TTL re-expires the
+    // message "before it has finished moving" — but the timer starts at enqueue,
+    // which is already after the travel. TRAVEL_MS and TRAVEL_MS * 10 loop exactly
+    // as hard as 0, and used to pass silently.
+    for (const ttl of [0, 1, TRAVEL_MS - 1, TRAVEL_MS, TRAVEL_MS * 10]) {
       const issues = validateTopology(looping(ttl))
-      expect(issues.some((i) => i.code === 'short-ttl-dead-letter-cycle')).toBe(true)
-      expect(issues.some((i) => i.message.toLowerCase().includes('cycle'))).toBe(true)
+      expect(issues.some((i) => i.code === 'self-dead-letter-cycle')).toBe(true)
     }
 
-    // At or above one hop the pattern is a legitimate retry-with-backoff loop.
+    // No TTL means nothing ever expires, so the message just waits: not a cycle.
     expect(
-      validateTopology(looping(TRAVEL_MS)).some((i) => i.code === 'short-ttl-dead-letter-cycle'),
+      validateTopology({
+        ...base,
+        queues: [{ ...base.queues[0]!, deadLetterExchange: 'ex' }],
+        bindings: [
+          { id: 'b1', exchangeId: 'ex', destinationId: 'q1', destinationKind: 'queue', routingKey: 'go' },
+        ],
+      }).some((i) => i.code === 'self-dead-letter-cycle'),
     ).toBe(false)
+  })
+
+  it('leaves lesson 13-style retry-with-backoff alone: the cycle is longer than one queue', () => {
+    // work -> retry-ex -> retry-1s -(ttl)-> main-ex -> work is a real cycle, but no
+    // queue's OWN dead-letter exchange routes back into it. This guard is deliberately
+    // narrow enough not to flag the pattern lesson 13 exists to teach.
+    const retry: Topology = {
+      ...base,
+      exchanges: [
+        { id: 'main-ex', label: 'main-ex', type: 'direct', position: { x: 0, y: 0 } },
+        { id: 'retry-ex', label: 'retry-ex', type: 'direct', position: { x: 100, y: 0 } },
+      ],
+      queues: [
+        { id: 'work', label: 'work', kind: 'classic', position: { x: 200, y: 0 }, deadLetterExchange: 'retry-ex' },
+        { id: 'retry-1s', label: 'retry-1s', kind: 'classic', position: { x: 300, y: 0 }, messageTtlMs: 1000, deadLetterExchange: 'main-ex' },
+      ],
+      bindings: [
+        { id: 'b1', exchangeId: 'main-ex', destinationId: 'work', destinationKind: 'queue', routingKey: 'order' },
+        { id: 'b2', exchangeId: 'retry-ex', destinationId: 'retry-1s', destinationKind: 'queue', routingKey: 'order' },
+      ],
+    }
+    expect(validateTopology(retry).some((i) => i.code === 'self-dead-letter-cycle')).toBe(false)
   })
 
   it('leaves a queue with a short ttl alone when nothing routes back into it', () => {
@@ -75,7 +103,7 @@ describe('validateTopology', () => {
         { id: 'b2', exchangeId: 'dlx', destinationId: 'dead', destinationKind: 'queue' },
       ],
     }
-    expect(validateTopology(noCycle).some((i) => i.code === 'short-ttl-dead-letter-cycle')).toBe(false)
+    expect(validateTopology(noCycle).some((i) => i.code === 'self-dead-letter-cycle')).toBe(false)
   })
 
   it('warns about a queue no message can reach', () => {
