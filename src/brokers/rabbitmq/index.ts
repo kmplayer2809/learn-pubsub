@@ -14,7 +14,7 @@ import { useRabbitEditing } from './ui/editing'
 import { vietnameseIssueMessage as issueText } from './ui/issueText'
 import { ConsumerNode, ExchangeNode, PublisherNode, QueueNode } from './ui/nodes'
 import { toFlowEdges, toFlowNodes } from './ui/toFlow'
-import type { BrokerModule, BrokerSandbox } from '../types'
+import type { BrokerModule } from '../types'
 
 // A user-built topology can loop (a DLX pointing back into its own source exchange is
 // one keystroke away) and, unlike a lesson script, nobody vetted it. A lower ceiling
@@ -58,11 +58,7 @@ export const rabbitmq: BrokerModule<EngineState, Topology, ScriptedAction, Valid
   StatePanel: InFlightPanel,
   issueText,
   sandbox: {
-    // SandboxPanel (and the IssuesList it renders) is typed against RabbitMQ's own
-    // discriminated ValidationIssue, not the contract's broader ValidationIssueBase — the
-    // shell only ever hands the sandbox its own broker's issues, so this narrowing is
-    // sound in practice even though the contract can't express it structurally.
-    Panel: SandboxPanel as BrokerSandbox<EngineState, Topology, ScriptedAction>['Panel'],
+    Panel: SandboxPanel,
     useTopology: () => useSandboxStore((s) => s.topology),
     useScript: () => useSandboxStore((s) => s.script),
     reset: () => useSandboxStore.getState().reset(),
