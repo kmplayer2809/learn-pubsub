@@ -1,19 +1,28 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { EngineState, ScriptedAction, Topology } from '../../engine'
 
-export function toFlowNodes(topology: Topology, state: EngineState): Node[] {
+/**
+ * `highlight` carries the active narrative step's `NarrativeStep.highlight` ids, so the
+ * canvas can emphasise exactly the nodes the prose is talking about. Ids that match no
+ * node are ignored: a lesson may name a node it later removes, and a silent miss is far
+ * better than a canvas that throws mid-run. In sandbox mode there is no narrative and the
+ * argument is omitted, which marks every node unhighlighted.
+ */
+export function toFlowNodes(topology: Topology, state: EngineState, highlight: string[] = []): Node[] {
+  const emphasised = new Set(highlight)
+
   const publishers = topology.publishers.map<Node>((p) => ({
     id: p.id,
     type: 'publisher',
     position: p.position,
-    data: { label: p.label },
+    data: { label: p.label, highlighted: emphasised.has(p.id) },
   }))
 
   const exchanges = topology.exchanges.map<Node>((e) => ({
     id: e.id,
     type: 'exchange',
     position: e.position,
-    data: { label: e.label, exchangeType: e.type },
+    data: { label: e.label, exchangeType: e.type, highlighted: emphasised.has(e.id) },
   }))
 
   const queues = topology.queues.map<Node>((q) => ({
@@ -27,6 +36,7 @@ export function toFlowNodes(topology: Topology, state: EngineState): Node[] {
       maxLength: q.maxLength,
       ttlMs: q.messageTtlMs,
       kind: q.kind,
+      highlighted: emphasised.has(q.id),
     },
   }))
 
@@ -40,6 +50,7 @@ export function toFlowNodes(topology: Topology, state: EngineState): Node[] {
       unacked: (state.unacked[c.id] ?? []).length,
       autoAck: c.autoAck,
       crashed: state.crashed.includes(c.id),
+      highlighted: emphasised.has(c.id),
     },
   }))
 

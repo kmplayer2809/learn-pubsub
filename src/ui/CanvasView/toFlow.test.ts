@@ -26,6 +26,63 @@ describe('toFlowNodes', () => {
   })
 })
 
+describe('toFlowNodes narrative highlight', () => {
+  const state = () => createSimulation({ topology: lesson.topology, script: [], seed: 1 }).snapshot()
+
+  it('marks exactly the ids in highlight and no others', () => {
+    // One id from each of the four node kinds is reachable, so this also proves the flag
+    // is set on every kind rather than only the ones that happened to be checked.
+    const nodes = toFlowNodes(lesson.topology, state(), ['p1', 'hello'])
+    const marked = nodes.filter((n) => n.data.highlighted).map((n) => n.id)
+    expect(marked.sort()).toEqual(['hello', 'p1'])
+    expect(nodes.find((n) => n.id === 'default')!.data.highlighted).toBe(false)
+    expect(nodes.find((n) => n.id === 'c1')!.data.highlighted).toBe(false)
+  })
+
+  it('marks the exchange and the consumer when those are the highlighted ids', () => {
+    const nodes = toFlowNodes(lesson.topology, state(), ['default', 'c1'])
+    const marked = nodes.filter((n) => n.data.highlighted).map((n) => n.id)
+    expect(marked.sort()).toEqual(['c1', 'default'])
+  })
+
+  it('marks nothing when no highlight is given, which is the sandbox case', () => {
+    const nodes = toFlowNodes(lesson.topology, state())
+    expect(nodes.every((n) => n.data.highlighted === false)).toBe(true)
+    expect(nodes).toHaveLength(4)
+  })
+
+  it('ignores a highlight id that matches no node instead of throwing', () => {
+    const nodes = toFlowNodes(lesson.topology, state(), ['ghost-node', 'hello'])
+    expect(nodes.filter((n) => n.data.highlighted).map((n) => n.id)).toEqual(['hello'])
+    expect(nodes).toHaveLength(4)
+  })
+
+  it('highlights every id of the active step for every lesson that declares one', () => {
+    // Highlight ids are authored by hand in seventeen lesson files. An id that has drifted
+    // from the topology silently emphasises nothing, which looks identical to a step that
+    // chose not to highlight — so check the whole corpus resolves.
+    for (const currentLesson of LESSONS) {
+      const sim = createSimulation({ topology: currentLesson.topology, script: [], seed: 1 })
+      for (const step of currentLesson.narrative) {
+        if (!step.highlight) continue
+        const nodes = toFlowNodes(currentLesson.topology, sim.snapshot(), step.highlight)
+        const marked = nodes.filter((n) => n.data.highlighted).map((n) => n.id)
+        expect(marked.sort()).toEqual([...step.highlight].sort())
+      }
+    }
+  })
+
+  it('keeps node position objects stable when the highlight changes', () => {
+    // Same hazard as the tick-stability invariant below: a new position object per render
+    // re-layouts the canvas, and the highlight changes on every narrative step boundary.
+    const snapshot = state()
+    const before = new Map(toFlowNodes(lesson.topology, snapshot, ['p1']).map((n) => [n.id, n.position]))
+    for (const node of toFlowNodes(lesson.topology, snapshot, ['hello', 'c1'])) {
+      expect(before.get(node.id)).toBe(node.position)
+    }
+  })
+})
+
 describe('toFlowEdges', () => {
   it('uses source->target ids so the message layer can find them', () => {
     const edges = toFlowEdges(lesson.topology)

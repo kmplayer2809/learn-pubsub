@@ -21,12 +21,19 @@ export function CanvasView({
   topology,
   state,
   script = [],
+  highlight,
   editable = false,
 }: {
   topology: Topology
   state: EngineState
   /** Needed only to derive RPC reply edges, which the topology cannot express. */
   script?: ScriptedAction[]
+  /**
+   * Node ids the active narrative step emphasises. Resolved by `App` — the canvas
+   * deliberately knows nothing about lessons, and the sandbox has no narrative to
+   * resolve, so it passes nothing.
+   */
+  highlight?: string[]
   /** True in the sandbox: enables dragging nodes and drawing new connections. */
   editable?: boolean
 }) {
@@ -36,8 +43,8 @@ export function CanvasView({
   const addBinding = useSandboxStore((s) => s.addBinding)
 
   const nodes = useMemo(
-    () => toFlowNodes(topology, state).map((n) => ({ ...n, selected: n.id === selectedNodeId })),
-    [topology, state, selectedNodeId],
+    () => toFlowNodes(topology, state, highlight).map((n) => ({ ...n, selected: n.id === selectedNodeId })),
+    [topology, state, highlight, selectedNodeId],
   )
   const edges = useMemo(() => toFlowEdges(topology, script), [topology, script])
 

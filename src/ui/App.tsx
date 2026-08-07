@@ -5,6 +5,7 @@ import { useAppStore } from '../sim/store'
 import { useSimulation } from '../sim/useSimulation'
 import { CanvasView } from './CanvasView/CanvasView'
 import { InFlightPanel } from './canvas/InFlightPanel'
+import { activeStepIndex } from './Inspector/activeStep'
 import { Inspector } from './Inspector/Inspector'
 import { LessonSidebar } from './LessonSidebar/LessonSidebar'
 import { Transport } from './Transport/Transport'
@@ -28,6 +29,12 @@ export default function App() {
   const topology = sandbox ? sandboxTopology : lesson!.topology
   const script = sandbox ? sandboxScript : lesson!.script
   const durationMs = sandbox ? SANDBOX_TRANSPORT_DURATION_MS : lesson!.durationMs
+  // The canvas emphasises whatever the narrative step currently on screen names. Resolved
+  // here for the same reason `topology`/`script` are: this is the one place that knows
+  // whether a lesson or the sandbox is driving, and the sandbox has no narrative at all.
+  const highlight = sandbox
+    ? undefined
+    : lesson!.narrative[activeStepIndex(lesson!.narrative, state.now)]?.highlight
 
   return (
     <div className="flex h-full bg-slate-950 text-slate-100">
@@ -36,7 +43,13 @@ export default function App() {
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
-          <CanvasView topology={topology} state={state} script={script} editable={sandbox} />
+          <CanvasView
+            topology={topology}
+            state={state}
+            script={script}
+            highlight={highlight}
+            editable={sandbox}
+          />
         </div>
         <div className="border-t border-slate-800">
           <InFlightPanel state={state} />
