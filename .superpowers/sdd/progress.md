@@ -449,3 +449,42 @@ STATUS: all 21 tasks complete. Remaining: superpowers:finishing-a-development-br
   (delivery.ts, advanced.ts, dlx.ts, validate.ts). Each defect was independently
   reproduced before the fix and re-probed after, and all 17 lesson journals and metrics
   are byte-identical across the wave, but a reviewer has not seen that diff.
+
+=== POST-REVIEW of a6f88ff..fe99dd5 (the 12 previously unreviewed commits) ===
+  Verdict: with fixes — 0 Critical, 2 Important, 7 Minor. Full text in
+  .superpowers/sdd/post-review.md. Reviewer cleared the things I had flagged:
+  - C1 is correct on EVERY path, including the contested no-clearInFlight decision
+    (verified by forcing crash+recover inside one TRAVEL_MS; no ghost in-flight anywhere
+    in the corpus). C1 also does not rest on the false M1 invariant — the reviewer forced
+    deliver-before-crash at an equal timestamp and the older applyConsumeDone guard covers
+    it. M2's severity drop is safe: no lesson trips it, run(upTo) is virtual-time bounded
+    so there is no freeze, and the ceiling still fires under load.
+  - M3 quietly fixed a SECOND real bug nobody had named: acking on a channel that never
+    received the delivery.
+  - Task 21 spec-complete, no defects.
+
+Both Important findings fixed by the controller directly (53b77d0), each reproduced first:
+  - I5 was only HALF fixed by 8ee109a. The narrowed (id, enqueuedAt) lookup still deleted
+    with `filter`, and that pair is NOT unique — a symmetric fan-in through two exchanges
+    reaches one queue by two equal-length paths, so both copies land in the same
+    millisecond sharing both fields. Measured: two copies enqueued at 1800, then
+    `expired 1 / deadLettered 1` for TWO messages and dead depth 1. One copy vanished with
+    no journal line and no metric. Now splices by index. RED-PROBED: restoring the filter
+    gives "expected 1 to be 2".
+    The old test could never have caught this — it manufactured a +100ms offset the engine
+    cannot produce. The new one drives the whole engine and pins that both copies really
+    do share an enqueuedAt, so it cannot silently stop testing the thing.
+  - M2's threshold was justified by a mechanism that does not exist: the TTL timer starts
+    at ENQUEUE, already after the travel, so nothing "re-expires before it finishes
+    moving". 599 and 600 cycled identically, only one warned. Threshold removed; guard
+    stays narrow (DLX must bind back to the SAME queue) so lesson 13's longer
+    work->retry-ex->retry-1s->main-ex->work cycle is untouched — pinned by a new test.
+    Renamed short-ttl-dead-letter-cycle -> self-dead-letter-cycle. Message no longer
+    promises the ceiling halts the run; at low volume a single message outlasts the 60s
+    the Sandbox transport reaches.
+  Verified after: all 17 lessons raise ZERO validation issues and metrics are unchanged;
+  confirmed === published on all 17. 397 tests / 32 files, typecheck, lint, build clean.
+
+  The 7 Minor findings in post-review.md are NOT fixed and are the only open items.
+
+STATUS: all tasks complete, both reviews closed. Next: superpowers:finishing-a-development-branch.
