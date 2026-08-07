@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getBroker } from '../brokers/registry'
 import type { EngineState, Simulation, Topology, ValidationIssue } from '../brokers/rabbitmq/engine'
 import * as engineModule from '../brokers/rabbitmq/engine'
 import { LESSONS } from '../brokers/rabbitmq/lessons/registry'
@@ -358,5 +359,35 @@ describe('useSimulation', () => {
     // journal built up through t=4000 has been discarded down to just that one entry.
     expect(result.current.state.journal.length).toBe(1)
     expect(result.current.state.journal[0]?.at).toBe(0)
+  })
+
+  // Regression for the Task 9 review finding: NO_SANDBOX.getScript used to return a fresh
+  // `[]` literal on every call. useSyncExternalStore compares snapshots with Object.is, so
+  // a broker whose `sandbox` is undefined made every render produce a "changed" snapshot,
+  // which drives React into "Maximum update depth exceeded". rabbitmq (the only broker
+  // registered today) always has a sandbox, so this path is only exercised by temporarily
+  // blanking it here — the next broker to ship without one (Redis) would otherwise hit this
+  // live. getScript must keep returning the SAME reference across calls.
+  it('a broker with no sandbox does not spin useSyncExternalStore into an infinite render loop', () => {
+    const broker = getBroker('rabbitmq')
+    const original = broker.sandbox
+    try {
+      ;(broker as { sandbox?: unknown }).sandbox = undefined
+
+      const { result, unmount } = renderHook(() => useSimulation())
+
+      expect(result.current.state).toBeDefined()
+      expect(result.current.issues).toEqual([])
+
+      // Drive a few more renders (mirrors what a mounted app keeps doing); an unstable
+      // getSnapshot would have already blown up on mount, but this makes sure nothing
+      // about the ongoing render cycle stays broken either.
+      act(() => useAppStore.getState().seek(100))
+      expect(result.current.state).toBeDefined()
+
+      unmount()
+    } finally {
+      ;(broker as { sandbox?: unknown }).sandbox = original
+    }
   })
 })

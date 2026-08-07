@@ -16,10 +16,16 @@ export interface SimulationView {
 // there must always be *some* subscribe/getter pair to hand it. This one never notifies and
 // always reads back "nothing" — indistinguishable, from the caller's point of view, from a
 // broker that genuinely has no sandbox.
+// Hoisted so `getScript` below always returns this exact reference: `useSyncExternalStore`
+// compares successive snapshots with `Object.is`, and a fresh `[]` literal returned on every
+// call would never be `Object.is`-equal to the previous one, forcing React into an infinite
+// re-render loop the moment a broker with no sandbox becomes active.
+const EMPTY_SCRIPT: never[] = []
+
 const NO_SANDBOX = {
   subscribe: () => () => {},
   getTopology: () => undefined,
-  getScript: () => [] as never[],
+  getScript: () => EMPTY_SCRIPT,
 }
 
 /**
