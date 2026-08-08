@@ -265,7 +265,7 @@ Titles may stay English when they are the plain name of the concept being taught
 - Shell tests: the broker switcher changes lessons, canvas, and state panel together; a
   broker without a sandbox hides the Sandbox button; switching brokers resets transport
   state and replays from zero.
-- The existing 322 RabbitMQ tests must stay green through the restructure. They move with
+- The existing 397 RabbitMQ tests must stay green through the restructure. They move with
   their code; only import paths change in phase 1.
 
 ## 9. Delivery phases

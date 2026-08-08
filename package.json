@@ -1,5 +1,5 @@
 {
-  "name": "rabbitmq-visualizer",
+  "name": "broker-visualizer",
   "private": true,
   "version": "0.0.0",
   "type": "module",

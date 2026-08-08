@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Behaviour must not change in this plan.** Every one of the 322 existing tests stays green from the first commit to the last. This plan moves and generalises code; it does not rewrite RabbitMQ behaviour, lesson content, or copy.
+- **Behaviour must not change in this plan.** Every one of the 397 existing tests stays green from the first commit to the last. This plan moves and generalises code; it does not rewrite RabbitMQ behaviour, lesson content, or copy.
 - **Typecheck command is `npm run typecheck`** (runs `tsc -b`). Never `npx tsc --noEmit` — the root `tsconfig.json` is project-references only and compiles zero files, so it exits 0 regardless of errors.
 - **Determinism contract holds:** no `Math.random`, `Date.now`, `new Date`, `setTimeout`, `setInterval`, `performance.now`, no `document.`/`window.`/`process.`, no dynamic `import(`/`require(`, and no imports of `react`, `zustand`, or `@xyflow/react` anywhere under `src/shell/kernel/**` or `src/brokers/*/engine/**` (excluding `*.test.ts`).
 - **User-facing copy is Vietnamese**; RabbitMQ/Redis/programming terms stay English. New UI strings in this plan follow that rule.
@@ -21,6 +21,163 @@
 - **No new runtime dependencies.** `package.json` dependencies stay exactly: `@xyflow/react`, `react`, `react-dom`, `zustand`.
 
 ---
+
+## Amendment (2026-08-08): no hooks in the BrokerModule contract
+
+Task 9's implementation and review superseded the sandbox-accessor design in
+Tasks 7, 9, 10, and 11. The plan originally had `BrokerSandbox` expose hooks —
+`useTopology()`, `useScript()`, `useEditing(topology)` — and had the shell call
+them behind `broker.sandbox?....` with a `NO_SANDBOX` / `NO_EDITING` fallback.
+
+That is unsound. React requires the hook count and order to be stable across
+renders of the same component instance; it does not care that switching brokers
+will rebuild the tree. `useRabbitEditing` calls three hooks and `NO_EDITING`
+calls none, so selecting a broker without a sandbox changes the hook count of a
+mounted component. The plan's justification ("a broker change already forces a
+full rebuild") argued the wrong thing.
+
+**The contract carries no hooks.** `BrokerSandbox` exposes plain functions:
+
+```ts
+export interface BrokerSandbox<S extends KernelState, T, A, I extends ValidationIssueBase> {
+  Panel: ComponentType<{ state: S; issues: I[] }>
+  getTopology(): T
+  getScript(): A[]
+  /** Zustand's subscribe: registers a listener, returns the unsubscribe. */
+  subscribe(onStoreChange: () => void): () => void
+  reset(): void
+  maxEvents: number
+  transportDurationMs: number
+  /** Canvas edit handlers. Plain functions, not hooks: they are event handlers
+   *  and read the broker's store through getState() when they fire. */
+  editing: {
+    onNodesChange(topology: T, changes: NodeChange[]): void
+    onConnect(topology: T, connection: Connection): void
+  }
+}
+```
+
+The shell reads sandbox state through exactly one `useSyncExternalStore` call per
+value, at a fixed call site, so the hook count never varies.
+
+**Every `getSnapshot` must return a stable reference.** `useSyncExternalStore`
+compares snapshots with `Object.is`, so a `getSnapshot` returning a fresh object
+or array literal re-renders forever. The no-sandbox fallback therefore returns
+module-scope constants (`EMPTY_SCRIPT`, `undefined`), never literals. This bug
+shipped once in Task 9 and was caught only because a reviewer looked for it;
+`src/shell/useSimulation.test.tsx` now carries a regression test that blanks the
+registered module's `sandbox` and asserts the hook settles.
+
+Consequences for the remaining tasks:
+
+- **Task 10:** `CanvasView` must not call `broker.sandbox?.useEditing(topology)`.
+  It calls `broker.sandbox?.editing.onNodesChange` / `.onConnect` inside its own
+  `useCallback`s, or passes them straight to React Flow. `NO_EDITING` disappears.
+  `src/brokers/rabbitmq/ui/editing.ts` becomes plain functions taking the topology
+  and reading `useSandboxStore.getState()`.
+- **Task 10:** `App` takes sandbox topology/script from `useSimulation`'s own
+  resolution rather than calling accessors itself, so it gains no new hook.
+- **Task 11:** unchanged; the switcher touches no sandbox accessor.
+
+## Amendment (2026-08-08): the Inspector's broker-specific panes become module slots
+
+Task 10's Step 5 assumed `issueText` was the Inspector's only RabbitMQ
+dependency. It is not. Three more survive, and once `App` passes the module's
+generic `Lesson<T, A>` and `KernelState`, they stop typechecking:
+
+- `NodeConfig` reads `lesson.topology.queues/consumers/exchanges` and
+  `state.queues/unacked` — pure AMQP.
+- `ExportDialog` (and the "Xuất code" button that opens it) is RabbitMQ code
+  generation, imported from `brokers/rabbitmq/sandbox/`.
+- `MetricsGrid` takes RabbitMQ's `Metrics`; `KernelState` has no `metrics`.
+
+The spec's "Inspector is unchanged" means its *layout* is unchanged — narrative,
+checkpoints, issues, node detail, metrics, journal, in that order. The broker
+still owns what goes in the broker-specific slots. So `BrokerModule` gains three
+members, matching the `StatePanel`/`issueText` pattern already established:
+
+```ts
+/** Counters for the inspector's metrics grid. Keys render verbatim, so each
+ *  broker names its own — the grid stays driven by Object.entries. */
+metrics(state: S): Record<string, number>
+/** Detail pane for the selected canvas node. */
+NodeConfig: ComponentType<{ lesson: Lesson<T, A>; state: S; nodeId: string }>
+/** Code export for a lesson's topology. Optional: a broker without one gets no
+ *  "Xuất code" button, exactly as a broker without a sandbox gets no Sandbox button. */
+ExportDialog?: ComponentType<{ topology: T; onClose(): void }>
+```
+
+`NodeConfig` is required, not optional: every broker has nodes and the shell has
+nothing generic to fall back on. The "Node này không có cấu hình." fallback moves
+into RabbitMQ's own `NodeConfig`, where it belongs — it is that broker's answer
+for a node it does not recognise, not the shell's.
+
+`Inspector` then takes `broker: AnyBrokerModule` in place of the `issueText` prop
+and reads all four slots off it, and its `lesson`/`state` props widen to
+`Lesson<any, any>` / `KernelState`. `AnyBrokerModule` is `BrokerModule<any, ...>`,
+so the slots' props are `any`-typed at that boundary and no cast is needed — the
+concrete types bind inside each broker's own `index.ts`, which is the one place
+that knows them. This is the same boundary `StatePanel` already crosses in `App`.
+
+`IssuesList` and `MetricsGrid` stay exported for `SandboxPanel`, which passes its
+own broker-specific `issueText` and metrics directly.
+
+**Supersedes:** Task 7's `BrokerModule` listing (add the three members; RabbitMQ
+supplies `metrics: (s) => s.metrics`, its own `NodeConfig`, and its `ExportDialog`)
+and Task 10's Step 5.
+
+## Amendment (2026-08-08): the store must not import the broker registry
+
+Task 8's review found a real import cycle:
+`store.ts -> registry.ts -> rabbitmq/index.ts -> SandboxPanel.tsx -> Inspector.tsx -> store.ts`.
+Reading `DEFAULT_BROKER_ID` while that cycle is unresolved yields `undefined`
+rather than throwing, so `brokerId` silently initialised to `undefined` whenever
+something imported `registry.ts` first. A `try/catch` cannot fix this: nothing is
+thrown, and whether the wrong branch runs depends on module evaluation order,
+which differs between Vite dev, the production bundle, and Vitest.
+
+The cycle is broken by splitting the broker *catalog* — the plain data the shell
+needs before any component exists — out of the module that pulls in components:
+
+`src/brokers/catalog.ts` (imports nothing but types):
+
+```ts
+/**
+ * Plain broker facts the shell needs at module-evaluation time. This file must
+ * never import a component, an engine, or `registry.ts` — importing any of them
+ * would recreate the cycle this file exists to break.
+ */
+export interface BrokerCatalogEntry {
+  id: string
+  label: string
+  defaultLessonId: string
+}
+
+export const BROKER_CATALOG: BrokerCatalogEntry[] = [
+  { id: 'rabbitmq', label: 'RabbitMQ', defaultLessonId: '01-hello-world' },
+]
+
+export const DEFAULT_BROKER_ID = 'rabbitmq'
+
+export function catalogEntry(id: string): BrokerCatalogEntry {
+  return BROKER_CATALOG.find((b) => b.id === id)
+    ?? BROKER_CATALOG.find((b) => b.id === DEFAULT_BROKER_ID)!
+}
+```
+
+Consequences, which supersede the corresponding text in Tasks 7, 8, and 11:
+
+- `src/shell/store.ts` imports **only** `./brokers/catalog`, never `registry.ts`.
+  Its initial `lessonId` is `catalogEntry(DEFAULT_BROKER_ID).defaultLessonId` and
+  `setBroker` validates against `BROKER_CATALOG`. No `try/catch`, no fallback
+  literals: with the cycle gone there is nothing to fall back from.
+- `src/brokers/registry.ts` re-exports `DEFAULT_BROKER_ID` from the catalog rather
+  than declaring its own, so there is one definition.
+- `src/brokers/registry.test.ts` gains a case asserting the two agree — every
+  catalog entry has a module with the same `label` and `defaultLessonId`, and
+  every module has a catalog entry. That test is what keeps the split honest.
+- `BrokerSwitcher` (Task 11) may render from either; prefer `BROKERS` so it shows
+  what is actually loadable.
 
 ## File Structure
 
@@ -109,7 +266,7 @@ Expected: exit 0, no output. If a path is still wrong, `tsc` names the exact fil
 - [ ] **Step 5: Run the full suite**
 
 Run: `npm test`
-Expected: all tests pass, same count as before the move (322).
+Expected: all tests pass, same count as before the move (397).
 
 - [ ] **Step 6: Lint**
 
@@ -196,7 +353,7 @@ Repeat typecheck until it exits 0.
 - [ ] **Step 5: Run the suite**
 
 Run: `npm test`
-Expected: 322 passing, unchanged.
+Expected: 397 passing, unchanged.
 
 - [ ] **Step 6: Lint and commit**
 
@@ -698,7 +855,7 @@ export { MAX_EVENTS_PER_RUN, MAX_JOURNAL, type Simulation } from '../../../shell
 - [ ] **Step 7: Run the full suite**
 
 Run: `npm test`
-Expected: all 322+ pass. The engine's own `index.test.ts`, `simulation.test.ts`, and the lesson determinism/snapshot tests are the proof that the extraction changed no behaviour — a snapshot diff here means the loop was altered, not merely moved.
+Expected: all 397+ pass. The engine's own `index.test.ts`, `simulation.test.ts`, and the lesson determinism/snapshot tests are the proof that the extraction changed no behaviour — a snapshot diff here means the loop was altered, not merely moved.
 
 - [ ] **Step 8: Typecheck, lint, commit**
 
@@ -948,11 +1105,11 @@ export interface BrokerModule<S extends KernelState, T, A, I extends ValidationI
   inFlight(state: S): InFlight[]
   StatePanel: ComponentType<{ state: S }>
   issueText(issue: I): string
-  sandbox?: BrokerSandbox<S, T, A>
+  sandbox?: BrokerSandbox<S, T, A, I>
 }
 
-export interface BrokerSandbox<S extends KernelState, T, A> {
-  Panel: ComponentType<{ state: S; issues: ValidationIssueBase[] }>
+export interface BrokerSandbox<S extends KernelState, T, A, I extends ValidationIssueBase> {
+  Panel: ComponentType<{ state: S; issues: I[] }>
   useTopology(): T
   useScript(): A[]
   reset(): void
@@ -1626,11 +1783,24 @@ describe('BrokerSwitcher', () => {
     expect(active?.getAttribute('data-broker-id')).toBe('rabbitmq')
   })
 
-  it('clicking a tab selects that broker', () => {
+  // Asserting only that brokerId equals the clicked tab's id would pass with an
+  // onClick that does nothing at all, because `rabbitmq` is the sole registered
+  // broker and is already active. So put the store somewhere setBroker must move
+  // it from, and assert the move — this stays honest once Redis joins BROKERS.
+  it('clicking a tab runs setBroker, not just a no-op handler', () => {
+    act(() => {
+      useAppStore.getState().openSandbox()
+      useAppStore.getState().selectNode('q1')
+    })
+    const before = useAppStore.getState().replayToken
     render(<BrokerSwitcher />)
     const tab = screen.getAllByTestId('broker-tab')[0]!
     act(() => tab.click())
-    expect(useAppStore.getState().brokerId).toBe(tab.getAttribute('data-broker-id'))
+    const after = useAppStore.getState()
+    expect(after.brokerId).toBe(tab.getAttribute('data-broker-id'))
+    expect(after.sandbox).toBe(false)
+    expect(after.selectedNodeId).toBeUndefined()
+    expect(after.replayToken).toBe(before + 1)
   })
 })
 ```
@@ -1686,18 +1856,23 @@ export function BrokerSwitcher() {
 
 - [ ] **Step 4: Mount it in the sidebar**
 
-In `src/shell/ui/LessonSidebar/LessonSidebar.tsx`, replace the static title line
+In `src/shell/ui/LessonSidebar/LessonSidebar.tsx`, replace the title line. Task 10
+already made it read from the module, so at HEAD it is
 
 ```tsx
-<div className="px-3 py-3 text-sm font-semibold text-slate-200">RabbitMQ Visualizer</div>
+<div className="px-3 py-3 text-sm font-semibold text-slate-200">{broker.label} Visualizer</div>
 ```
 
-with
+Replace it with the switcher above a title that is just the label — "Visualizer"
+was there to name the app when the app was one broker; the switcher now carries
+that job, and repeating the word beside a broker tab reads as noise:
 
 ```tsx
 <BrokerSwitcher />
 <div className="px-3 py-3 text-sm font-semibold text-slate-200">{broker.label}</div>
 ```
+
+Import `BrokerSwitcher` from `'../BrokerSwitcher/BrokerSwitcher'`.
 
 - [ ] **Step 5: Run the tests**
 
@@ -1774,7 +1949,7 @@ git commit -m "docs: describe the multi-broker structure and how to add a broker
 
 After Task 12, all of the following must hold:
 
-- `npm test` — every test passes, including the pre-existing 322.
+- `npm test` — every test passes, including the pre-existing 397.
 - `npm run typecheck` — exit 0.
 - `npm run lint` — exit 0.
 - `npm run build` — exit 0.
