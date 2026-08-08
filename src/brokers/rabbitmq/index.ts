@@ -7,11 +7,13 @@ import {
   type ValidationIssue,
 } from './engine'
 import { LESSONS, LESSON_GROUPS } from './lessons/registry'
+import { ExportDialog } from './sandbox/ExportDialog'
 import { SandboxPanel } from './sandbox/SandboxPanel'
 import { useSandboxStore } from './sandbox/sandboxStore'
 import { InFlightPanel } from './ui/InFlightPanel'
-import { useRabbitEditing } from './ui/editing'
+import { onConnect, onNodesChange } from './ui/editing'
 import { vietnameseIssueMessage as issueText } from './ui/issueText'
+import { NodeConfig } from './ui/NodeConfig'
 import { ConsumerNode, ExchangeNode, PublisherNode, QueueNode } from './ui/nodes'
 import { toFlowEdges, toFlowNodes } from './ui/toFlow'
 import type { BrokerModule } from '../types'
@@ -57,6 +59,13 @@ export const rabbitmq: BrokerModule<EngineState, Topology, ScriptedAction, Valid
     })),
   StatePanel: InFlightPanel,
   issueText,
+  // `Metrics` (engine/types.ts) has no index signature, so `state.metrics` itself
+  // doesn't structurally satisfy `Record<string, number>` — TS only accepts a fresh
+  // object literal there, not a variable of a named interface type, even though every
+  // field is a number. Spreading makes a fresh literal instead of casting the mismatch away.
+  metrics: (state) => ({ ...state.metrics }),
+  NodeConfig,
+  ExportDialog,
   sandbox: {
     Panel: SandboxPanel,
     getTopology: () => useSandboxStore.getState().topology,
@@ -65,6 +74,6 @@ export const rabbitmq: BrokerModule<EngineState, Topology, ScriptedAction, Valid
     reset: () => useSandboxStore.getState().reset(),
     maxEvents: SANDBOX_MAX_EVENTS,
     transportDurationMs: SANDBOX_TRANSPORT_DURATION_MS,
-    useEditing: useRabbitEditing,
+    editing: { onNodesChange, onConnect },
   },
 }

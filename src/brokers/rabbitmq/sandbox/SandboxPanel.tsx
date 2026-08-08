@@ -3,6 +3,7 @@ import type { EngineState, Topology, ValidationIssue } from '../engine'
 import { EventLog, HaltedBanner, IssuesList, MetricsGrid } from '../../../shell/ui/Inspector/Inspector'
 import { useAppStore } from '../../../shell/store'
 import { ExportDialog } from './ExportDialog'
+import { vietnameseIssueMessage } from '../ui/issueText'
 import { type SandboxNodeKind, useSandboxStore } from './sandboxStore'
 
 const PALETTE: { kind: SandboxNodeKind; label: string }[] = [
@@ -280,7 +281,7 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
 
       {exportOpen && <ExportDialog topology={topology} onClose={() => setExportOpen(false)} />}
 
-      <IssuesList issues={issues} />
+      <IssuesList issues={issues} issueText={vietnameseIssueMessage} />
       <HaltedBanner halted={state.halted} />
 
       <section>
@@ -305,7 +306,10 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
 
       <section>
         <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Chỉ số</h3>
-        <MetricsGrid metrics={state.metrics} />
+        {/* Fresh literal, not `state.metrics` directly: `Metrics` has no index signature,
+            so only a freshly-spread object structurally satisfies `MetricsGrid`'s
+            `Record<string, number>` prop (see the same note on the module's `metrics`). */}
+        <MetricsGrid metrics={{ ...state.metrics }} />
       </section>
 
       <section>

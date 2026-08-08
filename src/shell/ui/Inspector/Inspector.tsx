@@ -1,71 +1,42 @@
 import { useState } from 'react'
-import type { EngineState, JournalEntry, Metrics, ValidationIssue } from '../../../brokers/rabbitmq/engine'
-import type { Lesson } from '../../../brokers/rabbitmq/lessons/types'
-import { ExportDialog } from '../../../brokers/rabbitmq/sandbox/ExportDialog'
+import type { AnyBrokerModule } from '../../../brokers/types'
+import type { JournalEntry, KernelState, ValidationIssueBase } from '../../kernel/types'
+import type { Lesson } from '../../lesson/types'
 import { useAppStore } from '../../store'
 import { activeStepIndex } from '../../lesson/activeStep'
 import { CheckpointSection } from './CheckpointCard'
-import { vietnameseIssueMessage, vietnameseSeverityLabel } from '../../../brokers/rabbitmq/ui/issueText'
 import { Markdown, MarkdownInline } from './Markdown'
 
-function NodeConfig({ lesson, state, nodeId }: { lesson: Lesson; state: EngineState; nodeId: string }) {
-  const queue = lesson.topology.queues.find((q) => q.id === nodeId)
-  const consumer = lesson.topology.consumers.find((c) => c.id === nodeId)
-  const exchange = lesson.topology.exchanges.find((e) => e.id === nodeId)
-
-  if (queue) {
-    return (
-      <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
-        <dt>kind</dt><dd className="text-slate-200">{queue.kind}</dd>
-        <dt>depth</dt><dd className="text-slate-200">{(state.queues[queue.id] ?? []).length}</dd>
-        <dt>ttl</dt><dd className="text-slate-200">{queue.messageTtlMs ?? '—'}</dd>
-        <dt>max-length</dt><dd className="text-slate-200">{queue.maxLength ?? '—'}</dd>
-        <dt>dead-letter</dt><dd className="text-slate-200">{queue.deadLetterExchange ?? '—'}</dd>
-        <dt>max-priority</dt><dd className="text-slate-200">{queue.maxPriority ?? '—'}</dd>
-      </dl>
-    )
-  }
-
-  if (consumer) {
-    return (
-      <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
-        <dt>queue</dt><dd className="text-slate-200">{consumer.queueId}</dd>
-        <dt>prefetch</dt><dd className="text-slate-200">{consumer.prefetch || 'không giới hạn'}</dd>
-        <dt>ack mode</dt><dd className="text-slate-200">{consumer.autoAck ? 'auto' : 'manual'}</dd>
-        <dt>unacked</dt><dd className="text-slate-200">{(state.unacked[consumer.id] ?? []).length}</dd>
-        <dt>processing</dt><dd className="text-slate-200">{consumer.processingMs}ms</dd>
-        <dt>nack rate</dt><dd className="text-slate-200">{consumer.nackRate}</dd>
-      </dl>
-    )
-  }
-
-  if (exchange) {
-    const bindings = lesson.topology.bindings.filter((b) => b.exchangeId === exchange.id)
-    return (
-      <ul className="space-y-1 text-[11px] text-slate-400">
-        <li>type: <span className="text-slate-200">{exchange.type}</span></li>
-        {bindings.map((b) => (
-          <li key={b.id}>
-            <span className="font-mono text-sky-300">{b.routingKey ?? JSON.stringify(b.headers)}</span>
-            {' → '}
-            <span className="text-slate-200">{b.destinationId}</span>
-          </li>
-        ))}
-      </ul>
-    )
-  }
-
-  return <p className="text-[11px] text-slate-500">Node này không có cấu hình.</p>
+/** Vietnamese label for a severity shared by every broker's `ValidationIssueBase`. */
+const SEVERITY_LABEL: Record<ValidationIssueBase['severity'], string> = {
+  error: 'lỗi',
+  warning: 'cảnh báo',
 }
 
-/** Shared with SandboxPanel so a topology's validation errors/warnings render identically in both places. */
-export function IssuesList({ issues }: { issues: ValidationIssue[] }) {
+/**
+ * Shared with SandboxPanel so a topology's validation errors/warnings render identically
+ * in both places. `issueText` renders the broker-specific sentence; this component and
+ * its caller never know what shape an issue's own fields take beyond the shared base.
+ */
+export function IssuesList({
+  issues,
+  issueText,
+}: {
+  issues: ValidationIssueBase[]
+  // Method shorthand (not `issueText: (issue: ValidationIssueBase) => string`)
+  // deliberately: TypeScript checks method-shaped parameters bivariantly, which is what
+  // lets a broker's own narrower issue-rendering function (e.g. RabbitMQ's
+  // `vietnameseIssueMessage(issue: ValidationIssue)`, which `switch`es on a `code` field
+  // `ValidationIssueBase` doesn't have) satisfy this prop without a cast. A strict
+  // property-typed function here would reject that assignment outright.
+  issueText(issue: ValidationIssueBase): string
+}) {
   if (issues.length === 0) return null
   return (
     <section className="rounded border border-rose-700 bg-rose-950 p-2">
       {issues.map((issue, i) => (
         <p key={i} className="text-[11px] text-rose-200">
-          {vietnameseSeverityLabel(issue.severity)}: {vietnameseIssueMessage(issue)}
+          {SEVERITY_LABEL[issue.severity]}: {issueText(issue)}
         </p>
       ))}
     </section>
@@ -87,7 +58,7 @@ export function HaltedBanner({ halted }: { halted?: { reason: string } }) {
  * counter in `Metrics` appears in both surfaces with no per-counter work.
  * Metric keys (`published`, `routed`, ...) stay English, matching lesson mode.
  */
-export function MetricsGrid({ metrics }: { metrics: Metrics }) {
+export function MetricsGrid({ metrics }: { metrics: Record<string, number> }) {
   return (
     <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
       {Object.entries(metrics).map(([key, value]) => (
@@ -118,17 +89,20 @@ export function EventLog({ journal }: { journal: JournalEntry[] }) {
 }
 
 export function Inspector({
+  broker,
   lesson,
   state,
   issues,
 }: {
-  lesson: Lesson
-  state: EngineState
-  issues: ValidationIssue[]
+  broker: AnyBrokerModule
+  lesson: Lesson<any, any>
+  state: KernelState
+  issues: ValidationIssueBase[]
 }) {
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
   const step = lesson.narrative[activeStepIndex(lesson.narrative, state.now)]
   const [exportOpen, setExportOpen] = useState(false)
+  const { NodeConfig, ExportDialog } = broker
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto" data-testid="inspector">
@@ -137,24 +111,28 @@ export function Inspector({
           <h2 className="mb-1 text-sm font-semibold text-slate-100">
             <MarkdownInline text={step?.title ?? lesson.title} />
           </h2>
-          <button
-            onClick={() => setExportOpen(true)}
-            data-testid="export-button"
-            className="shrink-0 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
-          >
-            Xuất code
-          </button>
+          {ExportDialog && (
+            <button
+              onClick={() => setExportOpen(true)}
+              data-testid="export-button"
+              className="shrink-0 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+            >
+              Xuất code
+            </button>
+          )}
         </div>
         <Markdown text={step?.body ?? lesson.summary} />
       </section>
 
-      {exportOpen && <ExportDialog topology={lesson.topology} onClose={() => setExportOpen(false)} />}
+      {exportOpen && ExportDialog && (
+        <ExportDialog topology={lesson.topology} onClose={() => setExportOpen(false)} />
+      )}
 
       {/* Lesson-only: the sandbox has no narrative and no checkpoints, so SandboxPanel
           deliberately does not render this the way it shares IssuesList/MetricsGrid. */}
       <CheckpointSection lessonId={lesson.id} checkpoints={lesson.checkpoints} now={state.now} />
 
-      <IssuesList issues={issues} />
+      <IssuesList issues={issues} issueText={broker.issueText} />
 
       <HaltedBanner halted={state.halted} />
 
@@ -165,7 +143,7 @@ export function Inspector({
         {selectedNodeId ? (
           <NodeConfig lesson={lesson} state={state} nodeId={selectedNodeId} />
         ) : (
-          <MetricsGrid metrics={state.metrics} />
+          <MetricsGrid metrics={broker.metrics(state)} />
         )}
       </section>
 

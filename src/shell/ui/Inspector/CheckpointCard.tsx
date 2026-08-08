@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Checkpoint } from '../../../brokers/rabbitmq/lessons/types'
+import type { Checkpoint } from '../../lesson/types'
 import { Markdown, MarkdownInline } from './Markdown'
 
 /**

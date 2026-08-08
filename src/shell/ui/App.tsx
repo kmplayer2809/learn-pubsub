@@ -1,46 +1,34 @@
-import type { EngineState, ValidationIssue } from '../../brokers/rabbitmq/engine'
-import { getLesson } from '../../brokers/rabbitmq/lessons/registry'
-import { SandboxPanel } from '../../brokers/rabbitmq/sandbox/SandboxPanel'
-import { useSandboxStore } from '../../brokers/rabbitmq/sandbox/sandboxStore'
+import { getBroker } from '../../brokers/registry'
 import { useAppStore } from '../store'
 import { useSimulation } from '../useSimulation'
 import { CanvasView } from './CanvasView/CanvasView'
-import { InFlightPanel } from '../../brokers/rabbitmq/ui/InFlightPanel'
 import { activeStepIndex } from '../lesson/activeStep'
 import { Inspector } from './Inspector/Inspector'
 import { LessonSidebar } from './LessonSidebar/LessonSidebar'
 import { Transport } from './Transport/Transport'
 
-// Sandbox runs are open-ended (see useSimulation), but the transport scrubber
-// still needs a finite range to draw; this matches the generator's fixed
-// 60-second horizon plus headroom, mirroring how a lesson's own durationMs
-// sizes the same control.
-const SANDBOX_TRANSPORT_DURATION_MS = 60_000
-
 export default function App() {
+  const brokerId = useAppStore((s) => s.brokerId)
+  const broker = getBroker(brokerId)
   const sandbox = useAppStore((s) => s.sandbox)
   const lessonId = useAppStore((s) => s.lessonId)
-  const lesson = getLesson(lessonId)
-  // useSimulation now returns the broker-agnostic KernelState/ValidationIssueBase; App.tsx
-  // is still RabbitMQ-only until Tasks 10-11 wire it through the broker abstraction, so it
-  // casts back to the concrete types at its own boundary rather than at every call site.
-  const { state: rawState, issues: rawIssues, stepOnce } = useSimulation()
-  const state = rawState as EngineState
-  const issues = rawIssues as ValidationIssue[]
-  const sandboxTopology = useSandboxStore((s) => s.topology)
-  const sandboxScript = useSandboxStore((s) => s.script)
+  const lesson = broker.lessons.find((l) => l.id === lessonId)
+  const { state, issues, stepOnce, topology: simTopology, script: simScript } = useSimulation()
+  const inSandbox = sandbox && Boolean(broker.sandbox)
 
-  if (!sandbox && !lesson) return <div className="p-4 text-slate-200">Không tìm thấy bài học.</div>
+  if (!inSandbox && !lesson) return <div className="p-4 text-slate-200">Không tìm thấy bài học.</div>
 
-  const topology = sandbox ? sandboxTopology : lesson!.topology
-  const script = sandbox ? sandboxScript : lesson!.script
-  const durationMs = sandbox ? SANDBOX_TRANSPORT_DURATION_MS : lesson!.durationMs
+  const topology = inSandbox ? simTopology : lesson!.topology
+  const script = inSandbox ? simScript : lesson!.script
+  const durationMs = inSandbox ? broker.sandbox!.transportDurationMs : lesson!.durationMs
   // The canvas emphasises whatever the narrative step currently on screen names. Resolved
   // here for the same reason `topology`/`script` are: this is the one place that knows
   // whether a lesson or the sandbox is driving, and the sandbox has no narrative at all.
-  const highlight = sandbox
+  const highlight = inSandbox
     ? undefined
     : lesson!.narrative[activeStepIndex(lesson!.narrative, state.now)]?.highlight
+  const StatePanel = broker.StatePanel
+  const SandboxPanel = broker.sandbox?.Panel
 
   return (
     <div className="flex h-full bg-slate-950 text-slate-100">
@@ -50,25 +38,26 @@ export default function App() {
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
           <CanvasView
+            broker={broker}
             topology={topology}
             state={state}
             script={script}
             highlight={highlight}
-            editable={sandbox}
+            editable={inSandbox}
           />
         </div>
         <div className="border-t border-slate-800">
-          <InFlightPanel state={state} />
+          <StatePanel state={state} />
         </div>
         <div className="border-t border-slate-800">
           <Transport durationMs={durationMs} onStep={stepOnce} />
         </div>
       </main>
       <aside className="w-80 shrink-0 border-l border-slate-800 p-3">
-        {sandbox ? (
+        {inSandbox && SandboxPanel ? (
           <SandboxPanel state={state} issues={issues} />
         ) : (
-          <Inspector lesson={lesson!} state={state} issues={issues} />
+          <Inspector broker={broker} lesson={lesson!} state={state} issues={issues} />
         )}
       </aside>
     </div>

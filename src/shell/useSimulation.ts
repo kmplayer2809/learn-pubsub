@@ -8,6 +8,15 @@ import { useAppStore } from './store'
 export interface SimulationView {
   state: KernelState
   issues: ValidationIssueBase[]
+  /**
+   * The topology/script actually driving the current run — a lesson's fixed pair, or
+   * the sandbox draft. `App` reads these instead of resolving sandbox state itself:
+   * that resolution already happens once per render here (`useRunInput`, via a fixed
+   * pair of `useSyncExternalStore` calls), so exposing it avoids a second, App-owned
+   * hook whose count would vary with whether the active broker has a sandbox.
+   */
+  topology: unknown
+  script: unknown[]
   stepOnce(): void
 }
 
@@ -93,7 +102,13 @@ export function useSimulation(): SimulationView {
   const input = useRunInput(broker)
 
   const simRef = useRef<(Simulation<KernelState> & { readonly issues: ValidationIssueBase[] }) | null>(null)
-  const [view, setView] = useState<SimulationView | null>(null)
+  // Deliberately narrower than SimulationView: topology/script come from `input`, which
+  // is already recomputed every render, so there's no need to carry a copy through state.
+  const [view, setView] = useState<{
+    state: KernelState
+    issues: ValidationIssueBase[]
+    stepOnce(): void
+  } | null>(null)
 
   // Build (or rebuild) the engine. replayToken changes on seek-backwards, lesson switches,
   // and broker switches, which is exactly when a replay from zero is required. This is the
@@ -185,8 +200,14 @@ export function useSimulation(): SimulationView {
     setView({ state: sim.snapshot(), issues: sim.issues, stepOnce })
   }
 
-  if (view) return { ...view, stepOnce }
+  if (view) return { ...view, stepOnce, topology: input.topology, script: input.script }
 
   const fallback = broker.createSimulation(sandbox ? input : { ...input, script: [], seed: 0 })
-  return { state: fallback.snapshot(), issues: fallback.issues, stepOnce }
+  return {
+    state: fallback.snapshot(),
+    issues: fallback.issues,
+    stepOnce,
+    topology: input.topology,
+    script: input.script,
+  }
 }

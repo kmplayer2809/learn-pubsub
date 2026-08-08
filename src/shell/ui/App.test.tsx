@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { act } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { getBroker } from '../../brokers/registry'
 import { useSandboxStore } from '../../brokers/rabbitmq/sandbox/sandboxStore'
 import { useAppStore } from '../store'
 import App from './App'
@@ -84,5 +85,38 @@ describe('App', () => {
     render(<App />)
     act(() => useAppStore.getState().seek(30_000))
     expect(screen.queryByTestId('checkpoints')).toBeNull()
+  })
+
+  it('renders the active broker state panel, not a hard-coded one', () => {
+    render(<App />)
+    expect(screen.getByTestId('inflight-panel')).toBeTruthy()
+  })
+
+  it('hides the Sandbox button for a broker that ships without one', () => {
+    const broker = getBroker('rabbitmq')
+    const original = broker.sandbox
+    try {
+      // A Redis-shaped module may legitimately have no sandbox; the shell must not
+      // render a button that leads nowhere.
+      ;(broker as { sandbox?: unknown }).sandbox = undefined
+      render(<App />)
+      expect(screen.queryByTestId('open-sandbox')).toBeNull()
+    } finally {
+      ;(broker as { sandbox?: unknown }).sandbox = original
+    }
+  })
+
+  it('hides the export button for a broker that ships without an ExportDialog', () => {
+    const broker = getBroker('rabbitmq')
+    const original = broker.ExportDialog
+    try {
+      // Redis lessons will land before Redis code export does; the shell must not
+      // offer a button that opens nothing.
+      ;(broker as { ExportDialog?: unknown }).ExportDialog = undefined
+      render(<App />)
+      expect(screen.queryByTestId('export-button')).toBeNull()
+    } finally {
+      ;(broker as { ExportDialog?: unknown }).ExportDialog = original
+    }
   })
 })
