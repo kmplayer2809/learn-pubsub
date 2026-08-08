@@ -113,9 +113,17 @@ priority...) giữ nguyên tiếng Anh, không dịch.
 ## Thêm một broker mới
 
 1. Tạo `src/brokers/<id>/` với `engine/`, `lessons/`, `ui/`, và `index.ts`.
-2. `index.ts` export một object kiểu `BrokerModule` (định nghĩa ở
-   `src/brokers/types.ts`).
+2. `index.ts` export một object kiểu `BrokerModule` với type argument cụ thể, ví dụ
+   `BrokerModule<RedisState, RedisTopology, RedisCommand, RedisIssue>` — không dùng
+   `AnyBrokerModule` (chỉ shell dùng kiểu đó để giữ `BROKERS` chung một mảng; gắn nó
+   vào module của chính bạn là xoá mọi kiểm tra kiểu, biến một lỗi lẽ ra compile-time
+   thành crash lúc render).
 3. Thêm object đó vào `BROKERS` trong `src/brokers/registry.ts`.
+4. Đăng ký broker trong `src/brokers/catalog.ts` (`BROKER_CATALOG`) — store Zustand
+   đọc danh sách broker từ đây, không phải từ `registry.ts`. File này tách riêng vì
+   store không được import `registry.ts`: import cycle đó từng resolve thành
+   `undefined` lúc runtime thay vì throw lỗi, nên `catalog.ts` tồn tại để việc thiếu
+   bước này không lặp lại.
 
 Shell không cần sửa một dòng nào: broker switcher, sidebar, canvas, transport, và
 inspector đều đọc từ module. `purity.test.ts` tự động soi `src/brokers/<id>/engine/**`

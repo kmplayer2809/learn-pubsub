@@ -66,4 +66,13 @@ export interface BrokerSandbox<S extends KernelState, T, A, I extends Validation
   }
 }
 
+/**
+ * Exists so the shell can hold a heterogeneous `BROKERS` list without naming every
+ * broker's concrete state/topology/action/issue types. It is a shell-only escape
+ * hatch, never a broker author's type: annotate your own module with the concrete
+ * `BrokerModule<S, T, A, I>` instead. Reach for `AnyBrokerModule` in your own
+ * `index.ts` and every state-shape check TypeScript would otherwise run for you —
+ * a queue/exchange typo, a wrong action variant — is erased at the annotation, so
+ * the mismatch surfaces as a render-time crash instead of a compile error.
+ */
 export type AnyBrokerModule = BrokerModule<any, any, any, any>
