@@ -1,3 +1,10 @@
+/**
+ * A type fixture, not regression cover. `tsc` (via `npm run typecheck`) is the actual
+ * gate here: the literal below fails to compile if `RedisState` stops satisfying
+ * `KernelState` or its own fields drift. The runtime assertions only keep the fixture
+ * from being dead code — vitest strips the type-only import before resolution, so this
+ * file passes even with `types.ts` deleted. Do not read a green run here as proof.
+ */
 import { describe, expect, it } from 'vitest'
 import { createRng } from '../../../shell/kernel/rng'
 import type { RedisState } from './types'
