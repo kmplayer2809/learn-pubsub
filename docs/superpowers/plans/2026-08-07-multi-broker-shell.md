@@ -1783,11 +1783,24 @@ describe('BrokerSwitcher', () => {
     expect(active?.getAttribute('data-broker-id')).toBe('rabbitmq')
   })
 
-  it('clicking a tab selects that broker', () => {
+  // Asserting only that brokerId equals the clicked tab's id would pass with an
+  // onClick that does nothing at all, because `rabbitmq` is the sole registered
+  // broker and is already active. So put the store somewhere setBroker must move
+  // it from, and assert the move — this stays honest once Redis joins BROKERS.
+  it('clicking a tab runs setBroker, not just a no-op handler', () => {
+    act(() => {
+      useAppStore.getState().openSandbox()
+      useAppStore.getState().selectNode('q1')
+    })
+    const before = useAppStore.getState().replayToken
     render(<BrokerSwitcher />)
     const tab = screen.getAllByTestId('broker-tab')[0]!
     act(() => tab.click())
-    expect(useAppStore.getState().brokerId).toBe(tab.getAttribute('data-broker-id'))
+    const after = useAppStore.getState()
+    expect(after.brokerId).toBe(tab.getAttribute('data-broker-id'))
+    expect(after.sandbox).toBe(false)
+    expect(after.selectedNodeId).toBeUndefined()
+    expect(after.replayToken).toBe(before + 1)
   })
 })
 ```
@@ -1843,18 +1856,23 @@ export function BrokerSwitcher() {
 
 - [ ] **Step 4: Mount it in the sidebar**
 
-In `src/shell/ui/LessonSidebar/LessonSidebar.tsx`, replace the static title line
+In `src/shell/ui/LessonSidebar/LessonSidebar.tsx`, replace the title line. Task 10
+already made it read from the module, so at HEAD it is
 
 ```tsx
-<div className="px-3 py-3 text-sm font-semibold text-slate-200">RabbitMQ Visualizer</div>
+<div className="px-3 py-3 text-sm font-semibold text-slate-200">{broker.label} Visualizer</div>
 ```
 
-with
+Replace it with the switcher above a title that is just the label — "Visualizer"
+was there to name the app when the app was one broker; the switcher now carries
+that job, and repeating the word beside a broker tab reads as noise:
 
 ```tsx
 <BrokerSwitcher />
 <div className="px-3 py-3 text-sm font-semibold text-slate-200">{broker.label}</div>
 ```
+
+Import `BrokerSwitcher` from `'../BrokerSwitcher/BrokerSwitcher'`.
 
 - [ ] **Step 5: Run the tests**
 
