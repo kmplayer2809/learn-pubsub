@@ -29,6 +29,26 @@ describe('broker registry', () => {
     }
   })
 
+  it('every broker replays its default lesson identically from the same seed', () => {
+    // Determinism is the product's core contract: two runs from the same seed must
+    // produce byte-for-byte the same journal, or the "rewind by replaying" trick that
+    // `useSimulation.ts` relies on for scrubbing would silently drift.
+    for (const broker of BROKERS) {
+      const lesson = broker.lessons.find((l) => l.id === broker.defaultLessonId)!
+      expect(lesson, `${broker.id} has no lesson matching its defaultLessonId`).toBeDefined()
+      const run = () => {
+        const sim = broker.createSimulation({
+          topology: lesson.topology,
+          script: lesson.script,
+          seed: 1,
+        })
+        sim.advanceTo(60_000)
+        return sim.snapshot().journal
+      }
+      expect(run()).toEqual(run())
+    }
+  })
+
   it('agrees with the broker catalog in both directions', () => {
     for (const entry of BROKER_CATALOG) {
       const module = BROKERS.find((b) => b.id === entry.id)
