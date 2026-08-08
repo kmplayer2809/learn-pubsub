@@ -1,5 +1,6 @@
 import { getBroker } from '../../../brokers/registry'
 import { useAppStore } from '../../store'
+import { BrokerSwitcher } from '../BrokerSwitcher/BrokerSwitcher'
 
 export function LessonSidebar() {
   const broker = getBroker(useAppStore((s) => s.brokerId))
@@ -10,7 +11,8 @@ export function LessonSidebar() {
 
   return (
     <nav className="flex h-full flex-col overflow-y-auto" data-testid="lesson-sidebar">
-      <div className="px-3 py-3 text-sm font-semibold text-slate-200">{broker.label} Visualizer</div>
+      <BrokerSwitcher />
+      <div className="px-3 py-3 text-sm font-semibold text-slate-200">{broker.label}</div>
       {broker.lessonGroups.map((group) => (
         <div key={group.id} className="mb-3">
           <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500">
