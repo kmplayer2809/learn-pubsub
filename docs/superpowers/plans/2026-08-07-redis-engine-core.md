@@ -1184,6 +1184,7 @@ git add -A && git commit -m "feat(redis): assemble the Redis simulation on the s
 - Create: `src/brokers/redis/ui/toFlow.ts` (+ test)
 - Create: `src/brokers/redis/ui/KeyspacePanel.tsx` (+ test)
 - Create: `src/brokers/redis/ui/issueText.ts` (+ test)
+- Create: `src/brokers/redis/ui/NodeConfig.tsx` (+ test) — see **Amendment 3**
 
 **Interfaces:**
 - Consumes: `RedisState`, `RedisTopology` (Task 1); `RedisValidationIssue` (Task 7).
@@ -1196,6 +1197,7 @@ export function toFlowNodes(topology: RedisTopology, state: RedisState, highligh
 export function toFlowEdges(topology: RedisTopology): Edge[]
 export function KeyspacePanel({ state }: { state: RedisState }): JSX.Element
 export function issueText(issue: RedisValidationIssue): string
+export function NodeConfig(props: { lesson: Lesson<RedisTopology, RedisScriptedCommand>; state: RedisState; nodeId: string }): JSX.Element
 ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -1301,7 +1303,9 @@ export const REDIS_LESSON_GROUPS = [
 
 The `messaging` and `advanced` groups have no lessons until the next plan; the registry test asserts every lesson's group is declared, not that every group has a lesson, so an empty group is fine.
 
-`src/brokers/redis/index.ts` mirrors the RabbitMQ module: `id: 'redis'`, `label: 'Redis'`, `defaultLessonId: '01-strings'`, `emptyTopology` with one server and no clients, `createSimulation: createRedisSimulation`, `nodeTypes: { client: ClientNode, server: ServerNode }`, `toFlow`, `inFlight: (state) => state.inFlight`, `StatePanel: KeyspacePanel`, `issueText`, and **no** `sandbox` field.
+`src/brokers/redis/index.ts` mirrors the RabbitMQ module: `id: 'redis'`, `label: 'Redis'`, `defaultLessonId: '01-strings'`, `emptyTopology` with one server and no clients, `createSimulation: createRedisSimulation`, `nodeTypes: { client: ClientNode, server: ServerNode }`, `inFlight: (state) => state.inFlight`, `StatePanel: KeyspacePanel`, `issueText`, and **no** `sandbox` field.
+
+See **Amendments 1–4** at the end of this plan for the four slots this paragraph gets wrong — it was written before the shell branch finished, and the `BrokerModule` contract moved underneath it. `src/brokers/types.ts` at HEAD is the authority; that paragraph is not.
 
 `defaultLessonId` must resolve to a lesson that exists, so **this task includes Task 10's lesson file**: write `src/brokers/redis/lessons/01-strings.ts` exactly as Task 10 specifies and add it to `LESSONS` here. Task 10 then contributes only its behaviour test (its Step 4) and its own commit.
 
@@ -1313,8 +1317,12 @@ Expected: PASS once Task 10's first lesson exists.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "feat(redis): register the Redis broker module"
+git add -- src/brokers/redis/ src/brokers/registry.ts src/brokers/registry.test.ts src/brokers/catalog.ts src/shell/ui/App.test.tsx
+git commit -m "feat(redis): register the Redis broker module"
 ```
+
+Never `git add -A`: `.claude/scheduled_tasks.lock` is unrelated noise that has been
+left unstaged in every commit on this project, and a bare `-A` sweeps it in.
 
 ---
 
@@ -1561,3 +1569,124 @@ git add -A && git commit -m "test(redis): cross-lesson determinism, group behavi
 - `npx vitest run src/shell/kernel/purity.test.ts` — passes with `src/brokers/redis/engine` discovered.
 - `npm run dev`, then in the browser: the switcher shows RabbitMQ and Redis; selecting Redis loads `01-strings`; the keyspace panel fills as commands land; TTL counts down and a key vanishes on its lazy read; the eviction lesson visibly drops a key; no Sandbox button appears for Redis.
 - `grep -rn "redis" src/shell/` returns nothing.
+
+---
+
+## Amendments
+
+This plan was written while the multi-broker shell was still in progress. That
+branch has since merged (`3b1349a`), and four things about the `BrokerModule`
+contract changed after this plan's Task 9 was drafted. **`src/brokers/types.ts` at
+HEAD is the authority.** Where Task 9's prose disagrees with these amendments,
+the amendments win.
+
+### Amendment 1 — `toFlow` is now `toNodes` + `toEdges`
+
+The contract no longer has a single `toFlow`. It has:
+
+```ts
+  toNodes(topology: T, state: S, highlight?: string[]): Node[]
+  toEdges(topology: T, script: A[]): Edge[]
+```
+
+They were split because nodes depend on the live simulation state and edges do
+not, so fusing them rebuilt every edge on every tick and handed React Flow a new
+`edges` array identity each frame. `CanvasView` now memoizes the two separately.
+
+Task 8 already produces exactly the right pair of functions — `toFlowNodes` and
+`toFlowEdges` — so this costs nothing. Two details:
+
+- `toEdges` takes a `script` parameter that Redis has no use for: its edges come
+  from the client list alone. Accept it and ignore it. Do **not** widen
+  `toFlowEdges`'s own signature to take a script it will not read; adapt at the
+  module boundary instead:
+  `toEdges: (topology) => toFlowEdges(topology)`.
+- Neither may return a fresh literal derived from something unstable — both land
+  in a `useMemo`, and a new identity per call defeats the split.
+
+### Amendment 2 — `metrics(state)` is a required slot
+
+```ts
+  metrics(state: S): Record<string, number>
+```
+
+The Inspector's metrics grid is driven generically by `Object.entries`, so each
+broker names its own counters. Redis supplies its `RedisMetrics`.
+
+**`metrics: (state) => state.metrics` will not compile.** `RedisMetrics` is
+declared as an `interface`, and an interface gets no implicit index signature in
+TypeScript, so it does not structurally satisfy `Record<string, number>` even
+though every field is a number. Spread into a fresh object literal, exactly as
+RabbitMQ does at `src/brokers/rabbitmq/index.ts:66`:
+
+```ts
+  metrics: (state) => ({ ...state.metrics }),
+```
+
+**Do not fix this with a cast.** A cast here is the defect two tasks on the shell
+branch were sent back for. The spread is the fix.
+
+### Amendment 3 — `NodeConfig` is a required slot
+
+```ts
+  NodeConfig: ComponentType<{ lesson: Lesson<T, A>; state: S; nodeId: string }>
+```
+
+The Inspector renders it whenever a canvas node is selected; there is no generic
+shell fallback, so a broker without one does not compile. This plan never
+mentioned it, which is why Task 8's file list above now includes
+`src/brokers/redis/ui/NodeConfig.tsx`.
+
+Keep it small and mirror `src/brokers/rabbitmq/ui/NodeConfig.tsx` in shape and
+voice. Two branches suffice:
+
+- **server selected** — `maxmemoryBytes`, `evictionPolicy`, `activeExpireEveryMs`,
+  and the live `keysCount` / `memoryUsed`, taking the spec fields from
+  `lesson.topology.server` and the live numbers from `state`.
+- **client selected** — the client's label, and how many commands it has issued.
+
+Anything else falls back to the Vietnamese `Node này không có cấu hình.`, matching
+RabbitMQ's wording verbatim.
+
+`ExportDialog` stays **absent**: it is optional, and Redis code export belongs to
+the sandbox plan. The Inspector already hides the "Xuất code" button for a broker
+that ships without one, and there is a test covering exactly that.
+
+### Amendment 4 — Redis must also be added to `catalog.ts`
+
+`src/brokers/catalog.ts` is a second, deliberately separate registration: plain
+broker facts (`id`, `label`, `defaultLessonId`) that the Zustand store reads at
+module-evaluation time. It exists because the store must not import
+`registry.ts` — that cycle resolved to `undefined` at runtime rather than
+throwing, which is a failure mode worth never meeting twice.
+
+Registering Redis in `registry.ts` alone leaves `catalogEntry('redis')` silently
+falling back to RabbitMQ, so the switcher would appear to work while the store
+stayed on the wrong broker. Task 9 must add:
+
+```ts
+  { id: 'redis', label: 'Redis', defaultLessonId: '01-strings' },
+```
+
+The `label` and `defaultLessonId` must match the module's exactly. Add a Task 9
+test asserting that agreement for **every** broker, so the two registrations can
+never drift:
+
+```ts
+it('registers every broker in the catalog with matching facts', () => {
+  for (const broker of BROKERS) {
+    const entry = BROKER_CATALOG.find((b) => b.id === broker.id)
+    expect(entry, `${broker.id} is in BROKERS but missing from BROKER_CATALOG`).toBeDefined()
+    expect(entry!.label).toBe(broker.label)
+    expect(entry!.defaultLessonId).toBe(broker.defaultLessonId)
+  }
+})
+```
+
+Falsify it by changing one field in the catalog and confirming it goes red.
+
+### Amendment 5 — never `git add -A`
+
+Every task's commit step stages explicit paths.
+`.claude/scheduled_tasks.lock` is unrelated noise that has been left unstaged in
+every commit on this project; a bare `-A` sweeps it in.
