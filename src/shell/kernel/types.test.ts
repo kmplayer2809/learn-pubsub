@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { createRng } from './rng'
 import type { InFlight, KernelState } from './types'
 
+// Type fixture, not regression cover: these cases exist so `tsc` (via `npm run
+// typecheck`) checks the shapes below compile against `KernelState`/`InFlight`. The
+// runtime assertions are incidental, not the gate.
 describe('kernel types', () => {
   it('lets a broker state satisfy KernelState while adding its own fields', () => {
     interface MyState extends KernelState {

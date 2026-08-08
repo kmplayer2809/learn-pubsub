@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Lesson } from './types'
 
+// Type fixture, not regression cover: these cases exist so `tsc` (via `npm run
+// typecheck`) checks the shapes below compile against a broker-specific topology/script.
+// The runtime assertions are incidental, not the gate.
 describe('Lesson', () => {
   it('carries a broker-specific topology and script without the shell knowing either', () => {
     interface KeyspaceTopology { keys: string[] }

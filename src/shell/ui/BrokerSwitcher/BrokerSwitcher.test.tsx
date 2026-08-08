@@ -13,9 +13,9 @@ describe('BrokerSwitcher', () => {
     expect(screen.getAllByTestId('broker-tab')).toHaveLength(BROKERS.length)
   })
 
-  it('marks the active broker with aria-current', () => {
+  it('marks the active broker with aria-pressed', () => {
     render(<BrokerSwitcher />)
-    const active = screen.getByTestId('broker-switcher').querySelector('[aria-current="true"]')
+    const active = screen.getByTestId('broker-switcher').querySelector('[aria-pressed="true"]')
     expect(active?.getAttribute('data-broker-id')).toBe('rabbitmq')
   })
 

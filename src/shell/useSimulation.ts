@@ -216,6 +216,9 @@ export function useSimulation(): SimulationView {
   const stepOnce = () => {
     const sim = simRef.current
     if (!sim) return
+    // A step fired in the window between a broker switch and the rebuild effect below
+    // would otherwise step the *previous* broker's simulation — `simRef` still holds it.
+    if (view && view.brokerId !== broker.id) return
     sim.stepOnce()
     tickTo(sim.snapshot().now)
     setView({ brokerId: broker.id, state: sim.snapshot(), issues: sim.issues, stepOnce })

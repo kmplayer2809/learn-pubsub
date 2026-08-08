@@ -12,7 +12,6 @@ export function LessonSidebar() {
   return (
     <nav className="flex h-full flex-col overflow-y-auto" data-testid="lesson-sidebar">
       <BrokerSwitcher />
-      <div className="px-3 py-3 text-sm font-semibold text-slate-200">{broker.label}</div>
       {broker.lessonGroups.map((group) => (
         <div key={group.id} className="mb-3">
           <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500">

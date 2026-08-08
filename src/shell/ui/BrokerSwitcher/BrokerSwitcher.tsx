@@ -13,15 +13,13 @@ export function BrokerSwitcher() {
   return (
     <div
       className="flex gap-1 border-b border-slate-800 px-2 py-2"
-      role="tablist"
       aria-label="Chọn broker"
       data-testid="broker-switcher"
     >
       {BROKERS.map((broker) => (
         <button
           key={broker.id}
-          role="tab"
-          aria-current={broker.id === brokerId}
+          aria-pressed={broker.id === brokerId}
           data-testid="broker-tab"
           data-broker-id={broker.id}
           onClick={() => setBroker(broker.id)}
