@@ -1,14 +1,16 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getBroker } from '../brokers/registry'
+import { BROKER_CATALOG } from '../brokers/catalog'
+import { BROKERS, getBroker } from '../brokers/registry'
 import type { EngineState, Simulation, Topology, ValidationIssue } from '../brokers/rabbitmq/engine'
 import * as engineModule from '../brokers/rabbitmq/engine'
 import { LESSONS } from '../brokers/rabbitmq/lessons/registry'
 import type { Lesson } from '../brokers/rabbitmq/lessons/types'
 import { useSandboxStore } from '../brokers/rabbitmq/sandbox/sandboxStore'
+import type { AnyBrokerModule } from '../brokers/types'
 import type { KernelState } from './kernel/types'
 import { useAppStore } from './store'
-import { useSimulation } from './useSimulation'
+import { useSimulation, type SimulationView } from './useSimulation'
 
 const EMPTY_TOPOLOGY: Topology = { publishers: [], exchanges: [], queues: [], consumers: [], bindings: [] }
 
@@ -359,6 +361,125 @@ describe('useSimulation', () => {
     // journal built up through t=4000 has been discarded down to just that one entry.
     expect(result.current.state.journal.length).toBe(1)
     expect(result.current.state.journal[0]?.at).toBe(0)
+  })
+
+  // Regression for the stepOnce broker-switch guard: `view` is state, rebuilt only in a
+  // passive effect, so there is a render where `broker` already reflects a freshly switched
+  // broker but `view` (and `simRef`) still hold the *previous* broker's simulation. A step
+  // fired in exactly that window used to advance the wrong broker's engine.
+  //
+  // Nothing observable from outside React (flushSync, act, awaiting a microtask/macrotask)
+  // can pause between that render committing and the rebuild effect running — this project's
+  // test stack collapses the two into what is, for external code, a single atomic step, so
+  // there is no wall-clock gap to race into from the outside. But React still guarantees the
+  // one thing this test actually needs: every component in a render pass finishes rendering
+  // — Harness (which owns `useSimulation`) included — before ANY passive effect from that
+  // pass runs. `Stepper`, a sibling that renders straight after `Harness` and is forced to
+  // re-render alongside it by a shared `Root` subscribed to `brokerId`, fires `stepOnce()`
+  // from inside its own render body. At that exact point `broker` has already flipped to the
+  // new module (computed synchronously during render) but `view`/`simRef` are still whatever
+  // `Harness`'s last commit left them — precisely the closure the guard exists to catch,
+  // reached deterministically instead of by timing luck.
+  it('stepOnce fired between a broker switch and the rebuild effect does not step the previous broker\'s simulation', () => {
+    const rabbitmqBroker = getBroker('rabbitmq')
+    const originalCreateSimulation = rabbitmqBroker.createSimulation
+    let rabbitmqSim: ReturnType<typeof originalCreateSimulation> | undefined
+    const createSimSpy = vi.spyOn(rabbitmqBroker, 'createSimulation').mockImplementation((options) => {
+      const sim = originalCreateSimulation(options)
+      rabbitmqSim = sim
+      return sim
+    })
+
+    const fakeLesson: Lesson = {
+      id: 'only-lesson',
+      group: 'basics',
+      title: 'Fake lesson',
+      summary: 'Minimal second broker used only to give stepOnce a real broker switch to race.',
+      topology: EMPTY_TOPOLOGY,
+      script: [],
+      narrative: [],
+      seed: 0,
+      durationMs: 1000,
+    }
+    const fakeBroker: AnyBrokerModule = {
+      id: 'fake',
+      label: 'Fake',
+      lessonGroups: [{ id: 'basics', label: 'Basics' }],
+      lessons: [fakeLesson],
+      defaultLessonId: 'only-lesson',
+      createSimulation: () => {
+        let state = { now: 0, seq: 0, rng: { s: 0 }, journal: [] }
+        return {
+          advanceTo(t: number) {
+            state = { ...state, now: t }
+          },
+          stepOnce() {},
+          reset() {
+            state = { now: 0, seq: 0, rng: { s: 0 }, journal: [] }
+          },
+          nextEventTime: () => undefined,
+          snapshot: () => state,
+          issues: [],
+        }
+      },
+      emptyTopology: {},
+      nodeTypes: {},
+      toNodes: () => [],
+      toEdges: () => [],
+      inFlight: () => [],
+      StatePanel: () => null,
+      issueText: () => '',
+      metrics: () => ({}),
+      NodeConfig: () => null,
+    }
+
+    BROKER_CATALOG.push({ id: 'fake', label: 'Fake', defaultLessonId: 'only-lesson' })
+    BROKERS.push(fakeBroker)
+    try {
+      let latestView: SimulationView | undefined
+      let armed = false
+      function Harness() {
+        latestView = useSimulation()
+        return null
+      }
+      function Stepper() {
+        if (armed) {
+          // Only once: re-arming would also fire on the *next* pass, once view/broker
+          // have re-synced, which is the harmless case the guard has to let through.
+          armed = false
+          latestView!.stepOnce()
+        }
+        return null
+      }
+      function Root() {
+        useAppStore((s) => s.brokerId)
+        return (
+          <>
+            <Harness />
+            <Stepper />
+          </>
+        )
+      }
+
+      const { unmount } = render(<Root />)
+      expect(rabbitmqSim).toBeDefined()
+      const stepSpy = vi.spyOn(rabbitmqSim!, 'stepOnce')
+      const virtualTimeBeforeSwitch = useAppStore.getState().virtualTime
+
+      armed = true
+      act(() => {
+        useAppStore.getState().setBroker('fake')
+      })
+
+      expect(stepSpy).not.toHaveBeenCalled()
+      expect(useAppStore.getState().virtualTime).toBe(virtualTimeBeforeSwitch)
+
+      unmount()
+    } finally {
+      BROKERS.pop()
+      BROKER_CATALOG.pop()
+      createSimSpy.mockRestore()
+    }
   })
 
   // Regression for the Task 9 review finding: NO_SANDBOX.getScript used to return a fresh
