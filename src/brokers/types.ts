@@ -18,9 +18,17 @@ export interface BrokerModule<S extends KernelState, T, A, I extends ValidationI
     seed: number
     maxEvents?: number
   }): Simulation<S> & { readonly issues: I[] }
+  /** A single shared object handed straight into `createSimulation` for every run that
+   *  starts empty (a fresh sandbox, a lesson lookup miss). A broker whose engine mutates
+   *  its topology in place — rather than treating it as immutable input — would corrupt
+   *  every later run that reuses this same reference. */
   emptyTopology: T
   nodeTypes: NodeTypes
-  toFlow(topology: T, state: S, script: A[], highlight?: string[]): { nodes: Node[]; edges: Edge[] }
+  /** Canvas nodes. Depends on the live simulation state, so this reruns every tick. */
+  toNodes(topology: T, state: S, highlight?: string[]): Node[]
+  /** Canvas edges. Depends only on the topology and script, so this reruns only when
+   *  the lesson or the sandbox's topology changes — not on every simulation tick. */
+  toEdges(topology: T, script: A[]): Edge[]
   inFlight(state: S): InFlight[]
   StatePanel: ComponentType<{ state: S }>
   issueText(issue: I): string

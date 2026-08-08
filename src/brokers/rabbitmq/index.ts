@@ -45,10 +45,8 @@ export const rabbitmq: BrokerModule<EngineState, Topology, ScriptedAction, Valid
       maxEvents: options.maxEvents,
     }),
   nodeTypes: { publisher: PublisherNode, exchange: ExchangeNode, queue: QueueNode, consumer: ConsumerNode },
-  toFlow: (topology, state, script, highlight) => ({
-    nodes: toFlowNodes(topology, state, highlight),
-    edges: toFlowEdges(topology, script),
-  }),
+  toNodes: (topology, state, highlight) => toFlowNodes(topology, state, highlight),
+  toEdges: (topology, script) => toFlowEdges(topology, script),
   inFlight: (state) =>
     state.inFlight.map((f) => ({
       message: { id: f.message.id, solid: f.message.persistent },

@@ -120,9 +120,10 @@ export function useSimulation(): SimulationView {
   // switch renders once with the *new* broker (recomputed synchronously above) paired
   // with `view.state` still holding the *previous* broker's snapshot — the rebuild only
   // happens in the effect below, which fires after this render, not before it. Every
-  // consumer of this hook's return value (`CanvasView.toFlow`/`.inFlight`, `StatePanel`,
-  // `Inspector.metrics`) takes the *current* broker as a separate argument, so a mismatch
-  // here means the wrong module is asked to interpret a snapshot it never produced.
+  // consumer of this hook's return value (`CanvasView.toNodes`/`.toEdges`/`.inFlight`,
+  // `StatePanel`, `Inspector.metrics`) takes the *current* broker as a separate argument,
+  // so a mismatch here means the wrong module is asked to interpret a snapshot it never
+  // produced.
   const [view, setView] = useState<{
     brokerId: string
     state: KernelState

@@ -6,7 +6,7 @@ import type { KernelState } from '../../kernel/types'
 import { useAppStore } from '../../store'
 import { MessageLayer } from '../canvas/MessageLayer'
 
-// Hoisted so the default lands in `toFlow`'s `useMemo` dependency list (below) as the
+// Hoisted so the default lands in `toEdges`'s `useMemo` dependency list (below) as the
 // same reference on every render. A fresh `[]` literal as a default parameter value is
 // re-created every render, which would invalidate that memo every time for any caller
 // that omits `script` — the same class of bug `useSimulation`'s `EMPTY_SCRIPT` exists to
@@ -38,10 +38,15 @@ export function CanvasView({
   const selectNode = useAppStore((s) => s.selectNode)
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
 
-  const { nodes: rawNodes, edges } = useMemo(
-    () => broker.toFlow(topology, state, script, highlight),
-    [broker, topology, state, script, highlight],
+  // Nodes depend on the live simulation state and rerun every tick; edges depend only
+  // on the topology and script, which change on a lesson/sandbox-topology switch — not
+  // on every tick. Memoizing them together (the old fused `toFlow`) forced a full edge
+  // rebuild every tick and handed React Flow a new `edges` array identity every frame.
+  const rawNodes = useMemo(
+    () => broker.toNodes(topology, state, highlight),
+    [broker, topology, state, highlight],
   )
+  const edges = useMemo(() => broker.toEdges(topology, script), [broker, topology, script])
   const nodes = useMemo(
     () => rawNodes.map((n) => ({ ...n, selected: n.id === selectedNodeId })),
     [rawNodes, selectedNodeId],

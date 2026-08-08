@@ -188,7 +188,8 @@ describe('App', () => {
       },
       emptyTopology: {},
       nodeTypes: {},
-      toFlow: () => ({ nodes: [], edges: [] }),
+      toNodes: () => [],
+      toEdges: () => [],
       inFlight: () => [],
       // RabbitMQ's EngineState has no `streams` field — reading it throws if this
       // component is ever handed RabbitMQ's state instead of its own.
