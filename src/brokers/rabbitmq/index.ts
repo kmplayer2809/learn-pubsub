@@ -59,10 +59,12 @@ export const rabbitmq: BrokerModule<EngineState, Topology, ScriptedAction, Valid
     })),
   StatePanel: InFlightPanel,
   issueText,
-  // `Metrics` (engine/types.ts) has no index signature, so `state.metrics` itself
-  // doesn't structurally satisfy `Record<string, number>` — TS only accepts a fresh
-  // object literal there, not a variable of a named interface type, even though every
-  // field is a number. Spreading makes a fresh literal instead of casting the mismatch away.
+  // `Metrics` (engine/types.ts) is declared as an `interface`, and interfaces never get an
+  // implicit index signature — only type aliases and anonymous object types do. So
+  // `state.metrics` itself doesn't structurally satisfy `Record<string, number>`, even
+  // though every field is a number. Spreading into `{ ...state.metrics }` produces a plain
+  // object type (not an interface), which does get the implicit index signature, so it
+  // genuinely satisfies the target — this is not a freshness thing, and it's not a cast.
   metrics: (state) => ({ ...state.metrics }),
   NodeConfig,
   ExportDialog,

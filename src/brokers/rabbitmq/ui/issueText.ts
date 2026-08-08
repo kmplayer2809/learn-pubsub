@@ -31,12 +31,3 @@ export function vietnameseIssueMessage(issue: ValidationIssue): string {
       return `consumer ${issue.consumerLabel} tiêu thụ từ ${issue.queueId}, nhưng queue đó không tồn tại`
   }
 }
-
-const SEVERITY_LABEL: Record<ValidationIssue['severity'], string> = {
-  error: 'lỗi',
-  warning: 'cảnh báo',
-}
-
-export function vietnameseSeverityLabel(severity: ValidationIssue['severity']): string {
-  return SEVERITY_LABEL[severity]
-}

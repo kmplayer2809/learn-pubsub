@@ -6,11 +6,18 @@ import type { KernelState } from '../../kernel/types'
 import { useAppStore } from '../../store'
 import { MessageLayer } from '../canvas/MessageLayer'
 
+// Hoisted so the default lands in `toFlow`'s `useMemo` dependency list (below) as the
+// same reference on every render. A fresh `[]` literal as a default parameter value is
+// re-created every render, which would invalidate that memo every time for any caller
+// that omits `script` — the same class of bug `useSimulation`'s `EMPTY_SCRIPT` exists to
+// avoid for `useSyncExternalStore`.
+const EMPTY_SCRIPT: never[] = []
+
 export function CanvasView({
   broker,
   topology,
   state,
-  script = [],
+  script = EMPTY_SCRIPT,
   highlight,
   editable = false,
 }: {

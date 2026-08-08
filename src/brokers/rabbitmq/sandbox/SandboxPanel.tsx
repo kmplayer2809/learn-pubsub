@@ -306,9 +306,11 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
 
       <section>
         <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Chỉ số</h3>
-        {/* Fresh literal, not `state.metrics` directly: `Metrics` has no index signature,
-            so only a freshly-spread object structurally satisfies `MetricsGrid`'s
-            `Record<string, number>` prop (see the same note on the module's `metrics`). */}
+        {/* Spread, not `state.metrics` directly: `Metrics` is an `interface`, which never
+            gets an implicit index signature (only type aliases/anonymous object types do),
+            so it doesn't itself satisfy `MetricsGrid`'s `Record<string, number>` prop. The
+            spread produces a plain object type that does (see the same note on the
+            module's `metrics`) — genuinely, not as a freshness workaround. */}
         <MetricsGrid metrics={{ ...state.metrics }} />
       </section>
 

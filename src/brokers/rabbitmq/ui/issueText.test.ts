@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { validateTopology, type Topology, type ValidationIssue, type ValidationIssueCode } from '../engine'
-import { vietnameseIssueMessage, vietnameseSeverityLabel } from './issueText'
+import { vietnameseIssueMessage } from './issueText'
 
 // Every code the engine can currently produce (src/engine/validate.ts). Kept
 // as an explicit list, not derived from the type, so this file physically
@@ -88,11 +88,6 @@ describe('vietnameseIssueMessage', () => {
   it('never translates node ids or labels', () => {
     expect(vietnameseIssueMessage(fixtureFor('queue-unreachable'))).toContain('orphan')
     expect(vietnameseIssueMessage(fixtureFor('consumer-missing-queue'))).toContain('ghost')
-  })
-
-  it('translates the severity prefix', () => {
-    expect(vietnameseSeverityLabel('error')).toBe('lỗi')
-    expect(vietnameseSeverityLabel('warning')).toBe('cảnh báo')
   })
 
   it('renders the exact Sandbox repro: an orphan queue with no binding', () => {

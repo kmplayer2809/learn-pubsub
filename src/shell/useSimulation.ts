@@ -104,7 +104,17 @@ export function useSimulation(): SimulationView {
   const simRef = useRef<(Simulation<KernelState> & { readonly issues: ValidationIssueBase[] }) | null>(null)
   // Deliberately narrower than SimulationView: topology/script come from `input`, which
   // is already recomputed every render, so there's no need to carry a copy through state.
+  //
+  // `brokerId` rides along with the snapshot because the two are only ever produced
+  // together, by the same `broker.createSimulation` call below. Without it, a broker
+  // switch renders once with the *new* broker (recomputed synchronously above) paired
+  // with `view.state` still holding the *previous* broker's snapshot — the rebuild only
+  // happens in the effect below, which fires after this render, not before it. Every
+  // consumer of this hook's return value (`CanvasView.toFlow`/`.inFlight`, `StatePanel`,
+  // `Inspector.metrics`) takes the *current* broker as a separate argument, so a mismatch
+  // here means the wrong module is asked to interpret a snapshot it never produced.
   const [view, setView] = useState<{
+    brokerId: string
     state: KernelState
     issues: ValidationIssueBase[]
     stepOnce(): void
@@ -128,7 +138,7 @@ export function useSimulation(): SimulationView {
     })
     sim.advanceTo(useAppStore.getState().virtualTime)
     simRef.current = sim
-    setView({ state: sim.snapshot(), issues: sim.issues, stepOnce: () => {} })
+    setView({ brokerId: broker.id, state: sim.snapshot(), issues: sim.issues, stepOnce: () => {} })
   }, [broker, sandbox, replayToken, input.topology, input.script, input.failures, input.seed, input.maxEvents])
 
   // Advance on seek while paused, so scrubbing updates the canvas immediately.
@@ -136,8 +146,8 @@ export function useSimulation(): SimulationView {
     const sim = simRef.current
     if (!sim || playing) return
     sim.advanceTo(virtualTime)
-    setView({ state: sim.snapshot(), issues: sim.issues, stepOnce: () => {} })
-  }, [virtualTime, playing])
+    setView({ brokerId: broker.id, state: sim.snapshot(), issues: sim.issues, stepOnce: () => {} })
+  }, [virtualTime, playing, broker.id])
 
   // The rAF loop: virtual time only ever moves forward here. Pausing simply
   // stops calling advanceTo, which freezes particle positions since they are
@@ -163,7 +173,7 @@ export function useSimulation(): SimulationView {
         sim.advanceTo(target)
         const snapshot = sim.snapshot()
         tickTo(target)
-        setView({ state: snapshot, issues: sim.issues, stepOnce: () => {} })
+        setView({ brokerId: broker.id, state: snapshot, issues: sim.issues, stepOnce: () => {} })
 
         // A halted run (event ceiling tripped) must stop the loop rather than
         // spin forever repainting a frozen simulation.
@@ -190,17 +200,23 @@ export function useSimulation(): SimulationView {
       stopped = true
       cancelAnimationFrame(frame)
     }
-  }, [playing, speed, input.durationMs, tickTo, pause])
+  }, [playing, speed, input.durationMs, tickTo, pause, broker.id])
 
   const stepOnce = () => {
     const sim = simRef.current
     if (!sim) return
     sim.stepOnce()
     tickTo(sim.snapshot().now)
-    setView({ state: sim.snapshot(), issues: sim.issues, stepOnce })
+    setView({ brokerId: broker.id, state: sim.snapshot(), issues: sim.issues, stepOnce })
   }
 
-  if (view) return { ...view, stepOnce, topology: input.topology, script: input.script }
+  // A mismatch here (view built for a broker that is no longer active) is exactly the
+  // "nothing built yet" case below: fall through to a fresh build from the *current*
+  // broker/input so this render never hands one module's state to another's components.
+  // The rebuild effect above will supersede it with the persisted view on the next render.
+  if (view && view.brokerId === broker.id) {
+    return { ...view, stepOnce, topology: input.topology, script: input.script }
+  }
 
   const fallback = broker.createSimulation(sandbox ? input : { ...input, script: [], seed: 0 })
   return {
