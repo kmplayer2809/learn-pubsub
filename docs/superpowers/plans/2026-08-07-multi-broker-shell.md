@@ -79,6 +79,53 @@ Consequences for the remaining tasks:
   resolution rather than calling accessors itself, so it gains no new hook.
 - **Task 11:** unchanged; the switcher touches no sandbox accessor.
 
+## Amendment (2026-08-08): the Inspector's broker-specific panes become module slots
+
+Task 10's Step 5 assumed `issueText` was the Inspector's only RabbitMQ
+dependency. It is not. Three more survive, and once `App` passes the module's
+generic `Lesson<T, A>` and `KernelState`, they stop typechecking:
+
+- `NodeConfig` reads `lesson.topology.queues/consumers/exchanges` and
+  `state.queues/unacked` — pure AMQP.
+- `ExportDialog` (and the "Xuất code" button that opens it) is RabbitMQ code
+  generation, imported from `brokers/rabbitmq/sandbox/`.
+- `MetricsGrid` takes RabbitMQ's `Metrics`; `KernelState` has no `metrics`.
+
+The spec's "Inspector is unchanged" means its *layout* is unchanged — narrative,
+checkpoints, issues, node detail, metrics, journal, in that order. The broker
+still owns what goes in the broker-specific slots. So `BrokerModule` gains three
+members, matching the `StatePanel`/`issueText` pattern already established:
+
+```ts
+/** Counters for the inspector's metrics grid. Keys render verbatim, so each
+ *  broker names its own — the grid stays driven by Object.entries. */
+metrics(state: S): Record<string, number>
+/** Detail pane for the selected canvas node. */
+NodeConfig: ComponentType<{ lesson: Lesson<T, A>; state: S; nodeId: string }>
+/** Code export for a lesson's topology. Optional: a broker without one gets no
+ *  "Xuất code" button, exactly as a broker without a sandbox gets no Sandbox button. */
+ExportDialog?: ComponentType<{ topology: T; onClose(): void }>
+```
+
+`NodeConfig` is required, not optional: every broker has nodes and the shell has
+nothing generic to fall back on. The "Node này không có cấu hình." fallback moves
+into RabbitMQ's own `NodeConfig`, where it belongs — it is that broker's answer
+for a node it does not recognise, not the shell's.
+
+`Inspector` then takes `broker: AnyBrokerModule` in place of the `issueText` prop
+and reads all four slots off it, and its `lesson`/`state` props widen to
+`Lesson<any, any>` / `KernelState`. `AnyBrokerModule` is `BrokerModule<any, ...>`,
+so the slots' props are `any`-typed at that boundary and no cast is needed — the
+concrete types bind inside each broker's own `index.ts`, which is the one place
+that knows them. This is the same boundary `StatePanel` already crosses in `App`.
+
+`IssuesList` and `MetricsGrid` stay exported for `SandboxPanel`, which passes its
+own broker-specific `issueText` and metrics directly.
+
+**Supersedes:** Task 7's `BrokerModule` listing (add the three members; RabbitMQ
+supplies `metrics: (s) => s.metrics`, its own `NodeConfig`, and its `ExportDialog`)
+and Task 10's Step 5.
+
 ## Amendment (2026-08-08): the store must not import the broker registry
 
 Task 8's review found a real import cycle:
