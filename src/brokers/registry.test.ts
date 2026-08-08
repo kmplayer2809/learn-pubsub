@@ -29,23 +29,30 @@ describe('broker registry', () => {
     }
   })
 
-  it('every broker replays its default lesson identically from the same seed', () => {
+  it('every broker replays every lesson it ships identically from the same seed', () => {
     // Determinism is the product's core contract: two runs from the same seed must
     // produce byte-for-byte the same journal, or the "rewind by replaying" trick that
     // `useSimulation.ts` relies on for scrubbing would silently drift.
+    //
+    // This used to check only `defaultLessonId`, which passes vacuously for RabbitMQ:
+    // its default, 01-hello-world, has jitterMs: 0 and nackRate: 0, so it never draws
+    // from the seeded RNG at all. Checking every shipped lesson instead means the gate
+    // actually exercises randomness wherever a lesson uses it (e.g. 09-nack-requeue).
     for (const broker of BROKERS) {
-      const lesson = broker.lessons.find((l) => l.id === broker.defaultLessonId)!
-      expect(lesson, `${broker.id} has no lesson matching its defaultLessonId`).toBeDefined()
-      const run = () => {
-        const sim = broker.createSimulation({
-          topology: lesson.topology,
-          script: lesson.script,
-          seed: 1,
-        })
-        sim.advanceTo(60_000)
-        return sim.snapshot().journal
+      for (const lesson of broker.lessons) {
+        const run = () => {
+          const sim = broker.createSimulation({
+            topology: lesson.topology,
+            script: lesson.script,
+            seed: 1,
+          })
+          sim.advanceTo(60_000)
+          return sim.snapshot().journal
+        }
+        expect(run(), `${broker.id}/${lesson.id} replayed to a different journal from the same seed`).toEqual(
+          run(),
+        )
       }
-      expect(run()).toEqual(run())
     }
   })
 
