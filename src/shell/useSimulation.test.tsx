@@ -390,4 +390,39 @@ describe('useSimulation', () => {
       ;(broker as { sandbox?: unknown }).sandbox = original
     }
   })
+
+  // Regression for the final-review OOM. `useRunInput`'s non-sandbox branch returned
+  // `lesson?.script ?? []`; that fresh literal feeds the rebuild effect's dependency array,
+  // so a render whose `lesson` is undefined scheduled another rebuild, which rendered again,
+  // forever. React's "Maximum update depth exceeded" guard never fires — the `setView` lives
+  // in a passive effect whose deps legitimately changed — so the real symptom is
+  // `FATAL ERROR: Ineffective mark-compacts near heap limit`, i.e. an unrecoverable tab in a
+  // browser. `lesson` is undefined exactly when `lessonId` names nothing in the active
+  // broker's `lessons`, which is what this test sets up.
+  //
+  // Bounded on purpose: the wrapper throws as soon as the build count passes a low ceiling,
+  // so the pre-fix failure trips in milliseconds instead of growing a 4 GB heap first.
+  it('a lessonId that matches no lesson settles instead of rebuilding the simulation forever', () => {
+    const broker = getBroker('rabbitmq')
+    const build = broker.createSimulation
+    const REBUILD_CEILING = 20
+    let builds = 0
+    vi.spyOn(broker, 'createSimulation').mockImplementation((options) => {
+      builds++
+      if (builds > REBUILD_CEILING) {
+        throw new Error(
+          `createSimulation ran ${builds} times for one unknown lessonId (ceiling ${REBUILD_CEILING}): `
+            + 'the rebuild effect is looping on a dependency that changes identity every render',
+        )
+      }
+      return build(options)
+    })
+
+    useAppStore.setState({ lessonId: 'no-such-lesson' })
+    const { result, unmount } = renderHook(() => useSimulation())
+
+    expect(builds).toBeLessThanOrEqual(REBUILD_CEILING)
+    expect(result.current.state.journal).toEqual([])
+    unmount()
+  })
 })

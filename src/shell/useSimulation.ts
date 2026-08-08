@@ -29,6 +29,8 @@ export interface SimulationView {
 // compares successive snapshots with `Object.is`, and a fresh `[]` literal returned on every
 // call would never be `Object.is`-equal to the previous one, forcing React into an infinite
 // re-render loop the moment a broker with no sandbox becomes active.
+// The same reference is also the "no lesson script" fallback in `useRunInput` below, for the
+// same reason applied to an effect dependency array instead of a snapshot comparison.
 const EMPTY_SCRIPT: never[] = []
 
 const NO_SANDBOX = {
@@ -81,7 +83,15 @@ function useRunInput(broker: AnyBrokerModule) {
   }
   return {
     topology: lesson?.topology ?? broker.emptyTopology,
-    script: lesson?.script ?? [],
+    // EMPTY_SCRIPT, not a fresh `[]`: this value lands in the rebuild effect's dependency
+    // array below, so a new array identity on every render rebuilds the simulation on
+    // every render, forever. React's "Maximum update depth exceeded" guard does not catch
+    // it either — the `setView` sits in a passive effect whose deps genuinely changed — so
+    // it runs until the heap dies. `lesson` is undefined whenever `lessonId` names no
+    // lesson in the active broker (`Lesson.script` is required, so a lesson without a
+    // script cannot exist), and `App`'s "Không tìm thấy bài học." early return does not
+    // protect this: `useSimulation()` is called before it.
+    script: lesson?.script ?? EMPTY_SCRIPT,
     failures: (lesson as { failures?: unknown[] } | undefined)?.failures,
     seed: lesson?.seed ?? 0,
     maxEvents: undefined,
