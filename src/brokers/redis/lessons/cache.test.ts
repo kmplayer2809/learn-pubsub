@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { cacheAside } from './08-cache-aside'
 import { writeThrough } from './09-write-through'
 import { stampede } from './10-stampede'
+import { eviction } from './11-eviction'
 import { createRedisSimulation } from '../engine'
 
 function run(lesson: { topology: Parameters<typeof createRedisSimulation>[0]['topology']; script: Parameters<typeof createRedisSimulation>[0]['script']; seed: number }) {
@@ -86,5 +87,43 @@ describe('10 cache stampede', () => {
     expect(sim.snapshot().metrics.misses).toBe(0)
     sim.advanceTo(5400)
     expect(sim.snapshot().metrics.misses).toBe(3)
+  })
+})
+
+describe('11 maxmemory và eviction policy', () => {
+  it('refuses SET e with OOM under volatile-lru when no key carries a TTL, without touching metrics.evicted', () => {
+    const sim = run(eviction)
+    // SET e is scripted at 8000, applied at 8120 — after CONFIG SET switched the
+    // policy to volatile-lru (scripted 7000, applied 7120) but before EXPIRE a
+    // (scripted 10000) gives any key a TTL.
+    sim.advanceTo(8200)
+    const state = sim.snapshot()
+    expect(state.metrics.evicted).toBe(1) // only `b`, evicted earlier under allkeys-lru
+    const journal = state.journal
+    expect(journal[journal.length - 1]!.text).toBe("SET \"e\" \"eeeeeeee\" → (error) OOM command not allowed when used memory > 'maxmemory'.")
+  })
+
+  it('accepts SET f once EXPIRE a makes a a volatile-lru candidate, evicting a', () => {
+    const sim = run(eviction)
+    // SET f is scripted at 11000, applied at 11120 — after EXPIRE a (scripted 10000,
+    // applied 10120) gives `a` the only TTL in the keyspace.
+    sim.advanceTo(11_200)
+    const state = sim.snapshot()
+    expect(state.keys['a']).toBeUndefined()
+    expect(state.metrics.evicted).toBe(2) // `b` earlier, now `a`
+    const journal = state.journal
+    expect(journal[journal.length - 1]!.text).toBe('SET "f" "ffffffff" → OK')
+  })
+
+  it('pins the two KEYS * journal entries so the eviction victims are proven, not inferred', () => {
+    const sim = run(eviction)
+    sim.advanceTo(24_000)
+    const keysLines = sim.snapshot().journal.filter((e) => e.text.startsWith('KEYS')).map((e) => e.text)
+    expect(keysLines).toEqual([
+      // b is gone (evicted for d under allkeys-lru): a, c, d survive.
+      'KEYS "*" → 1) "a" 2) "c" 3) "d"',
+      // a is gone too (evicted for f under volatile-lru, the only TTL-bearing key): c, d, f survive.
+      'KEYS "*" → 1) "c" 2) "d" 3) "f"',
+    ])
   })
 })
