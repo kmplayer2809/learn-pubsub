@@ -11,6 +11,7 @@ import { list } from './03-list'
 import { set } from './04-set'
 import { zset } from './05-zset'
 import { ttl } from './06-ttl'
+import { scan } from './07-scan'
 
 function run(lesson: RedisLesson, upTo: number) {
   const sim = createRedisSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
@@ -107,5 +108,25 @@ describe('06 ttl', () => {
     const afterActivePass = run(ttl, 5000)
     expect(afterActivePass.keys['session:2']).toBeUndefined()
     expect(afterActivePass.metrics.expired).toBe(2)
+  })
+})
+
+describe('07 scan', () => {
+  it('pages all twelve keys across three SCAN calls, the reply\'s FIRST element being the cursor, not the last', () => {
+    // The plan says the last SCAN reply "ends with cursor 0". Reading
+    // commands/keyspace.ts's `scan` shows the reply array is actually
+    // `[nextCursor, ...liveKeys]` — the cursor is the first entry. Restated
+    // here rather than asserted as written: the last SCAN's first reply
+    // element is "0", not its last.
+    const state = run(scan, 12_000)
+    const setLines = Array.from({ length: 12 }, (_, i) => `SET user:${i + 1} "v" → OK`)
+    expect(state.journal.map((e) => e.text)).toEqual([
+      ...setLines,
+      'KEYS user:* → 1) "user:1" 2) "user:2" 3) "user:3" 4) "user:4" 5) "user:5" 6) "user:6" 7) "user:7" 8) "user:8" 9) "user:9" 10) "user:10" 11) "user:11" 12) "user:12"',
+      'SCAN 0 "COUNT" 5 → 1) "5" 2) "user:1" 3) "user:2" 4) "user:3" 5) "user:4" 6) "user:5"',
+      'SCAN 5 "COUNT" 5 → 1) "10" 2) "user:6" 3) "user:7" 4) "user:8" 5) "user:9" 6) "user:10"',
+      'SCAN 10 "COUNT" 5 → 1) "0" 2) "user:11" 3) "user:12"',
+      'DBSIZE → (integer) 12',
+    ])
   })
 })
