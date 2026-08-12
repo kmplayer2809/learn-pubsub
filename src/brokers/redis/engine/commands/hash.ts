@@ -10,7 +10,7 @@ import { oomReply, wrongTypeReply } from '../reply'
  */
 const hset: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, ...pairs] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   // Narrowed through a plain local rather than the `record.value.type` chain
   // directly: TS does not retain discriminated-union narrowing on a nested
   // property path across a later re-test of the same chain (see string.ts's INCR).
@@ -42,7 +42,7 @@ const hset: CommandHandler = (context: CommandContext): CommandResult => {
 /** `HGET key field` — nil for a missing key or a missing field, WRONGTYPE for a non-hash key. */
 const hget: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, field] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'nil' } }
   if (record.value.type !== 'hash') return { state, reply: wrongTypeReply() }
   const value = record.value.value[field!]
@@ -52,7 +52,7 @@ const hget: CommandHandler = (context: CommandContext): CommandResult => {
 /** `HGETALL key` — every field/value pair, flattened, in insertion order; empty array for a missing key. */
 const hgetall: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'array', value: [] } }
   if (record.value.type !== 'hash') return { state, reply: wrongTypeReply() }
   // Narrowed through a plain local for the same reason HSET is (see its
@@ -72,7 +72,7 @@ const hgetall: CommandHandler = (context: CommandContext): CommandResult => {
  */
 const hdel: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, ...fieldsToRemove] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   if (!record) return { state: afterRead, reply: { kind: 'integer', value: 0 } }
   if (record.value.type !== 'hash') return { state: afterRead, reply: wrongTypeReply() }
 
@@ -102,7 +102,7 @@ const hdel: CommandHandler = (context: CommandContext): CommandResult => {
  */
 const hincrby: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, field, incrementArg] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   const existingValue = record?.value
   if (existingValue && existingValue.type !== 'hash') return { state: afterRead, reply: wrongTypeReply() }
 

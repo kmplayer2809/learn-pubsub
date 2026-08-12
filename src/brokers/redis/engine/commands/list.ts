@@ -24,7 +24,7 @@ function resolveRange(length: number, startArg: string, stopArg: string): [numbe
 /** `LPUSH key value [value ...]` — each value in turn becomes the new head, so the last value listed ends up first. */
 const lpush: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, ...values] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   const existingValue = record?.value
   if (existingValue && existingValue.type !== 'list') return { state: afterRead, reply: wrongTypeReply() }
 
@@ -39,7 +39,7 @@ const lpush: CommandHandler = (context: CommandContext): CommandResult => {
 /** `RPUSH key value [value ...]` — appended in the order given, tail-first. */
 const rpush: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, ...values] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   const existingValue = record?.value
   if (existingValue && existingValue.type !== 'list') return { state: afterRead, reply: wrongTypeReply() }
 
@@ -54,7 +54,7 @@ const rpush: CommandHandler = (context: CommandContext): CommandResult => {
 /** `LPOP key` — pops the head; nil for a missing key; deletes the key once the last element is gone. */
 const lpop: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   if (!record) return { state: afterRead, reply: { kind: 'nil' } }
   if (record.value.type !== 'list') return { state: afterRead, reply: wrongTypeReply() }
 
@@ -66,7 +66,7 @@ const lpop: CommandHandler = (context: CommandContext): CommandResult => {
 /** `RPOP key` — pops the tail; same nil/delete rules as LPOP. */
 const rpop: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   if (!record) return { state: afterRead, reply: { kind: 'nil' } }
   if (record.value.type !== 'list') return { state: afterRead, reply: wrongTypeReply() }
 
@@ -80,7 +80,7 @@ const rpop: CommandHandler = (context: CommandContext): CommandResult => {
 /** `LRANGE key start stop` — inclusive slice; negative indices count from the end; out-of-range yields `[]`. */
 const lrange: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, startArg, stopArg] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'array', value: [] } }
   if (record.value.type !== 'list') return { state, reply: wrongTypeReply() }
 
@@ -92,7 +92,7 @@ const lrange: CommandHandler = (context: CommandContext): CommandResult => {
 /** `LLEN key` — 0 for a missing key. */
 const llen: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'integer', value: 0 } }
   if (record.value.type !== 'list') return { state, reply: wrongTypeReply() }
   return { state, reply: { kind: 'integer', value: record.value.value.length } }
@@ -112,7 +112,7 @@ const blpop: CommandHandler = (context: CommandContext): CommandResult => {
 
   let working = context.state
   for (const key of keys) {
-    const { state: afterRead, record } = readKey(working, key)
+    const { state: afterRead, record } = readKey(working, key, 'write')
     working = afterRead
     if (!record) continue
     if (record.value.type !== 'list') return { state: working, reply: wrongTypeReply() }

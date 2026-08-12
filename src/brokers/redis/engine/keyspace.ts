@@ -15,15 +15,42 @@ export function livesAt(state: RedisState, key: string, now: number): boolean {
 }
 
 /**
+ * Why a lookup is happening, which decides one thing only: whether it moves
+ * `metrics.hits` / `metrics.misses`.
+ *
+ * Real Redis splits the same lookup into `lookupKeyRead` and `lookupKeyWrite`,
+ * and only the read path touches `keyspace_hits` / `keyspace_misses`. `SET k v`
+ * on a fresh key is not a cache miss — nobody was looking for a value — and
+ * counting it as one makes the hit rate, the single number that says whether a
+ * cache is earning its place, unreadable in exactly the lessons that teach it.
+ *
+ * Deliberately a required argument rather than an option defaulting to `'read'`:
+ * the compiler then forces every new handler to state its intent, instead of
+ * silently inheriting the counting behaviour that is wrong for a write.
+ */
+export type LookupIntent = 'read' | 'write'
+
+/**
  * Reads a key, removing it first if it is past its expiry (lazy expiry: the
  * only other place a key dies is the periodic active-expire cycle, modelled
- * separately so the gap between the two is visible to a learner). Counts a
- * hit or a miss, and on a genuine hit refreshes the LRU stamp and bumps the
- * LFU counter used by eviction.
+ * separately so the gap between the two is visible to a learner). On a genuine
+ * hit it refreshes the LRU stamp and bumps the LFU counter used by eviction —
+ * both of those happen whatever the `intent`, because a write is an access as
+ * far as eviction is concerned, and real Redis touches the LRU clock on its
+ * write path too. `intent` gates the hit/miss counters and nothing else.
+ *
+ * `metrics.expired` is likewise ungated: a key found dead really did expire,
+ * and which command noticed does not change that.
  */
-export function readKey(state: RedisState, key: string): { state: RedisState; record?: KeyRecord } {
+export function readKey(
+  state: RedisState,
+  key: string,
+  intent: LookupIntent,
+): { state: RedisState; record?: KeyRecord } {
+  const counts = intent === 'read'
   const record = state.keys[key]
   if (!record) {
+    if (!counts) return { state, record: undefined }
     return { state: { ...state, metrics: { ...state.metrics, misses: state.metrics.misses + 1 } }, record: undefined }
   }
 
@@ -40,7 +67,7 @@ export function readKey(state: RedisState, key: string): { state: RedisState; re
       metrics: {
         ...state.metrics,
         expired: state.metrics.expired + 1,
-        misses: state.metrics.misses + 1,
+        misses: counts ? state.metrics.misses + 1 : state.metrics.misses,
         keysCount: state.metrics.keysCount - 1,
         memoryUsed: state.metrics.memoryUsed - record.bytes,
       },
@@ -52,7 +79,7 @@ export function readKey(state: RedisState, key: string): { state: RedisState; re
   const nextState: RedisState = {
     ...state,
     keys: { ...state.keys, [key]: updatedRecord },
-    metrics: { ...state.metrics, hits: state.metrics.hits + 1 },
+    metrics: { ...state.metrics, hits: counts ? state.metrics.hits + 1 : state.metrics.hits },
   }
   return { state: nextState, record: updatedRecord }
 }

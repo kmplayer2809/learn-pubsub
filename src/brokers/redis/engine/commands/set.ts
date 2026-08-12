@@ -12,7 +12,7 @@ import { oomReply, wrongTypeReply } from '../reply'
  */
 const sadd: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, ...members] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   const existingValue = record?.value
   if (existingValue && existingValue.type !== 'set') return { state: afterRead, reply: wrongTypeReply() }
 
@@ -33,7 +33,7 @@ const sadd: CommandHandler = (context: CommandContext): CommandResult => {
 /** `SREM key member [member ...]` — removes the given members; the key is deleted once the last member is gone. */
 const srem: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, ...members] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   if (!record) return { state: afterRead, reply: { kind: 'integer', value: 0 } }
   if (record.value.type !== 'set') return { state: afterRead, reply: wrongTypeReply() }
 
@@ -49,7 +49,7 @@ const srem: CommandHandler = (context: CommandContext): CommandResult => {
 /** `SMEMBERS key` — every member, in insertion order; empty array for a missing key. */
 const smembers: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'array', value: [] } }
   if (record.value.type !== 'set') return { state, reply: wrongTypeReply() }
   return { state, reply: { kind: 'array', value: record.value.value } }
@@ -70,7 +70,7 @@ const sinter: CommandHandler = (context: CommandContext): CommandResult => {
   const sets: string[][] = []
   let anyMissing = false
   for (const key of context.args) {
-    const { state: afterRead, record } = readKey(working, key)
+    const { state: afterRead, record } = readKey(working, key, 'read')
     working = afterRead
     if (!record) {
       anyMissing = true
@@ -89,7 +89,7 @@ const sinter: CommandHandler = (context: CommandContext): CommandResult => {
 /** `SISMEMBER key member` — 1 or 0. */
 const sismember: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, member] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'integer', value: 0 } }
   if (record.value.type !== 'set') return { state, reply: wrongTypeReply() }
   return { state, reply: { kind: 'integer', value: record.value.value.includes(member!) ? 1 : 0 } }
@@ -98,7 +98,7 @@ const sismember: CommandHandler = (context: CommandContext): CommandResult => {
 /** `SCARD key` — 0 for a missing key. */
 const scard: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'integer', value: 0 } }
   if (record.value.type !== 'set') return { state, reply: wrongTypeReply() }
   return { state, reply: { kind: 'integer', value: record.value.value.length } }

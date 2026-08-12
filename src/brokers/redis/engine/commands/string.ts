@@ -28,7 +28,7 @@ const set: CommandHandler = (context: CommandContext): CommandResult => {
 
   // Route the existence check through readKey (never `state.keys` directly) so
   // lazy expiry and hit/miss counting stay centralised, per the engine's rules.
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   if (nx && record) return { state: afterRead, reply: { kind: 'nil' } }
   if (xx && !record) return { state: afterRead, reply: { kind: 'nil' } }
 
@@ -43,7 +43,7 @@ const set: CommandHandler = (context: CommandContext): CommandResult => {
 /** `GET key` — nil for a missing key, WRONGTYPE for a non-string one. */
 const get: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'nil' } }
   if (record.value.type !== 'string') return { state, reply: wrongTypeReply() }
   return { state, reply: { kind: 'bulk', value: record.value.value } }
@@ -56,7 +56,7 @@ const get: CommandHandler = (context: CommandContext): CommandResult => {
  */
 const incr: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   // Narrowed through a plain local rather than the `record.value.type` chain
   // directly: TS does not retain discriminated-union narrowing on a nested
   // property path across a later re-test of the same chain.
@@ -81,7 +81,7 @@ const del: CommandHandler = (context: CommandContext): CommandResult => {
   for (const key of context.args) {
     // readKey first: a key past its deadline is already gone (lazy expiry),
     // and must not be double-counted as a fresh deletion.
-    const { state: afterRead, record } = readKey(working, key)
+    const { state: afterRead, record } = readKey(working, key, 'write')
     working = afterRead
     if (!record) continue
     working = deleteKey(working, key).state
@@ -93,7 +93,7 @@ const del: CommandHandler = (context: CommandContext): CommandResult => {
 /** `SETNX key value` — writes only when the key does not already exist. */
 const setnx: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, value] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   if (record) return { state: afterRead, reply: { kind: 'integer', value: 0 } }
 
   const result = writeKey(afterRead, key!, { type: 'string', value: value! })

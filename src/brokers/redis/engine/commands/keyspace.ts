@@ -9,7 +9,7 @@ import type { CommandContext, CommandHandler, CommandResult } from '../reply'
  */
 const expire: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, secondsArg] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   if (!record) return { state: afterRead, reply: { kind: 'integer', value: 0 } }
 
   const expiresAt = afterRead.now + Number(secondsArg) * 1000
@@ -20,7 +20,7 @@ const expire: CommandHandler = (context: CommandContext): CommandResult => {
 /** `TTL key` — remaining seconds, `-1` with no TTL, `-2` when the key is gone. */
 const ttl: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'integer', value: -2 } }
   if (record.expiresAt === undefined) return { state, reply: { kind: 'integer', value: -1 } }
   // Round up: a key with 500ms left still reads as "1 second remaining" rather
@@ -32,7 +32,7 @@ const ttl: CommandHandler = (context: CommandContext): CommandResult => {
 /** `PERSIST key` — clears a TTL; returns `1` only when there was one to clear. */
 const persist: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   if (!record || record.expiresAt === undefined) return { state: afterRead, reply: { kind: 'integer', value: 0 } }
 
   // No `expiresAt` and no `keepTtl` in the write opts: writeKey's default is
@@ -46,7 +46,7 @@ const exists: CommandHandler = (context: CommandContext): CommandResult => {
   let working = context.state
   let count = 0
   for (const key of context.args) {
-    const { state: afterRead, record } = readKey(working, key)
+    const { state: afterRead, record } = readKey(working, key, 'read')
     working = afterRead
     if (record) count++
   }
@@ -56,7 +56,7 @@ const exists: CommandHandler = (context: CommandContext): CommandResult => {
 /** `TYPE key` — the value's type name, or `none` for a missing (or expired) key. */
 const type: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   return { state, reply: { kind: 'status', value: record ? record.value.type : 'none' } }
 }
 

@@ -6,7 +6,7 @@ describe('readKey', () => {
   it('counts a hit and refreshes the LRU stamp', () => {
     const written = writeKey(emptyState(), 'a', { type: 'string', value: 'x' }).state
     const at = { ...written, now: 500 }
-    const { state, record } = readKey(at, 'a')
+    const { state, record } = readKey(at, 'a', 'read')
     expect(record?.value).toEqual({ type: 'string', value: 'x' })
     expect(state.metrics.hits).toBe(1)
     expect(state.keys['a']!.lastAccessAt).toBe(500)
@@ -14,14 +14,14 @@ describe('readKey', () => {
   })
 
   it('counts a miss for a key that was never written', () => {
-    const { state, record } = readKey(emptyState(), 'nope')
+    const { state, record } = readKey(emptyState(), 'nope', 'read')
     expect(record).toBeUndefined()
     expect(state.metrics.misses).toBe(1)
   })
 
   it('removes an expired key lazily on read and counts it as expired, not evicted', () => {
     const written = writeKey(emptyState(), 'a', { type: 'string', value: 'x' }, { expiresAt: 100 }).state
-    const { state, record } = readKey({ ...written, now: 101 }, 'a')
+    const { state, record } = readKey({ ...written, now: 101 }, 'a', 'read')
     expect(record).toBeUndefined()
     expect(state.keys['a']).toBeUndefined()
     expect(state.keyOrder).toEqual([])
@@ -32,7 +32,45 @@ describe('readKey', () => {
 
   it('keeps a key that expires exactly now — Redis expires strictly after the deadline', () => {
     const written = writeKey(emptyState(), 'a', { type: 'string', value: 'x' }, { expiresAt: 100 }).state
-    expect(readKey({ ...written, now: 100 }, 'a').record).toBeDefined()
+    expect(readKey({ ...written, now: 100 }, 'a', 'read').record).toBeDefined()
+  })
+
+  describe("intent 'write'", () => {
+    it('finds the same key and record a read would, without moving hits or misses', () => {
+      const written = writeKey(emptyState(), 'a', { type: 'string', value: 'x' }).state
+      const hit = readKey({ ...written, now: 500 }, 'a', 'write')
+      expect(hit.record?.value).toEqual({ type: 'string', value: 'x' })
+      expect(hit.state.metrics.hits).toBe(0)
+
+      const miss = readKey(written, 'nope', 'write')
+      expect(miss.record).toBeUndefined()
+      expect(miss.state.metrics.misses).toBe(0)
+    })
+
+    it('still refreshes the LRU stamp and the LFU counter, because eviction must see a write as an access', () => {
+      // If a write did not count as an access, `allkeys-lru` would treat the
+      // key just written as the coldest in the keyspace and evict it first —
+      // which is the opposite of what the eviction lesson demonstrates.
+      const written = writeKey(emptyState(), 'a', { type: 'string', value: 'x' }).state
+      const { state } = readKey({ ...written, now: 500 }, 'a', 'write')
+      expect(state.keys['a']!.lastAccessAt).toBe(500)
+      expect(state.keys['a']!.hits).toBe(1)
+    })
+
+    it('still expires a dead key and still counts it expired — only the miss is withheld', () => {
+      const written = writeKey(emptyState(), 'a', { type: 'string', value: 'x' }, { expiresAt: 100 }).state
+      const { state, record } = readKey({ ...written, now: 101 }, 'a', 'write')
+      expect(record).toBeUndefined()
+      expect(state.keys['a']).toBeUndefined()
+      expect(state.keyOrder).toEqual([])
+      expect(state.metrics.expired).toBe(1)
+      expect(state.metrics.misses).toBe(0)
+    })
+
+    it('returns the caller\'s own state object on a plain miss, allocating nothing', () => {
+      const state = emptyState()
+      expect(readKey(state, 'nope', 'write').state).toBe(state)
+    })
   })
 })
 

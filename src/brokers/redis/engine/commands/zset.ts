@@ -46,7 +46,7 @@ function resolveRange(length: number, startArg: string, stopArg: string): [numbe
  */
 const zadd: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, ...pairs] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   const existingValue = record?.value
   if (existingValue && existingValue.type !== 'zset') return { state: afterRead, reply: wrongTypeReply() }
 
@@ -72,7 +72,7 @@ const zadd: CommandHandler = (context: CommandContext): CommandResult => {
 /** `ZINCRBY key increment member` — creates the member at `increment` when absent. */
 const zincrby: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, incrementArg, member] = context.args
-  const { state: afterRead, record } = readKey(context.state, key!)
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
   const existingValue = record?.value
   if (existingValue && existingValue.type !== 'zset') return { state: afterRead, reply: wrongTypeReply() }
 
@@ -95,7 +95,7 @@ const zincrby: CommandHandler = (context: CommandContext): CommandResult => {
 const zrange: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, startArg, stopArg, ...opts] = context.args
   const withScores = opts.some((opt) => opt.toUpperCase() === 'WITHSCORES')
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'array', value: [] } }
   if (record.value.type !== 'zset') return { state, reply: wrongTypeReply() }
 
@@ -110,7 +110,7 @@ const zrange: CommandHandler = (context: CommandContext): CommandResult => {
 const zrevrange: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, startArg, stopArg, ...opts] = context.args
   const withScores = opts.some((opt) => opt.toUpperCase() === 'WITHSCORES')
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'array', value: [] } }
   if (record.value.type !== 'zset') return { state, reply: wrongTypeReply() }
 
@@ -124,7 +124,7 @@ const zrevrange: CommandHandler = (context: CommandContext): CommandResult => {
 /** `ZSCORE key member` — nil when the key or the member is missing. */
 const zscore: CommandHandler = (context: CommandContext): CommandResult => {
   const [key, member] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'nil' } }
   if (record.value.type !== 'zset') return { state, reply: wrongTypeReply() }
   const entry = record.value.value.find((e) => e.member === member)
@@ -134,7 +134,7 @@ const zscore: CommandHandler = (context: CommandContext): CommandResult => {
 /** `ZCARD key` — 0 for a missing key. */
 const zcard: CommandHandler = (context: CommandContext): CommandResult => {
   const [key] = context.args
-  const { state, record } = readKey(context.state, key!)
+  const { state, record } = readKey(context.state, key!, 'read')
   if (!record) return { state, reply: { kind: 'integer', value: 0 } }
   if (record.value.type !== 'zset') return { state, reply: wrongTypeReply() }
   return { state, reply: { kind: 'integer', value: record.value.value.length } }
