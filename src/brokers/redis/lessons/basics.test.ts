@@ -5,6 +5,7 @@ import { strings } from './01-strings'
 import { hash } from './02-hash'
 import { list } from './03-list'
 import { set } from './04-set'
+import { zset } from './05-zset'
 
 function run(lesson: RedisLesson, upTo: number) {
   const sim = createRedisSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
@@ -69,5 +70,17 @@ describe('04 set', () => {
     const state = run(set, 8000)
     const lines = state.journal.map((e) => e.text)
     expect(lines).toContain('SINTER online:mon online:tue → 1) "bob" 2) "cat"')
+  })
+})
+
+describe('05 zset', () => {
+  it('lists ann first with score 300 in the second ZREVRANGE, after ZINCRBY overtakes bob', () => {
+    const state = run(zset, 8500)
+    const lines = state.journal.map((e) => e.text)
+    // 'board' and 'WITHSCORES' are plain words (no colon), so formatCommand
+    // quotes both; '0' and '2' are bare integers, unquoted.
+    expect(lines).toContain(
+      'ZREVRANGE "board" 0 2 "WITHSCORES" → 1) "ann" 2) "300" 3) "bob" 4) "250" 5) "cat" 6) "175"',
+    )
   })
 })
