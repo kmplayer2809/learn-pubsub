@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createRedisSimulation } from '../engine'
 import type { RedisLesson } from './types'
 import { strings } from './01-strings'
+import { hash } from './02-hash'
 
 function run(lesson: RedisLesson, upTo: number) {
   const sim = createRedisSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
@@ -19,5 +20,17 @@ describe('01 strings', () => {
     const state = run(strings, 10_000)
     expect(state.keys['page:views']!.value).toEqual({ type: 'string', value: '2' })
     expect(state.metrics.misses).toBe(1)
+  })
+})
+
+describe('02 hash', () => {
+  it('keeps HGETALL in insertion order after HDEL, with the removed field gone and logins where it was created, not sorted', () => {
+    // fieldOrder after HSET is ['name', 'city']; HINCRBY appends 'logins' ->
+    // ['name', 'city', 'logins']; HDEL 'city' splices it out -> ['name',
+    // 'logins']. HGETALL flattens fieldOrder, never Object.entries (which
+    // would sort a numeric-looking field name ahead of insertion order).
+    const state = run(hash, 9000)
+    const lines = state.journal.map((e) => e.text)
+    expect(lines[lines.length - 1]).toBe('HGETALL user:1 → 1) "name" 2) "alice" 3) "logins" 4) "1"')
   })
 })
