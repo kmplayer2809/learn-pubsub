@@ -117,24 +117,105 @@ describe('createRedisSimulation', () => {
     expect(sim.issues.some((i) => i.code === 'maxmemory-noeviction' && i.severity === 'warning')).toBe(true)
   })
 
-  it('wakes a BLPOP client when a push arrives, in arrival order', () => {
-    const sim = createRedisSimulation({
-      topology: { ...topology, clients: [...topology.clients, { id: 'c2', label: 'Worker', position: { x: 40, y: 260 } }] },
-      script: [
-        { at: 0, clientId: 'c2', name: 'BLPOP', args: ['jobs', '10'] },
-        { at: 1000, clientId: 'c1', name: 'LPUSH', args: ['jobs', 'job-1'] },
-      ],
-      seed: 1,
+  describe('BLPOP timeout', () => {
+    const withWorker: RedisTopology = {
+      ...topology,
+      clients: [...topology.clients, { id: 'c2', label: 'Worker', position: { x: 40, y: 260 } }],
+    }
+
+    it('wakes a BLPOP client when a push arrives, journalling exactly one line for it, not a spurious extra', () => {
+      const sim = createRedisSimulation({
+        topology: withWorker,
+        script: [
+          { at: 0, clientId: 'c2', name: 'BLPOP', args: ['jobs', '10'] },
+          { at: 1000, clientId: 'c1', name: 'LPUSH', args: ['jobs', 'job-1'] },
+        ],
+        seed: 1,
+      })
+      sim.advanceTo(3000)
+      expect(sim.snapshot().blocked).toEqual([])
+      expect(sim.snapshot().keys['jobs']).toBeUndefined()
+      // Asserting the full journal array, not `toContain`: the review found
+      // the previous fixture's `toContain` never noticed a spurious extra
+      // "(nil)" line journalled the instant the client parked. There must be
+      // exactly one BLPOP line — the real completion — not two.
+      // 'jobs' has no colon, so formatCommand's quoting heuristic (reply.ts:
+      // bare integers and `a:b` tokens go unquoted, everything else is quoted)
+      // quotes it on the command side, same as it would any other plain word.
+      expect(sim.snapshot().journal.map((e) => e.text)).toEqual([
+        'LPUSH "jobs" "job-1" → (integer) 1',
+        'BLPOP "jobs" 10 → 1) "jobs" 2) "job-1"',
+      ])
     })
-    sim.advanceTo(3000)
-    expect(sim.snapshot().blocked).toEqual([])
-    expect(sim.snapshot().keys['jobs']).toBeUndefined()
-    // 'jobs' has no colon, so formatCommand's quoting heuristic (reply.ts:
-    // bare integers and `a:b` tokens go unquoted, everything else is quoted)
-    // quotes it on the command side, same as it would any other plain word.
-    // formatReply's array rendering always quotes every entry regardless, so
-    // the reply side was already quoted either way.
-    expect(sim.snapshot().journal.map((e) => e.text)).toContain('BLPOP "jobs" 10 → 1) "jobs" 2) "job-1"')
+
+    it('never times out with no push: still blocked at t=1000 and the journal is empty; after the deadline, one nil line, unblocked, a return flight animated', () => {
+      const sim = createRedisSimulation({
+        topology: withWorker,
+        script: [{ at: 0, clientId: 'c2', name: 'BLPOP', args: ['jobs', '5'] }],
+        seed: 1,
+      })
+      sim.advanceTo(1000)
+      expect(sim.snapshot().blocked).toHaveLength(1)
+      expect(sim.snapshot().journal).toEqual([])
+
+      // Parked at t=120 (COMMAND_TRAVEL_MS after the scripted `at: 0`),
+      // deadline 5s later: timeoutAt = 120 + 5000 = 5120.
+      sim.advanceTo(5130)
+      expect(sim.snapshot().blocked).toEqual([])
+      expect(sim.snapshot().journal.map((e) => e.text)).toEqual(['BLPOP "jobs" 5 → (nil)'])
+      expect(sim.snapshot().inFlight.map((f) => f.edgeId)).toContain('redis->c2')
+
+      sim.advanceTo(6000)
+      expect(sim.snapshot().inFlight).toEqual([])
+    })
+
+    it('a push landing at exactly the deadline wakes the client with data, not a timeout', () => {
+      // BLPOP parks at t=120 with a 0.1s timeout, so its deadline is exactly
+      // t=220. Scripting the LPUSH at t=100 makes its own reply (t=100+120)
+      // land at that same instant — proving `applyUnblock`'s wake-before-
+      // timeout ordering, not just that a push can outrace an unrelated
+      // deadline.
+      const sim = createRedisSimulation({
+        topology: withWorker,
+        script: [
+          { at: 0, clientId: 'c2', name: 'BLPOP', args: ['jobs', '0.1'] },
+          { at: 100, clientId: 'c1', name: 'LPUSH', args: ['jobs', 'job-1'] },
+        ],
+        seed: 1,
+      })
+      sim.advanceTo(1000)
+      expect(sim.snapshot().blocked).toEqual([])
+      expect(sim.snapshot().journal.map((e) => e.text)).toEqual([
+        'LPUSH "jobs" "job-1" → (integer) 1',
+        'BLPOP "jobs" "0.1" → 1) "jobs" 2) "job-1"',
+      ])
+    })
+
+    it('BLPOP key 0 blocks forever: still parked long after any plausible deadline, no journal line', () => {
+      const sim = createRedisSimulation({
+        topology: withWorker,
+        script: [{ at: 0, clientId: 'c2', name: 'BLPOP', args: ['jobs', '0'] }],
+        seed: 1,
+      })
+      sim.advanceTo(100_000)
+      expect(sim.snapshot().blocked).toHaveLength(1)
+      expect(sim.snapshot().journal).toEqual([])
+    })
+
+    it('metrics.commands counts a BLPOP that parks and then wakes exactly once, not twice', () => {
+      const sim = createRedisSimulation({
+        topology: withWorker,
+        script: [
+          { at: 0, clientId: 'c2', name: 'BLPOP', args: ['jobs', '10'] },
+          { at: 1000, clientId: 'c1', name: 'LPUSH', args: ['jobs', 'job-1'] },
+        ],
+        seed: 1,
+      })
+      sim.advanceTo(3000)
+      // BLPOP + LPUSH = 2 commands scripted; BLPOP must count once (at park),
+      // never a second time when applyUnblock later wakes it.
+      expect(sim.snapshot().metrics.commands).toBe(2)
+    })
   })
 
   it('advances without throwing and reports no-clients when nothing is scheduled at all', () => {

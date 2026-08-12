@@ -174,11 +174,38 @@ function applyReply(state: RedisState, event: SimEvent<RedisEventType>): ReduceR
 
   const handled = HANDLERS[name]({ state, clientId, args })
 
-  const withJournal: RedisState = {
+  // The command was issued and counted the instant the client sent it, same
+  // as real Redis — whether it completes now or parks. Parking must not count
+  // it again when the client later wakes (applyUnblock does not touch this).
+  const withMetrics: RedisState = {
     ...handled.state,
     metrics: { ...handled.state.metrics, commands: handled.state.metrics.commands + 1 },
+  }
+
+  if (handled.parked) {
+    // The reply has not happened yet: no journal line, no return flight. Only
+    // schedule a wake-up if the client didn't ask to block forever — the
+    // handler always appends the just-parked entry last, so that's the
+    // deadline to schedule against (the `parked` flag already tells us
+    // parking happened; this is just finding which entry, not re-detecting
+    // whether it did).
+    const parkedEntry = withMetrics.blocked[withMetrics.blocked.length - 1]
+    if (parkedEntry?.timeoutAt === undefined) return { state: withMetrics, newEvents: [] }
+
+    const [seq, afterSeq] = nextSeq(withMetrics)
+    const timeoutEvent: SimEvent<RedisEventType> = {
+      at: parkedEntry.timeoutAt,
+      seq,
+      type: 'unblock',
+      payload: {},
+    }
+    return { state: afterSeq, newEvents: [timeoutEvent] }
+  }
+
+  const withJournal: RedisState = {
+    ...withMetrics,
     journal: [
-      ...handled.state.journal,
+      ...withMetrics.journal,
       {
         at: state.now,
         type: 'reply',
@@ -220,9 +247,26 @@ function applyReply(state: RedisState, event: SimEvent<RedisEventType>): ReduceR
   return { state: afterUnblockSeq, newEvents: [unblockEvent] }
 }
 
+/** Builds the return `RedisFlight` a woken or timed-out BLPOP client sees, server back to client. */
+function blpopReturnFlight(state: RedisState, entry: BlockedClient): RedisFlight {
+  return {
+    message: { id: `${entry.commandId}-in`, label: 'BLPOP', solid: false },
+    edgeId: `${state.topology.server.id}->${entry.clientId}`,
+    fromT: state.now,
+    toT: state.now + COMMAND_TRAVEL_MS,
+    // BlockedClient carries no tone — the scripted command's tone lived on the
+    // event payload, long gone by the time the client wakes — so fall back to
+    // the engine's default rather than inventing a per-client one.
+    tone: DEFAULT_TONE,
+  }
+}
+
 function applyUnblock(state: RedisState, _event: SimEvent<RedisEventType>): ReduceResult {
   let working = state
 
+  // Wakes first. When a push and a timeout land at the same virtual
+  // millisecond, the push wins — that is Redis' own behaviour, and the
+  // friendlier lesson for a learner watching this run.
   for (;;) {
     const woken = nextWakeable(working)
     if (!woken) break
@@ -248,6 +292,28 @@ function applyUnblock(state: RedisState, _event: SimEvent<RedisEventType>): Redu
           messageId: entry.commandId,
         },
       ],
+      inFlight: [...popped.state.inFlight, blpopReturnFlight(working, entry)],
+    }
+  }
+
+  // Then timeouts: any remaining entry whose deadline has passed exits with a
+  // nil, even though no push ever showed up for it.
+  const timedOut = working.blocked.filter((entry) => entry.timeoutAt !== undefined && entry.timeoutAt <= working.now)
+  for (const entry of timedOut) {
+    working = {
+      ...working,
+      blocked: working.blocked.filter((candidate) => candidate !== entry),
+      journal: [
+        ...working.journal,
+        {
+          at: working.now,
+          type: 'unblock',
+          text: `${formatCommand('BLPOP', entry.args)} → ${formatReply({ kind: 'nil' })}`,
+          nodeId: entry.clientId,
+          messageId: entry.commandId,
+        },
+      ],
+      inFlight: [...working.inFlight, blpopReturnFlight(working, entry)],
     }
   }
 

@@ -83,11 +83,15 @@ describe('BLPOP', () => {
     // list is now ['b', 'a']
     const result = run(second.state, 'BLPOP', ['l', '5'])
     expect(result.reply).toEqual({ kind: 'array', value: ['l', 'b'] })
+    // A completed pop is not a park: the kernel wiring must journal it and
+    // animate a return flight immediately, same as any other reply.
+    expect(result.parked).toBeUndefined()
   })
 
   it('parks the client on state.blocked when the list is empty, and replies nil', () => {
     const result = run(emptyState(), 'BLPOP', ['l', '5'])
     expect(result.reply).toEqual({ kind: 'nil' })
+    expect(result.parked).toBe(true)
     expect(result.state.blocked).toHaveLength(1)
     expect(result.state.blocked[0]!.clientId).toBe('c1')
     expect(result.state.blocked[0]!.keys).toEqual(['l'])
@@ -106,5 +110,34 @@ describe('BLPOP', () => {
     const result = run(emptyState(), 'BLPOP', ['nope', '5'])
     expect(result.state.blocked).toHaveLength(1)
     expect(result.state.blocked[0]!.keys).toEqual(['nope'])
+  })
+
+  it('computes timeoutAt from now plus the timeout in seconds, converted to ms', () => {
+    const result = run(emptyState(), 'BLPOP', ['l', '5'])
+    expect(result.state.blocked[0]!.timeoutAt).toBe(5000)
+  })
+
+  it('accepts a fractional timeout, in seconds', () => {
+    const result = run(emptyState(), 'BLPOP', ['l', '0.5'])
+    expect(result.state.blocked[0]!.timeoutAt).toBe(500)
+  })
+
+  it('a timeout of 0 means block forever: timeoutAt is undefined', () => {
+    const result = run(emptyState(), 'BLPOP', ['l', '0'])
+    expect(result.state.blocked[0]!.timeoutAt).toBeUndefined()
+  })
+
+  // Malformed input is validate.ts's job to report to the script's author —
+  // the engine itself must not throw over it mid-run, so it degrades to the
+  // same block-forever behavior as an explicit 0.
+  it('a timeout that does not parse as a number degrades to block-forever rather than throwing', () => {
+    expect(() => run(emptyState(), 'BLPOP', ['l', 'not-a-number'])).not.toThrow()
+    const result = run(emptyState(), 'BLPOP', ['l', 'not-a-number'])
+    expect(result.state.blocked[0]!.timeoutAt).toBeUndefined()
+  })
+
+  it('a negative timeout also degrades to block-forever rather than throwing', () => {
+    const result = run(emptyState(), 'BLPOP', ['l', '-5'])
+    expect(result.state.blocked[0]!.timeoutAt).toBeUndefined()
   })
 })

@@ -123,19 +123,30 @@ const blpop: CommandHandler = (context: CommandContext): CommandResult => {
     return { state: working, reply: { kind: 'array', value: [key, popped!] } }
   }
 
+  // BLPOP's timeout is seconds, possibly fractional, with 0 meaning "block
+  // forever" — real Redis semantics this engine matches. A timeout that does
+  // not parse as a finite non-negative number is malformed input; that gets
+  // reported by validate.ts, not here, so a running simulation treats it as
+  // block-forever rather than throwing over it.
+  const timeoutArg = context.args[context.args.length - 1]!
+  const parsedTimeout = Number(timeoutArg)
+  const timeoutAt =
+    Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? working.now + parsedTimeout * 1000 : undefined
+
   const blockedClient: BlockedClient = {
     clientId: context.clientId,
     keys,
     args: context.args,
     since: working.now,
     commandId: String(working.commandCounter),
+    timeoutAt,
   }
   const nextState: RedisState = {
     ...working,
     commandCounter: working.commandCounter + 1,
     blocked: [...working.blocked, blockedClient],
   }
-  return { state: nextState, reply: { kind: 'nil' } }
+  return { state: nextState, reply: { kind: 'nil' }, parked: true }
 }
 
 export const handlers = {

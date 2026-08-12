@@ -80,6 +80,12 @@ export interface BlockedClient {
   args: string[]
   since: number
   commandId: string
+  /**
+   * Absolute virtual-ms deadline, or undefined when the client asked to block
+   * forever (BLPOP's timeout argument of 0). Parsed at park time because
+   * `args` holds the raw seconds string the client typed.
+   */
+  timeoutAt?: number
 }
 
 export interface RedisState extends KernelState {

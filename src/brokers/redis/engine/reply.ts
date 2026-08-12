@@ -86,6 +86,13 @@ export interface CommandContext {
 export interface CommandResult {
   state: RedisState
   reply: Reply
+  /**
+   * True when the handler parked the client on `state.blocked` rather than
+   * completing. The command has been issued and counted, but its reply has not
+   * happened yet — the kernel wiring must not journal `reply` or animate a
+   * return trip until the client is actually woken (by a push) or times out.
+   */
+  parked?: boolean
 }
 
 export type CommandHandler = (context: CommandContext) => CommandResult
