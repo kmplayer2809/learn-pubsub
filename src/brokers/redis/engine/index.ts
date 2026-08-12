@@ -264,9 +264,17 @@ function blpopReturnFlight(state: RedisState, entry: BlockedClient): RedisFlight
 function applyUnblock(state: RedisState, _event: SimEvent<RedisEventType>): ReduceResult {
   let working = state
 
-  // Wakes first. When a push and a timeout land at the same virtual
-  // millisecond, the push wins — that is Redis' own behaviour, and the
-  // friendlier lesson for a learner watching this run.
+  // Wakes before timeouts — but only within this one call. Both exits resolving
+  // in the same reducer invocation means an arriving element beats a deadline
+  // that has just passed, which is the friendlier lesson.
+  //
+  // It does NOT mean a push always wins a tie. A timeout is armed as its own
+  // `unblock` event when the client parks, so it carries a lower `seq` than any
+  // reply generated later; a push whose reply lands on exactly the deadline
+  // therefore sorts second and finds the client already gone, leaving its
+  // element unclaimed in the list. Deterministic, defensible (the timeout was
+  // armed first), and a one-millisecond window no lesson should sit on
+  // deliberately — but do not read the ordering here as a guarantee.
   for (;;) {
     const woken = nextWakeable(working)
     if (!woken) break
