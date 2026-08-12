@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { createRedisSimulation } from '../engine'
+// `livesAt` is not re-exported by the engine barrel (`engine/index.ts`) — only
+// `engine/keyspace.ts` exports it directly. The engine is off-limits to edit,
+// so this imports the deeper path rather than adding a re-export.
+import { livesAt } from '../engine/keyspace'
 import type { RedisLesson } from './types'
 import { strings } from './01-strings'
 import { hash } from './02-hash'
 import { list } from './03-list'
 import { set } from './04-set'
 import { zset } from './05-zset'
+import { ttl } from './06-ttl'
 
 function run(lesson: RedisLesson, upTo: number) {
   const sim = createRedisSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
@@ -82,5 +87,25 @@ describe('05 zset', () => {
     expect(lines).toContain(
       'ZREVRANGE "board" 0 2 "WITHSCORES" → 1) "ann" 2) "300" 3) "bob" 4) "250" 5) "cat" 6) "175"',
     )
+  })
+})
+
+describe('06 ttl', () => {
+  it('leaves an expired key present-but-dead until lazy read or the active cycle actually removes it', () => {
+    // SET session:2 is scripted at 200, applies at 200 + 120 = 320, and
+    // `EX 3` gives expiresAt = 320 + 3000 = 3320. At t=3500 that deadline has
+    // passed, but nothing has touched the key yet (the active cycle's first
+    // pass is scheduled at exactly activeExpireEveryMs = 5000, per this
+    // lesson's server override), so the record is still sitting in state.
+    const beforeActivePass = run(ttl, 3500)
+    expect(beforeActivePass.keys['session:2']).toBeDefined()
+    expect(livesAt(beforeActivePass, 'session:2', 3500)).toBe(false)
+
+    // By 5000ms the active cycle has run once: session:1 was already removed
+    // lazily by the GET at 4000 (applies 4120), and session:2 — still dead
+    // and still present — is exactly what that first pass sweeps.
+    const afterActivePass = run(ttl, 5000)
+    expect(afterActivePass.keys['session:2']).toBeUndefined()
+    expect(afterActivePass.metrics.expired).toBe(2)
   })
 })
