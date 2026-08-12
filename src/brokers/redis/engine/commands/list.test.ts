@@ -93,6 +93,15 @@ describe('BLPOP', () => {
     expect(result.state.blocked[0]!.keys).toEqual(['l'])
   })
 
+  // Regression: `keys` drops the trailing timeout (see the comment above), so
+  // anything that later needs to re-journal the original command verbatim —
+  // the kernel wiring's completed-BLPOP line — must read it from `args`
+  // instead. This was missing until the kernel wiring task needed it.
+  it('keeps the full original arguments, timeout included, on the blocked entry', () => {
+    const result = run(emptyState(), 'BLPOP', ['l', '5'])
+    expect(result.state.blocked[0]!.args).toEqual(['l', '5'])
+  })
+
   it('parks the client when the named key is missing entirely', () => {
     const result = run(emptyState(), 'BLPOP', ['nope', '5'])
     expect(result.state.blocked).toHaveLength(1)

@@ -71,6 +71,13 @@ export interface RedisFlight {
 export interface BlockedClient {
   clientId: NodeId
   keys: string[]
+  /**
+   * The full original command arguments, including the trailing timeout —
+   * `keys` deliberately drops it (see `commands/list.ts`'s `blpop`), but the
+   * kernel wiring that journals the completed BLPOP once a push wakes this
+   * client needs the exact text the client typed, timeout included.
+   */
+  args: string[]
   since: number
   commandId: string
 }

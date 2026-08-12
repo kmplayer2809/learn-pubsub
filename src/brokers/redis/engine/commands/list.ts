@@ -126,6 +126,7 @@ const blpop: CommandHandler = (context: CommandContext): CommandResult => {
   const blockedClient: BlockedClient = {
     clientId: context.clientId,
     keys,
+    args: context.args,
     since: working.now,
     commandId: String(working.commandCounter),
   }
