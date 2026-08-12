@@ -26,7 +26,9 @@ describe('sizeOf', () => {
   })
 
   it('sums every field of a hash', () => {
-    expect(sizeOf('h', { type: 'hash', value: { name: 'alice', city: 'hanoi' } })).toBe(16 + 1 + 4 + 5 + 4 + 5)
+    expect(sizeOf('h', { type: 'hash', value: { name: 'alice', city: 'hanoi' }, fieldOrder: ['name', 'city'] })).toBe(
+      16 + 1 + 4 + 5 + 4 + 5,
+    )
   })
 
   it('adds eight bytes per zset score', () => {

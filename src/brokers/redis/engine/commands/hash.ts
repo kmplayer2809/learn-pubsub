@@ -18,15 +18,23 @@ const hset: CommandHandler = (context: CommandContext): CommandResult => {
   if (existingValue && existingValue.type !== 'hash') return { state: afterRead, reply: wrongTypeReply() }
 
   const fields: Record<string, string> = existingValue && existingValue.type === 'hash' ? { ...existingValue.value } : {}
+  // Fields keep the position they were first set at — Object key order sorts
+  // all-digit field names numerically regardless of insertion order (see
+  // types.ts's `fieldOrder` doc), so this array is the only source of truth
+  // HGETALL is allowed to iterate.
+  const fieldOrder: string[] = existingValue && existingValue.type === 'hash' ? [...existingValue.fieldOrder] : []
   let added = 0
   for (let i = 0; i < pairs.length; i += 2) {
     const field = pairs[i]!
     const value = pairs[i + 1]!
-    if (!Object.hasOwn(fields, field)) added++
+    if (!Object.hasOwn(fields, field)) {
+      added++
+      fieldOrder.push(field)
+    }
     fields[field] = value
   }
 
-  const result = writeKey(afterRead, key!, { type: 'hash', value: fields })
+  const result = writeKey(afterRead, key!, { type: 'hash', value: fields, fieldOrder })
   if (result.oom) return { state: result.state, reply: oomReply() }
   return { state: result.state, reply: { kind: 'integer', value: added } }
 }
@@ -47,7 +55,13 @@ const hgetall: CommandHandler = (context: CommandContext): CommandResult => {
   const { state, record } = readKey(context.state, key!)
   if (!record) return { state, reply: { kind: 'array', value: [] } }
   if (record.value.type !== 'hash') return { state, reply: wrongTypeReply() }
-  const flattened = Object.entries(record.value.value).flat()
+  // Narrowed through a plain local for the same reason HSET is (see its
+  // comment): TS won't carry the `type === 'hash'` narrowing into the
+  // flatMap callback's closure otherwise.
+  const hash = record.value
+  // fieldOrder, not Object.entries: plain-object key enumeration sorts
+  // all-digit field names numerically ahead of insertion order.
+  const flattened = hash.fieldOrder.flatMap((field) => [field, hash.value[field]!])
   return { state, reply: { kind: 'array', value: flattened } }
 }
 
@@ -63,10 +77,13 @@ const hdel: CommandHandler = (context: CommandContext): CommandResult => {
   if (record.value.type !== 'hash') return { state: afterRead, reply: wrongTypeReply() }
 
   const fields = { ...record.value.value }
+  const fieldOrder = [...record.value.fieldOrder]
   let removed = 0
   for (const field of fieldsToRemove) {
     if (Object.hasOwn(fields, field)) {
       delete fields[field]
+      const index = fieldOrder.indexOf(field)
+      if (index !== -1) fieldOrder.splice(index, 1)
       removed++
     }
   }
@@ -74,7 +91,7 @@ const hdel: CommandHandler = (context: CommandContext): CommandResult => {
   if (Object.keys(fields).length === 0) {
     return { state: deleteKey(afterRead, key!).state, reply: { kind: 'integer', value: removed } }
   }
-  const result = writeKey(afterRead, key!, { type: 'hash', value: fields })
+  const result = writeKey(afterRead, key!, { type: 'hash', value: fields, fieldOrder })
   return { state: result.state, reply: { kind: 'integer', value: removed } }
 }
 
@@ -90,14 +107,17 @@ const hincrby: CommandHandler = (context: CommandContext): CommandResult => {
   if (existingValue && existingValue.type !== 'hash') return { state: afterRead, reply: wrongTypeReply() }
 
   const fields: Record<string, string> = existingValue && existingValue.type === 'hash' ? { ...existingValue.value } : {}
-  const current = Object.hasOwn(fields, field!) ? fields[field!]! : '0'
+  const fieldOrder: string[] = existingValue && existingValue.type === 'hash' ? [...existingValue.fieldOrder] : []
+  const isNewField = !Object.hasOwn(fields, field!)
+  const current = isNewField ? '0' : fields[field!]!
   if (!/^-?\d+$/.test(current)) {
     return { state: afterRead, reply: { kind: 'error', value: 'ERR hash value is not an integer' } }
   }
 
   const next = Number(current) + Number(incrementArg)
   fields[field!] = String(next)
-  const result = writeKey(afterRead, key!, { type: 'hash', value: fields })
+  if (isNewField) fieldOrder.push(field!)
+  const result = writeKey(afterRead, key!, { type: 'hash', value: fields, fieldOrder })
   if (result.oom) return { state: result.state, reply: oomReply() }
   return { state: result.state, reply: { kind: 'integer', value: next } }
 }

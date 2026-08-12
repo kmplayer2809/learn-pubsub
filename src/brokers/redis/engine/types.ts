@@ -4,7 +4,7 @@ export type NodeId = string
 
 export type RedisValue =
   | { type: 'string'; value: string }
-  | { type: 'hash'; value: Record<string, string> }
+  | { type: 'hash'; value: Record<string, string>; fieldOrder: string[] }
   | { type: 'list'; value: string[] }
   | { type: 'set'; value: string[] } // insertion-ordered for determinism
   | { type: 'zset'; value: { member: string; score: number }[] }
