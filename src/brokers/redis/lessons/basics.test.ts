@@ -4,6 +4,7 @@ import type { RedisLesson } from './types'
 import { strings } from './01-strings'
 import { hash } from './02-hash'
 import { list } from './03-list'
+import { set } from './04-set'
 
 function run(lesson: RedisLesson, upTo: number) {
   const sim = createRedisSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
@@ -60,5 +61,13 @@ describe('03 list', () => {
       'LPUSH "jobs" "d" → (integer) 1',
       'BLPOP "jobs" 10 → 1) "jobs" 2) "d"',
     ])
+  })
+})
+
+describe('04 set', () => {
+  it('intersects online:mon and online:tue in the first set\'s insertion order, both keys colon-namespaced so unquoted', () => {
+    const state = run(set, 8000)
+    const lines = state.journal.map((e) => e.text)
+    expect(lines).toContain('SINTER online:mon online:tue → 1) "bob" 2) "cat"')
   })
 })
