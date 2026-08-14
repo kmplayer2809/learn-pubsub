@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LESSONS, LESSON_GROUPS } from './registry'
+import { BROKERS } from '../../brokers/registry'
 
 /** Any Vietnamese letter carrying a diacritic. */
 const VIETNAMESE = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i
@@ -15,8 +15,11 @@ function stripCode(text: string): string {
   return text.replace(/`[^`]*`/g, ' ')
 }
 
-describe('reader-facing copy is Vietnamese', () => {
-  it.each(LESSONS.map((l) => [l.id, l] as const))('%s', (_id, lesson) => {
+describe.each(BROKERS.map((b) => [b.id, b] as const))('%s: reader-facing copy is Vietnamese', (
+  _brokerId,
+  broker,
+) => {
+  it.each(broker.lessons.map((l) => [l.id, l] as const))('%s', (_id, lesson) => {
     // Prose, not individual titles: a title like "Fanout exchange" is legitimately all
     // English terms, so requiring a diacritic per title would distort the copy. Bodies
     // are full sentences and always carry Vietnamese connective tissue.
@@ -56,11 +59,12 @@ describe('reader-facing copy is Vietnamese', () => {
   })
 
   it('labels the lesson groups in Vietnamese', () => {
-    // 'Dead-letter & retry' is a term, not prose, so it is exempt from the diacritic
-    // rule; the others must carry one.
-    const labels = LESSON_GROUPS.map((g) => g.label)
-    expect(labels).toContain('Cơ bản')
-    expect(labels).toContain('Độ tin cậy')
-    expect(labels).toContain('Pattern nâng cao')
+    // A few group labels are terms, not prose ('Dead-letter & retry', 'Cache',
+    // 'Messaging'), so they are exempt from the diacritic rule; the rest must carry one.
+    const TERM_LABELS = new Set(['Dead-letter & retry', 'Cache', 'Messaging'])
+    for (const group of broker.lessonGroups) {
+      if (TERM_LABELS.has(group.label)) continue
+      expect(group.label, `${broker.id} group ${group.id}`).toMatch(VIETNAMESE)
+    }
   })
 })
