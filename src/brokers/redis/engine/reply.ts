@@ -80,6 +80,18 @@ export interface CommandContext {
   state: RedisState
   clientId: NodeId
   args: string[]
+  /**
+   * The scheduler's own id for this command — the same `cmd-N` that ends up as
+   * the journal line's `messageId` and as the in-flight message id.
+   *
+   * Only `BLPOP` reads it, to stamp the entry it parks on `state.blocked`: the
+   * client wakes up in a later reducer, long after this context is gone, and
+   * the line written then must carry the id of the command that caused it.
+   * Required rather than optional because it is dispatch metadata every caller
+   * already holds, and a handler that silently invented its own is exactly the
+   * defect this field replaced.
+   */
+  commandId: string
 }
 
 /** What a handler returns: the (possibly new) state, and the reply to journal. */

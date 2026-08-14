@@ -4,7 +4,7 @@ import { emptyState } from '../testState'
 import { HANDLERS } from './index'
 
 const run = (state: ReturnType<typeof emptyState>, name: string, args: string[]) =>
-  HANDLERS[name as keyof typeof HANDLERS]({ state, clientId: 'c1', args })
+  HANDLERS[name as keyof typeof HANDLERS]({ state, clientId: 'c1', args, commandId: 'cmd-0' })
 
 describe('EXPIRE / TTL / PERSIST', () => {
   it('EXPIRE on an existing key returns 1 and stamps the deadline', () => {

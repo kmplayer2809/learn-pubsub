@@ -172,7 +172,7 @@ function applyReply(state: RedisState, event: SimEvent<RedisEventType>): ReduceR
   const tone = asOptionalString(event.payload.tone, 'tone') ?? DEFAULT_TONE
   const commandId = asString(event.payload.commandId, 'commandId')
 
-  const handled = HANDLERS[name]({ state, clientId, args })
+  const handled = HANDLERS[name]({ state, clientId, args, commandId })
 
   // The command was issued and counted the instant the client sent it, same
   // as real Redis — whether it completes now or parks. Parking must not count

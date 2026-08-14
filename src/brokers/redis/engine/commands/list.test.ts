@@ -3,8 +3,8 @@ import { writeKey } from '../keyspace'
 import { emptyState } from '../testState'
 import { HANDLERS } from './index'
 
-const run = (state = emptyState(), name: string, args: string[]) =>
-  HANDLERS[name as keyof typeof HANDLERS]({ state, clientId: 'c1', args })
+const run = (state = emptyState(), name: string, args: string[], commandId = 'cmd-0') =>
+  HANDLERS[name as keyof typeof HANDLERS]({ state, clientId: 'c1', args, commandId })
 
 describe('LPUSH / RPUSH / LRANGE', () => {
   it('LPUSH pushes onto the head, most recent first', () => {
@@ -104,6 +104,18 @@ describe('BLPOP', () => {
   it('keeps the full original arguments, timeout included, on the blocked entry', () => {
     const result = run(emptyState(), 'BLPOP', ['l', '5'])
     expect(result.state.blocked[0]!.args).toEqual(['l', '5'])
+  })
+
+  // Regression: the parked entry used to mint its own id from
+  // `state.commandCounter`, which is not the id the scheduler stamped on this
+  // command. The woken client's journal line is written from
+  // `entry.commandId`, so a BLPOP that parked and later resolved appeared in
+  // the journal under an id no scripted command ever had — `"0"` instead of
+  // `"cmd-7"` — and nothing could tie the reply back to the command that
+  // caused it.
+  it('carries the scheduler`s own command id onto the blocked entry, not an invented one', () => {
+    const result = run(emptyState(), 'BLPOP', ['l', '5'], 'cmd-7')
+    expect(result.state.blocked[0]!.commandId).toBe('cmd-7')
   })
 
   it('parks the client when the named key is missing entirely', () => {

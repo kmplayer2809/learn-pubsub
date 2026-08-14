@@ -4,7 +4,7 @@ import { emptyState } from '../testState'
 import { HANDLERS } from './index'
 
 const run = (state = emptyState(), name: string, args: string[]) =>
-  HANDLERS[name as keyof typeof HANDLERS]({ state, clientId: 'c1', args })
+  HANDLERS[name as keyof typeof HANDLERS]({ state, clientId: 'c1', args, commandId: 'cmd-0' })
 
 describe('ZADD / ZRANGE / ZREVRANGE', () => {
   it('ZADD counts only the new members, and ZRANGE orders ascending by score', () => {

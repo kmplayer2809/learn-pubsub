@@ -138,7 +138,7 @@ const blpop: CommandHandler = (context: CommandContext): CommandResult => {
     keys,
     args: context.args,
     since: working.now,
-    commandId: String(working.commandCounter),
+    commandId: context.commandId,
     timeoutAt,
   }
   const nextState: RedisState = {
