@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createRedisSimulation } from '../engine'
-// `livesAt` is not re-exported by the engine barrel (`engine/index.ts`) — only
-// `engine/keyspace.ts` exports it directly. The engine is off-limits to edit,
-// so this imports the deeper path rather than adding a re-export.
-import { livesAt } from '../engine/keyspace'
+import { createRedisSimulation, livesAt } from '../engine'
 import type { RedisLesson } from './types'
 import { strings } from './01-strings'
 import { hash } from './02-hash'

@@ -21,6 +21,15 @@ export {
   type RedisValidationIssue,
   type UnvalidatedScriptedCommand,
 }
+/**
+ * `livesAt` answers whether a key is alive at a given instant without mutating
+ * anything, which is exactly what a caller outside the engine needs: the UI
+ * cannot run a lazy expiry just to find out what to draw, and a test asserting
+ * that an expired key is still present-but-dead must not be the thing that
+ * reaps it. Re-exported because both the keyspace panel and the lesson tests
+ * were reaching past this barrel into `./keyspace` to get at it.
+ */
+export { livesAt } from './keyspace'
 export { createRng, nextFloat, nextInt, type RngState } from '../../../shell/kernel/rng'
 export { MAX_EVENTS_PER_RUN, MAX_JOURNAL, type Simulation } from '../../../shell/kernel/run'
 

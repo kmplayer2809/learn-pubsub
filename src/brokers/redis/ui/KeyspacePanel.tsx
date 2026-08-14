@@ -1,5 +1,4 @@
-import type { RedisState, RedisValue } from '../engine'
-import { livesAt } from '../engine/keyspace'
+import { livesAt, type RedisState, type RedisValue } from '../engine'
 
 /** A key whose TTL falls within this window of `state.now` gets the pulsing `data-expiring` flag. */
 const EXPIRING_WITHIN_MS = 1000

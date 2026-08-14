@@ -4,8 +4,9 @@ import { writeThrough } from './09-write-through'
 import { stampede } from './10-stampede'
 import { eviction } from './11-eviction'
 import { createRedisSimulation } from '../engine'
+import type { RedisLesson } from './types'
 
-function run(lesson: { topology: Parameters<typeof createRedisSimulation>[0]['topology']; script: Parameters<typeof createRedisSimulation>[0]['script']; seed: number }) {
+function run(lesson: RedisLesson) {
   return createRedisSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
 }
 
