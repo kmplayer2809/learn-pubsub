@@ -15,6 +15,7 @@ describe('CONFIG', () => {
       state: withServer({ evictionPolicy: 'noeviction' }),
       clientId: 'c1',
       args: ['SET', 'maxmemory-policy', 'volatile-lru'],
+      commandId: 'cmd-0',
     })
     expect(result.reply).toEqual({ kind: 'status', value: 'OK' })
     expect(result.state.topology.server.evictionPolicy).toBe('volatile-lru')
@@ -25,6 +26,7 @@ describe('CONFIG', () => {
       state: emptyState(),
       clientId: 'c1',
       args: ['SET', 'maxmemory', '200'],
+      commandId: 'cmd-0',
     })
     expect(result.reply).toEqual({ kind: 'status', value: 'OK' })
     expect(result.state.topology.server.maxmemoryBytes).toBe(200)
@@ -52,6 +54,7 @@ describe('CONFIG', () => {
         state: withServer({ evictionPolicy: 'allkeys-lfu' }),
         clientId: 'c1',
         args: ['GET', 'maxmemory-policy'],
+        commandId: 'cmd-0',
       }).reply,
     ).toEqual({ kind: 'array', value: ['maxmemory-policy', 'allkeys-lfu'] })
   })
@@ -98,6 +101,7 @@ describe('CONFIG', () => {
       state: handlers.CONFIG({ state, clientId: 'c1', args: ['SET', 'maxmemory-policy', 'allkeys-lru'], commandId: 'cmd-0' }).state,
       clientId: 'c1',
       args: ['d', 'vvvvvvvv'],
+      commandId: 'cmd-0',
     })
     expect(allowed.reply).toEqual({ kind: 'status', value: 'OK' })
     expect(allowed.state.metrics.evicted).toBeGreaterThan(0)

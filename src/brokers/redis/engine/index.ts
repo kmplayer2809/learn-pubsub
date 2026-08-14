@@ -289,7 +289,15 @@ function applyUnblock(state: RedisState, _event: SimEvent<RedisEventType>): Redu
     if (!woken) break
 
     const { index, entry, key } = woken
-    const popped = HANDLERS.LPOP({ state: working, clientId: entry.clientId, args: [key] })
+    // This LPOP is issued on behalf of the parked BLPOP, so it carries that
+    // command's id rather than one of its own — the pop and the wake are the
+    // same command finally completing, not two separate ones.
+    const popped = HANDLERS.LPOP({
+      state: working,
+      clientId: entry.clientId,
+      args: [key],
+      commandId: entry.commandId,
+    })
     // `nextWakeable` only ever names a key that currently holds a non-empty
     // list, so LPOP always pops a real element here — never nil. The fallback
     // exists purely so this stays a type guard rather than an `as` assertion.
