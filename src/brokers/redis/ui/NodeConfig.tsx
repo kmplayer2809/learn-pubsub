@@ -47,12 +47,26 @@ export function NodeConfig({
     // rather than inventing a counter or widening the engine is deliberate — see
     // the Task 8 report.
     const commandCount = state.journal.filter((entry) => entry.nodeId === client.id).length
+    // The half of that undercount worth surfacing. A parked client is the one case
+    // where the missing command is the whole point: lesson 03's worker sits on
+    // BLPOP for four seconds, and a panel showing only a command count renders it
+    // as a client that has gone quiet rather than one that is visibly waiting.
+    // A command merely in flight stays uncounted — it resolves within 120ms and
+    // `RedisFlight` is keyed by edge rather than by client, so recovering the
+    // client would mean parsing an edge id back apart.
+    const parked = state.blocked.find((entry) => entry.clientId === client.id)
     return (
       <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
         <dt>client</dt>
         <dd className="text-slate-200">{client.label}</dd>
         <dt>commands</dt>
         <dd className="text-slate-200">{commandCount}</dd>
+        {parked && (
+          <>
+            <dt>đang chờ</dt>
+            <dd className="text-amber-400">BLPOP {parked.keys.join(' ')}</dd>
+          </>
+        )}
       </dl>
     )
   }

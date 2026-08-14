@@ -134,6 +134,38 @@ describe('KeyspacePanel', () => {
     expect(screen.getByTestId('keyspace-panel').textContent).toContain('42')
   })
 
+  // The TTL lesson's whole point, and it has to be legible rather than look like
+  // a rendering bug. `metrics.keysCount` counts every record the keyspace holds,
+  // including one that is past its deadline but not yet reaped; the rows show
+  // only live keys. So the header can honestly read "2" above zero rows, and
+  // without a word saying why, that reads as broken.
+  it('names the gap when expired records are still holding memory', () => {
+    const state = withKeys(
+      {
+        dead: record({ type: 'string', value: 'x' }, { expiresAt: 1000 }),
+        alive: record({ type: 'string', value: 'y' }),
+      },
+      ['dead', 'alive'],
+      { now: 5000 }, // `dead` is well past its deadline, and nothing has reaped it
+    )
+    render(<KeyspacePanel state={state} />)
+
+    expect(screen.getAllByTestId('keyspace-row').map((r) => r.getAttribute('data-key'))).toEqual([
+      'alive',
+    ])
+    const header = screen.getByTestId('keyspace-header').textContent ?? ''
+    expect(header).toContain('1/2 keys')
+    expect(header).toContain('1 hết hạn chưa thu hồi')
+  })
+
+  it('says nothing about reclamation when every record is live', () => {
+    const state = withKeys({ k: record({ type: 'string', value: 'x' }) }, ['k'])
+    render(<KeyspacePanel state={state} />)
+    const header = screen.getByTestId('keyspace-header').textContent ?? ''
+    expect(header).toContain('1 keys')
+    expect(header).not.toContain('hết hạn')
+  })
+
   it('marks a key expiring within 1000ms with data-expiring="true"', () => {
     const state = withKeys(
       { k: record({ type: 'string', value: 'x' }, { expiresAt: 1000 }) },

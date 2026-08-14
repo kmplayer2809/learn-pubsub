@@ -81,6 +81,34 @@ describe('NodeConfig', () => {
     expect(screen.getByText('0')).toBeTruthy()
   })
 
+  // A client parked on BLPOP has issued a command that has not journalled yet, so
+  // the command count alone renders a worker that is visibly waiting as one that
+  // has simply gone quiet — which is the opposite of what the List lesson teaches.
+  it('says the client is blocked while it sits on state.blocked', () => {
+    const topology: RedisTopology = {
+      clients: [{ id: 'worker', label: 'Worker', position: { x: 0, y: 0 } }],
+      server: { id: 'redis', label: 'Redis', position: { x: 0, y: 0 } },
+    }
+    const base = emptyState()
+    const state: RedisState = {
+      ...base,
+      blocked: [
+        { clientId: 'worker', keys: ['jobs'], args: ['jobs', '10'], since: 0, commandId: 'cmd-0' },
+      ],
+    }
+    render(<NodeConfig lesson={lesson(topology)} state={state} nodeId="worker" />)
+    expect(document.body.textContent).toContain('BLPOP jobs')
+  })
+
+  it('says nothing about blocking for a client that is not parked', () => {
+    const topology: RedisTopology = {
+      clients: [{ id: 'worker', label: 'Worker', position: { x: 0, y: 0 } }],
+      server: { id: 'redis', label: 'Redis', position: { x: 0, y: 0 } },
+    }
+    render(<NodeConfig lesson={lesson(topology)} state={emptyState()} nodeId="worker" />)
+    expect(document.body.textContent).not.toContain('BLPOP')
+  })
+
   it('falls back to the Vietnamese sentence for a node id matching neither the server nor a client', () => {
     const topology: RedisTopology = {
       clients: [{ id: 'c1', label: 'Client One', position: { x: 0, y: 0 } }],
