@@ -11,6 +11,7 @@ export interface BrokerCatalogEntry {
 
 export const BROKER_CATALOG: BrokerCatalogEntry[] = [
   { id: 'rabbitmq', label: 'RabbitMQ', defaultLessonId: '01-hello-world' },
+  { id: 'redis', label: 'Redis', defaultLessonId: '01-strings' },
 ]
 
 export const DEFAULT_BROKER_ID = 'rabbitmq'

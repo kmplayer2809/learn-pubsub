@@ -145,6 +145,17 @@ describe('App', () => {
     expect(screen.getByTestId('export-button')).toBeTruthy()
   })
 
+  it('renders the Redis keyspace panel, with no inflight panel or sandbox button', () => {
+    // Redis ships neither `sandbox` nor `ExportDialog` (both optional slots); this is
+    // the proof the shell reads that as genuinely optional rather than crashing or
+    // falling back to RabbitMQ's own panel and buttons.
+    render(<App />)
+    act(() => useAppStore.getState().setBroker('redis'))
+    expect(screen.getByTestId('keyspace-panel')).toBeTruthy()
+    expect(screen.queryByTestId('inflight-panel')).toBeNull()
+    expect(screen.queryByTestId('open-sandbox')).toBeNull()
+  })
+
   it('renders the new broker with its own state, not the previous broker stale snapshot', () => {
     // Reproduces the exact hazard: `useSimulation` recomputes its `input` during render
     // but only rebuilds the simulation in a `useEffect`. On the first render that sees a

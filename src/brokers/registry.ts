@@ -1,8 +1,9 @@
 import { rabbitmq } from './rabbitmq'
+import { redis } from './redis'
 import type { AnyBrokerModule } from './types'
 import { DEFAULT_BROKER_ID } from './catalog'
 
-export const BROKERS: AnyBrokerModule[] = [rabbitmq]
+export const BROKERS: AnyBrokerModule[] = [rabbitmq, redis]
 
 export { DEFAULT_BROKER_ID }
 
