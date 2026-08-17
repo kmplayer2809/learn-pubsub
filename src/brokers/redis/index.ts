@@ -1,5 +1,6 @@
 import {
   createRedisSimulation,
+  type RedisFault,
   type RedisScriptedCommand,
   type RedisState,
   type RedisTopology,
@@ -23,13 +24,15 @@ export const redis: BrokerModule<RedisState, RedisTopology, RedisScriptedCommand
     clients: [],
     server: { id: 'redis', label: 'Redis', position: { x: 0, y: 0 } },
   },
-  // Redis takes no `failures` — that option is AMQP-only (see `BrokerModule.createSimulation`'s
-  // comment in `../types`) — so this adapter is a straight passthrough, unlike RabbitMQ's.
   createSimulation: (options) =>
     createRedisSimulation({
       topology: options.topology,
       script: options.script,
       seed: options.seed,
+      // See `src/shell/useSimulation.ts:95` — the shell reads any lesson's
+      // `.failures` field generically and hands it through opaquely here,
+      // the same mechanism RabbitMQ's `ScriptedFailure[]` already relies on.
+      failures: options.failures as RedisFault[] | undefined,
       maxEvents: options.maxEvents,
     }),
   nodeTypes: { client: ClientNode, server: ServerNode },

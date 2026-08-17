@@ -13,7 +13,8 @@ export interface BrokerModule<S extends KernelState, T, A, I extends ValidationI
   createSimulation(options: {
     topology: T
     script: A[]
-    /** Scripted consumer failures. Only AMQP lessons carry them; other brokers ignore this. */
+    /** Scripted failures — AMQP's `ScriptedFailure[]`, Redis' `RedisFault[]`. Opaque here
+     *  because the shell is broker-agnostic; each `createSimulation` casts it back. */
     failures?: unknown[]
     seed: number
     maxEvents?: number

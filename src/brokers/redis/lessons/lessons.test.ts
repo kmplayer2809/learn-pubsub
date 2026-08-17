@@ -4,7 +4,7 @@ import { LESSONS, REDIS_LESSON_GROUPS } from './registry'
 
 describe.each(LESSONS.map((l) => [l.id, l] as const))('%s', (_id, lesson) => {
   const start = () =>
-    createRedisSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
+    createRedisSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed, failures: lesson.failures })
 
   it('validates without a fatal issue', () => {
     expect(start().issues.filter((i) => i.severity === 'error')).toEqual([])
@@ -66,7 +66,12 @@ describe.each(LESSONS.map((l) => [l.id, l] as const))('%s', (_id, lesson) => {
   })
 
   it('highlights only node ids that exist', () => {
-    const ids = new Set([...lesson.topology.clients.map((c) => c.id), lesson.topology.server.id])
+    const ids = new Set([
+      ...lesson.topology.clients.map((c) => c.id),
+      lesson.topology.server.id,
+      ...(lesson.topology.replicas ?? []).map((r) => r.id),
+      ...(lesson.topology.sentinels ?? []).map((s) => s.id),
+    ])
     for (const step of lesson.narrative) for (const id of step.highlight ?? []) expect(ids.has(id)).toBe(true)
   })
 
@@ -87,9 +92,9 @@ describe.each(LESSONS.map((l) => [l.id, l] as const))('%s', (_id, lesson) => {
   })
 })
 
-it('ships fifteen lessons with unique ids, in the order the sidebar renders them', () => {
-  expect(LESSONS).toHaveLength(15)
-  expect(new Set(LESSONS.map((l) => l.id)).size).toBe(15)
+it('ships seventeen lessons with unique ids, in the order the sidebar renders them', () => {
+  expect(LESSONS).toHaveLength(17)
+  expect(new Set(LESSONS.map((l) => l.id)).size).toBe(17)
   expect(LESSONS.map((l) => l.id)).toEqual([
     '01-strings',
     '02-hash',
@@ -106,5 +111,7 @@ it('ships fifteen lessons with unique ids, in the order the sidebar renders them
     '13-lua',
     '14-distributed-lock',
     '15-rate-limit',
+    '16-persistence',
+    '17-replication',
   ])
 })

@@ -3,11 +3,22 @@ import { transactions } from './12-transactions'
 import { lua } from './13-lua'
 import { distributedLock } from './14-distributed-lock'
 import { rateLimit } from './15-rate-limit'
+import { persistence } from './16-persistence'
+import { replication } from './17-replication'
 import { createRedisSimulation } from '../engine'
 import type { RedisLesson } from './types'
 
 function run(lesson: RedisLesson) {
   return createRedisSimulation({ topology: lesson.topology, script: lesson.script, seed: lesson.seed })
+}
+
+function runWithFailures(lesson: RedisLesson) {
+  return createRedisSimulation({
+    topology: lesson.topology,
+    script: lesson.script,
+    seed: lesson.seed,
+    failures: lesson.failures,
+  })
 }
 
 describe('12 transactions', () => {
@@ -71,5 +82,30 @@ describe('15 rate limit', () => {
     sim.advanceTo(rateLimit.durationMs)
     const lines = sim.snapshot().journal.filter((e) => e.text.startsWith('ZCARD'))
     expect(lines[1]!.text).toBe('ZCARD ratelimit:ip1 → (integer) 3')
+  })
+})
+
+describe('16 persistence', () => {
+  it('keeps a but loses b after the RDB-only server crashes and restarts', () => {
+    const sim = runWithFailures(persistence)
+    sim.advanceTo(persistence.durationMs)
+    const state = sim.snapshot()
+    expect(state.keys['a']).toBeDefined()
+    expect(state.keys['b']).toBeUndefined()
+  })
+})
+
+describe('17 replication', () => {
+  it('promotes replica-1 to primaryId after the sentinelFailover fault', () => {
+    const sim = runWithFailures(replication)
+    sim.advanceTo(replication.durationMs)
+    expect(sim.snapshot().primaryId).toBe('replica-1')
+  })
+
+  it('answers CLUSTER KEYSLOT with an in-range integer', () => {
+    const sim = runWithFailures(replication)
+    sim.advanceTo(replication.durationMs)
+    const line = sim.snapshot().journal.find((e) => e.text.startsWith('CLUSTER'))!
+    expect(line.text).toMatch(/CLUSTER "KEYSLOT" "a" → \(integer\) \d+/)
   })
 })

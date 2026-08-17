@@ -15,6 +15,8 @@ import { transactions } from './12-transactions'
 import { lua } from './13-lua'
 import { distributedLock } from './14-distributed-lock'
 import { rateLimit } from './15-rate-limit'
+import { persistence } from './16-persistence'
+import { replication } from './17-replication'
 
 /**
  * `messaging` and `advanced` carry no lessons until the next plan. That is
@@ -45,4 +47,6 @@ export const LESSONS: RedisLesson[] = [
   lua,
   distributedLock,
   rateLimit,
+  persistence,
+  replication,
 ]
