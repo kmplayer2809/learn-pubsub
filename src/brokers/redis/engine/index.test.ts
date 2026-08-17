@@ -232,3 +232,70 @@ describe('createRedisSimulation', () => {
     expect(sim.snapshot().journal).toEqual([])
   })
 })
+
+describe('persistence: crash and restart', () => {
+  const topologyNoPersistence: RedisTopology = {
+    clients: [{ id: 'app', label: 'App', position: { x: 0, y: 0 } }],
+    server: { id: 'redis', label: 'Redis', position: { x: 200, y: 50 } }, // no `persistence` field at all
+  }
+
+  it('with no persistence configured, a crash wipes every key', () => {
+    const sim = createRedisSimulation({
+      topology: topologyNoPersistence,
+      script: [{ at: 0, clientId: 'app', name: 'SET', args: ['a', '1'] }],
+      failures: [{ at: 500, kind: 'crash', target: 'redis' }],
+      seed: 1,
+    })
+    sim.advanceTo(1000)
+    expect(sim.snapshot().keys).toEqual({})
+  })
+
+  it('with aof: always, a crash loses nothing', () => {
+    const topology: RedisTopology = {
+      ...topologyNoPersistence,
+      server: { ...topologyNoPersistence.server, persistence: { aof: 'always' } },
+    }
+    const sim = createRedisSimulation({
+      topology,
+      script: [{ at: 0, clientId: 'app', name: 'SET', args: ['a', '1'] }],
+      failures: [{ at: 500, kind: 'crash', target: 'redis' }],
+      seed: 1,
+    })
+    sim.advanceTo(1000)
+    expect(sim.snapshot().keys['a']!.value).toEqual({ type: 'string', value: '1' })
+  })
+
+  it('with rdb.everySec, a crash keeps only what the last snapshot had', () => {
+    const topology: RedisTopology = {
+      ...topologyNoPersistence,
+      server: { ...topologyNoPersistence.server, persistence: { rdb: { everySec: 1 } } },
+    }
+    const sim = createRedisSimulation({
+      topology,
+      script: [
+        { at: 0, clientId: 'app', name: 'SET', args: ['a', '1'] }, // before the first snapshot at t=1000
+        { at: 1500, clientId: 'app', name: 'SET', args: ['b', '2'] }, // after it, lost on crash
+      ],
+      failures: [{ at: 1800, kind: 'crash', target: 'redis' }],
+      seed: 1,
+    })
+    sim.advanceTo(2000)
+    const state = sim.snapshot()
+    expect(state.keys['a']).toBeDefined()
+    expect(state.keys['b']).toBeUndefined()
+  })
+
+  it('restart clears primaryDown', () => {
+    const sim = createRedisSimulation({
+      topology: topologyNoPersistence,
+      script: [],
+      failures: [
+        { at: 200, kind: 'crash', target: 'redis' },
+        { at: 400, kind: 'restart', target: 'redis' },
+      ],
+      seed: 1,
+    })
+    sim.advanceTo(600)
+    expect(sim.snapshot().primaryDown).toBe(false)
+  })
+})

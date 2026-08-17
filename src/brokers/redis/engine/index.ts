@@ -1,8 +1,9 @@
 import { HANDLERS, isCommandName, type RedisCommandName } from './commands'
 import { isInTransaction, queueCommand } from './commands/tx'
 import { applyActiveExpire } from './expiry'
+import { recomputeMemoryMetrics } from './memory'
 import { formatCommand, formatReply, type Reply } from './reply'
-import type { BlockedClient, RedisEventType, RedisFlight, RedisState, RedisTopology } from './types'
+import type { BlockedClient, RedisEventType, RedisFlight, RedisSnapshot, RedisState, RedisTopology } from './types'
 import {
   validateRedisTopology,
   type RedisIssueCode,
@@ -43,10 +44,17 @@ const DEFAULT_ACTIVE_EXPIRE_EVERY_MS = 100
 /** Flight tone used when a scripted command does not name one. */
 const DEFAULT_TONE = 'crimson'
 
+export interface RedisFault {
+  at: number
+  kind: 'crash' | 'restart' | 'sentinelFailover'
+  target: string
+}
+
 export interface RedisSimulationOptions {
   topology: RedisTopology
   script: RedisScriptedCommand[]
   seed: number
+  failures?: RedisFault[]
   /** Overrides MAX_EVENTS_PER_RUN — see the RabbitMQ module for why the Sandbox needs this. */
   maxEvents?: number
 }
@@ -125,6 +133,23 @@ function pruneFlights(state: RedisState): RedisState {
 
 // --- Seeding ----------------------------------------------------------------
 
+/** Only one of RDB or AOF-everysec periodic snapshotting is ever active for a
+ *  given server (a lesson declares one persistence mode), and `aof: 'always'`
+ *  needs no periodic snapshot at all — a crash under that mode loses nothing
+ *  regardless. Absent `persistence` entirely needs none either: `applyCrash`
+ *  already treats "no snapshot ever taken" as "restore to empty". */
+function snapshotIntervalMs(server: RedisTopology['server']): number | undefined {
+  if (server.persistence?.aof === 'everysec') return 1000
+  if (server.persistence?.rdb) return server.persistence.rdb.everySec * 1000
+  return undefined
+}
+
+function snapshotSeedEvent(topology: RedisTopology, seq: number): SimEvent<RedisEventType> | undefined {
+  const interval = snapshotIntervalMs(topology.server)
+  if (interval === undefined) return undefined
+  return { at: interval, seq, type: 'snapshotWrite', payload: {} }
+}
+
 function seedEvents(options: RedisSimulationOptions): SimEvent<RedisEventType>[] {
   let seq = 0
   const commands: SimEvent<RedisEventType>[] = options.script.map((command, index) => ({
@@ -150,7 +175,22 @@ function seedEvents(options: RedisSimulationOptions): SimEvent<RedisEventType>[]
     payload: {},
   }
 
-  return [...commands, activeExpireSeed]
+  const faultEvents: SimEvent<RedisEventType>[] = (options.failures ?? []).map((fault) => ({
+    at: fault.at,
+    seq: seq++,
+    // `RedisFault.kind` already carries `'sentinelFailover'` (Task 14 wires up
+    // its behaviour); `RedisEventType`/`REDUCERS` don't recognise it yet, by
+    // this task's own design (see the `RedisEventType` comment in types.ts).
+    // No lesson schedules that kind of fault before Task 14 lands, so this
+    // cast is sound in practice even though the type alone can't prove it.
+    type: fault.kind as RedisEventType,
+    payload: { target: fault.target },
+  }))
+
+  const snapshotSeed = snapshotSeedEvent(options.topology, seq)
+  if (snapshotSeed) seq++
+
+  return [...commands, activeExpireSeed, ...faultEvents, ...(snapshotSeed ? [snapshotSeed] : [])]
 }
 
 // --- Reducers ----------------------------------------------------------------
@@ -370,6 +410,65 @@ function nextWakeable(state: RedisState): { index: number; entry: BlockedClient;
   return undefined
 }
 
+function applySnapshotWrite(state: RedisState, _event: SimEvent<RedisEventType>): ReduceResult {
+  const snapshot: RedisSnapshot = {
+    keys: state.keys,
+    keyOrder: state.keyOrder,
+    keyVersions: state.keyVersions,
+    writeCounter: state.writeCounter,
+  }
+  const interval = snapshotIntervalMs(state.topology.server)
+  const next: RedisState = {
+    ...state,
+    lastSnapshot: snapshot,
+    journal: [...state.journal, { at: state.now, type: 'snapshotWrite', text: '# snapshot taken' }],
+  }
+  if (interval === undefined) return { state: next, newEvents: [] }
+  const [seq, afterSeq] = nextSeq(next)
+  return { state: afterSeq, newEvents: [{ at: state.now + interval, seq, type: 'snapshotWrite', payload: {} }] }
+}
+
+function applyCrash(state: RedisState, event: SimEvent<RedisEventType>): ReduceResult {
+  const target = asString(event.payload.target, 'target')
+  if (target !== state.topology.server.id) return { state, newEvents: [] } // this simulation only crashes the primary
+
+  const restored: RedisSnapshot =
+    state.topology.server.persistence?.aof === 'always'
+      ? { keys: state.keys, keyOrder: state.keyOrder, keyVersions: state.keyVersions, writeCounter: state.writeCounter }
+      : (state.lastSnapshot ?? { keys: {}, keyOrder: [], keyVersions: {}, writeCounter: 0 })
+
+  const { keysCount, memoryUsed } = recomputeMemoryMetrics(restored.keys)
+  const reason =
+    state.topology.server.persistence?.aof === 'always'
+      ? 'AOF always — nothing lost'
+      : state.lastSnapshot
+        ? 'restored from last snapshot'
+        : 'no persistence configured — everything lost'
+
+  return {
+    state: {
+      ...state,
+      keys: restored.keys,
+      keyOrder: restored.keyOrder,
+      keyVersions: restored.keyVersions,
+      writeCounter: restored.writeCounter,
+      metrics: { ...state.metrics, keysCount, memoryUsed },
+      primaryDown: true,
+      journal: [...state.journal, { at: state.now, type: 'crash', text: `# ${target} crashed — ${reason}` }],
+    },
+    newEvents: [],
+  }
+}
+
+function applyRestart(state: RedisState, event: SimEvent<RedisEventType>): ReduceResult {
+  const target = asString(event.payload.target, 'target')
+  if (target !== state.topology.server.id) return { state, newEvents: [] }
+  return {
+    state: { ...state, primaryDown: false, journal: [...state.journal, { at: state.now, type: 'restart', text: `# ${target} restarted` }] },
+    newEvents: [],
+  }
+}
+
 function withPrune(reducer: Reducer): Reducer {
   return (state, event) => reducer(pruneFlights(state), event)
 }
@@ -384,6 +483,9 @@ const REDUCERS: Record<RedisEventType, Reducer> = {
   activeExpire: withPrune(applyActiveExpire),
   evict: withPrune((state) => ({ state, newEvents: [] })),
   unblock: withPrune(applyUnblock),
+  snapshotWrite: withPrune(applySnapshotWrite),
+  crash: withPrune(applyCrash),
+  restart: withPrune(applyRestart),
 }
 
 export function createRedisSimulation(

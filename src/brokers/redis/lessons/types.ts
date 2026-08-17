@@ -1,5 +1,7 @@
 import type { Lesson } from '../../../shell/lesson/types'
-import type { RedisScriptedCommand, RedisTopology } from '../engine'
+import type { RedisFault, RedisScriptedCommand, RedisTopology } from '../engine'
+
+export type { RedisFault } from '../engine'
 
 export type RedisLessonGroup = 'basics' | 'cache' | 'messaging' | 'advanced'
 
@@ -10,6 +12,11 @@ export type RedisLessonGroup = 'basics' | 'cache' | 'messaging' | 'advanced'
  */
 export interface RedisLesson extends Lesson<RedisTopology, RedisScriptedCommand> {
   group: RedisLessonGroup
+  /** Named `failures` (not `faults`) on purpose — `src/shell/useSimulation.ts`
+   *  reads any lesson's `.failures` field generically to pass into
+   *  `createSimulation`, and that mechanism is what keeps `src/shell/`
+   *  broker-agnostic. See the design doc's "Deviation" note for why. */
+  failures?: RedisFault[]
 }
 
 /**

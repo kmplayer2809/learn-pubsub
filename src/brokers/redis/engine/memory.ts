@@ -37,6 +37,17 @@ export function sizeOf(key: string, value: RedisValue): number {
   }
 }
 
+/** Rebuilds `keysCount`/`memoryUsed` from scratch. Needed only after a bulk
+ *  keyspace replacement (a crash restore) — every other path updates these
+ *  incrementally as it goes. */
+export function recomputeMemoryMetrics(keys: Record<string, KeyRecord>): { keysCount: number; memoryUsed: number } {
+  const entries = Object.entries(keys)
+  return {
+    keysCount: entries.length,
+    memoryUsed: entries.reduce((sum, [key, record]) => sum + sizeOf(key, record.value), 0),
+  }
+}
+
 export interface EvictionResult {
   keys: string[]
   rng: RngState

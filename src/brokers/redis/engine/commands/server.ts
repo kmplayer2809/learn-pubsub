@@ -139,8 +139,30 @@ const cluster: CommandHandler = (context: CommandContext): CommandResult => {
   return { state: context.state, reply: configError(`Unknown CLUSTER subcommand '${subcommand}'`) }
 }
 
+/** `BGSAVE` — real Redis forks and saves asynchronously; here it is
+ *  synchronous and instant (there is no async in this engine), and the reply
+ *  text still says "started" to match what a learner would see typing this
+ *  into a real terminal. The actual snapshot state update happens through
+ *  the periodic `snapshotWrite` event, same as an automatic save — BGSAVE
+ *  does not special-case it, matching the fact that a manual save and a
+ *  scheduled one write the same file in real Redis. */
+const bgsave: CommandHandler = (context: CommandContext): CommandResult => ({
+  state: context.state,
+  reply: { kind: 'status', value: 'Background saving started' },
+})
+
+/** `REPLICAOF host port` / `REPLICAOF NO ONE` — this simulation has no real
+ *  network, so there is no handshake to perform; the reply alone is enough
+ *  for a lesson to narrate the command's meaning. */
+const replicaof: CommandHandler = (context: CommandContext): CommandResult => ({
+  state: context.state,
+  reply: { kind: 'status', value: 'OK' },
+})
+
 export const handlers = {
   CONFIG: config,
   INFO: info,
   CLUSTER: cluster,
+  BGSAVE: bgsave,
+  REPLICAOF: replicaof,
 } satisfies Record<string, CommandHandler>
