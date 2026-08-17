@@ -2,6 +2,7 @@ import type { CommandHandler } from '../reply'
 import * as hash from './hash'
 import * as keyspace from './keyspace'
 import * as list from './list'
+import * as script from './script'
 import * as server from './server'
 import * as set from './set'
 import * as string from './string'
@@ -18,6 +19,7 @@ export const HANDLERS = {
   ...zset.handlers,
   ...server.handlers,
   ...tx.handlers,
+  ...script.handlers,
 } satisfies Record<string, CommandHandler>
 
 export type RedisCommandName = keyof typeof HANDLERS
