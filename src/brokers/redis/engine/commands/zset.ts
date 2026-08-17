@@ -140,6 +140,42 @@ const zcard: CommandHandler = (context: CommandContext): CommandResult => {
   return { state, reply: { kind: 'integer', value: record.value.value.length } }
 }
 
+function parseScoreBound(arg: string): number {
+  if (arg === '-inf') return -Infinity
+  if (arg === '+inf') return Infinity
+  return Number(arg)
+}
+
+/** `ZREMRANGEBYSCORE key min max` — removes members whose score falls in [min, max]. */
+const zremrangebyscore: CommandHandler = (context: CommandContext): CommandResult => {
+  const [key, minArg, maxArg] = context.args
+  const { state: afterRead, record } = readKey(context.state, key!, 'write')
+  if (!record) return { state: afterRead, reply: { kind: 'integer', value: 0 } }
+  if (record.value.type !== 'zset') return { state: afterRead, reply: wrongTypeReply() }
+
+  const min = parseScoreBound(minArg!)
+  const max = parseScoreBound(maxArg!)
+  const kept = record.value.value.filter((e) => e.score < min || e.score > max)
+  const removed = record.value.value.length - kept.length
+  if (removed === 0) return { state: afterRead, reply: { kind: 'integer', value: 0 } }
+
+  const result = writeKey(afterRead, key!, { type: 'zset', value: kept })
+  return { state: result.state, reply: { kind: 'integer', value: removed } }
+}
+
+/** `ZCOUNT key min max` — counts members whose score falls in [min, max]. */
+const zcount: CommandHandler = (context: CommandContext): CommandResult => {
+  const [key, minArg, maxArg] = context.args
+  const { state, record } = readKey(context.state, key!, 'read')
+  if (!record) return { state, reply: { kind: 'integer', value: 0 } }
+  if (record.value.type !== 'zset') return { state, reply: wrongTypeReply() }
+
+  const min = parseScoreBound(minArg!)
+  const max = parseScoreBound(maxArg!)
+  const count = record.value.value.filter((e) => e.score >= min && e.score <= max).length
+  return { state, reply: { kind: 'integer', value: count } }
+}
+
 export const handlers = {
   ZADD: zadd,
   ZINCRBY: zincrby,
@@ -147,4 +183,6 @@ export const handlers = {
   ZREVRANGE: zrevrange,
   ZSCORE: zscore,
   ZCARD: zcard,
+  ZREMRANGEBYSCORE: zremrangebyscore,
+  ZCOUNT: zcount,
 } satisfies Record<string, CommandHandler>

@@ -67,3 +67,24 @@ describe('ZINCRBY / ZSCORE / ZCARD', () => {
     expect(run(emptyState(), 'ZCARD', ['nope']).reply).toEqual({ kind: 'integer', value: 0 })
   })
 })
+
+describe('ZREMRANGEBYSCORE / ZCOUNT', () => {
+  it('removes and counts members with score in [min, max], -inf/+inf included', () => {
+    const add = run(emptyState(), 'ZADD', ['z', '1', 'a', '2', 'b', '3', 'c'])
+
+    expect(run(add.state, 'ZCOUNT', ['z', '-inf', '2']).reply).toEqual({ kind: 'integer', value: 2 })
+
+    const afterRemove = run(add.state, 'ZREMRANGEBYSCORE', ['z', '-inf', '1'])
+    expect(afterRemove.reply).toEqual({ kind: 'integer', value: 1 })
+    expect(run(afterRemove.state, 'ZCARD', ['z']).reply).toEqual({ kind: 'integer', value: 2 })
+  })
+
+  it('returns 0 for a missing key and WRONGTYPE for a non-zset key', () => {
+    expect(run(emptyState(), 'ZCOUNT', ['nope', '0', '10']).reply).toEqual({ kind: 'integer', value: 0 })
+    expect(run(emptyState(), 'ZREMRANGEBYSCORE', ['nope', '0', '10']).reply).toEqual({ kind: 'integer', value: 0 })
+
+    const stringState = writeKey(emptyState(), 'z', { type: 'string', value: 'x' }).state
+    expect(run(stringState, 'ZCOUNT', ['z', '0', '10']).reply.kind).toBe('error')
+    expect(run(stringState, 'ZREMRANGEBYSCORE', ['z', '0', '10']).reply.kind).toBe('error')
+  })
+})
