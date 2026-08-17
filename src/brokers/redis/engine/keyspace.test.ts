@@ -113,6 +113,8 @@ describe('writeKey', () => {
     expect(result.oom).toBe(false)
     expect(result.state.keys['new']).toBeDefined()
     expect(result.state.metrics.evicted).toBe(1)
+    // Eviction must bump the key's version so WATCH can detect it changed
+    expect(result.state.keyVersions['old']).toBe(2)
   })
 
   // Regression: growing an existing key past the budget must never let
