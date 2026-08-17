@@ -140,3 +140,16 @@ describe('INFO', () => {
     expect(handlers.INFO({ state, clientId: 'c1', args: [], commandId: 'cmd-0' }).state).toBe(state)
   })
 })
+
+describe('CLUSTER KEYSLOT', () => {
+  it('replies with an integer slot number', () => {
+    const result = handlers.CLUSTER({ state: emptyState(), clientId: 'app', args: ['KEYSLOT', 'user:1000'], commandId: 'cmd-0' })
+    expect(result.reply.kind).toBe('integer')
+    expect((result.reply as { kind: 'integer'; value: number }).value).toBeGreaterThanOrEqual(0)
+  })
+
+  it('rejects an unknown CLUSTER subcommand', () => {
+    const result = handlers.CLUSTER({ state: emptyState(), clientId: 'app', args: ['NOTASUBCOMMAND'], commandId: 'cmd-0' })
+    expect(result.reply.kind).toBe('error')
+  })
+})

@@ -1,3 +1,4 @@
+import { keySlot } from '../crc16'
 import type { CommandContext, CommandHandler, CommandResult, Reply } from '../reply'
 import type { EvictionPolicy, RedisServerSpec, RedisState } from '../types'
 
@@ -123,7 +124,23 @@ const info: CommandHandler = (context: CommandContext): CommandResult => {
   return { state: context.state, reply: { kind: 'status', value: fields.join(' ') } }
 }
 
+/**
+ * `CLUSTER KEYSLOT key` — the hash slot `key` would live on in a real
+ * Cluster deployment. Nothing in this simulation actually shards data
+ * across slots; this is a pure, informational computation.
+ */
+const cluster: CommandHandler = (context: CommandContext): CommandResult => {
+  const [subcommand, key] = context.args
+  const sub = subcommand?.toUpperCase()
+  if (sub === 'KEYSLOT') {
+    if (key === undefined) return { state: context.state, reply: configError("wrong number of arguments for 'cluster|keyslot' command") }
+    return { state: context.state, reply: { kind: 'integer', value: keySlot(key) } }
+  }
+  return { state: context.state, reply: configError(`Unknown CLUSTER subcommand '${subcommand}'`) }
+}
+
 export const handlers = {
   CONFIG: config,
   INFO: info,
+  CLUSTER: cluster,
 } satisfies Record<string, CommandHandler>
