@@ -16,11 +16,12 @@ lệnh (Redis) định sẵn, dạy một khái niệm cụ thể:
   consumers, ack mode, prefetch/QoS, nack & requeue, publisher confirms,
   dead-letter exchange, TTL & max-length, retry with backoff, RPC, priority
   queue, delayed message, quorum vs classic.
-- **Redis** — 11 lesson trải trên bốn nhóm (`basics`/Cơ bản, `cache`/Cache,
-  `messaging`/Messaging, `advanced`/Nâng cao — hai nhóm sau còn trống, để
-  dành cho một plan sau): String & counter, Hash, List, Set, Sorted Set,
-  TTL, `SCAN` thay `KEYS`, cache-aside, write-through & write-behind, cache
-  stampede, `maxmemory` & eviction policy.
+- **Redis** — 15 lesson trải trên bốn nhóm (`basics`/Cơ bản, `cache`/Cache,
+  `messaging`/Messaging — còn trống, để dành cho một plan sau,
+  `advanced`/Nâng cao): String & counter, Hash, List, Set, Sorted Set, TTL,
+  `SCAN` thay `KEYS`, cache-aside, write-through & write-behind, cache
+  stampede, `maxmemory` & eviction policy, transactions, Lua atomicity,
+  distributed lock, sliding-window rate limit.
 
 RabbitMQ còn có **Sandbox tự do** (`sandbox/`) — tự xây topology bằng cách
 kéo-thả node, publish message tay hoặc bằng generator, và xuất topology
@@ -52,7 +53,7 @@ Redis, vì Redis chưa có Sandbox.
 ## Kiểm thử và build
 
 ```bash
-npm test          # vitest run — 428 test trên 38 file
+npm test          # vitest run — 867 test trên 67 file
 npm run typecheck  # tsc -b --noEmit — BẮT BUỘC dùng script này, không dùng `npx tsc --noEmit` trực tiếp
 npm run build      # tsc -b && vite build — xuất ra dist/
 npm run lint       # oxlint
