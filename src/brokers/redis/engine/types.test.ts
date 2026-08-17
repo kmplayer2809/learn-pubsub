@@ -23,6 +23,7 @@ describe('RedisState', () => {
       inFlight: [],
       blocked: [],
       commandCounter: 0,
+      keyVersions: {},
     }
     expect(state.keys['user:1']!.value.type).toBe('string')
     expect(state.keyOrder).toEqual(['user:1'])

@@ -1,6 +1,12 @@
 import { evictionVictims, sizeOf } from './memory'
 import type { KeyRecord, RedisState, RedisValue } from './types'
 
+/** Bumps `key`'s version. Every place a `KeyRecord` is written, evicted, deleted,
+ *  or lazily expired must call this — see the field doc on `RedisState.keyVersions`. */
+export function touchKey(state: RedisState, key: string): RedisState {
+  return { ...state, keyVersions: { ...state.keyVersions, [key]: (state.keyVersions[key] ?? 0) + 1 } }
+}
+
 /**
  * True when `key` exists and is not past its expiry, as of `now`. Does not
  * mutate state or touch hit/miss metrics — callers that need the side
@@ -72,7 +78,7 @@ export function readKey(
         memoryUsed: state.metrics.memoryUsed - record.bytes,
       },
     }
-    return { state: nextState, record: undefined }
+    return { state: touchKey(nextState, key), record: undefined }
   }
 
   const updatedRecord: KeyRecord = { ...record, lastAccessAt: state.now, hits: record.hits + 1 }
@@ -148,6 +154,7 @@ export function writeKey(
           memoryUsed: working.metrics.memoryUsed - victimRecord.bytes,
         },
       }
+      working = touchKey(working, victim)
       evicted.push(victim)
     }
   }
@@ -175,7 +182,7 @@ export function writeKey(
     },
   }
 
-  return { state: nextState, oom: false, evicted }
+  return { state: touchKey(nextState, key), oom: false, evicted }
 }
 
 /** Removes a key outright (not via expiry or eviction) and frees its bytes. */
@@ -195,5 +202,5 @@ export function deleteKey(state: RedisState, key: string): { state: RedisState; 
       memoryUsed: state.metrics.memoryUsed - record.bytes,
     },
   }
-  return { state: nextState, existed: true }
+  return { state: touchKey(nextState, key), existed: true }
 }

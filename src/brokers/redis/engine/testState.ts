@@ -15,5 +15,6 @@ export function emptyState(): RedisState {
     inFlight: [],
     blocked: [],
     commandCounter: 0,
+    keyVersions: {},
   }
 }

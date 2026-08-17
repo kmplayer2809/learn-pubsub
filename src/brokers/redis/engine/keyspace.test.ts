@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deleteKey, livesAt, readKey, writeKey } from './keyspace'
+import { deleteKey, livesAt, readKey, touchKey, writeKey } from './keyspace'
 import { emptyState } from './testState'
 
 describe('readKey', () => {
@@ -168,5 +168,38 @@ describe('livesAt', () => {
     const written = writeKey(emptyState(), 'a', { type: 'string', value: 'x' }).state
     expect(livesAt(written, 'a', 0)).toBe(true)
     expect(written.metrics.hits).toBe(0)
+  })
+})
+
+describe('touchKey', () => {
+  it('starts a key at version 1 on first touch and increments from there', () => {
+    let state = { ...emptyState() }
+    state = touchKey(state, 'a')
+    expect(state.keyVersions['a']).toBe(1)
+    state = touchKey(state, 'a')
+    expect(state.keyVersions['a']).toBe(2)
+  })
+})
+
+describe('writeKey / deleteKey version stamping', () => {
+  it('bumps the key version on every write, every eviction, every explicit delete, and every lazy-expiry removal', () => {
+    let state = emptyState()
+    state = writeKey(state, 'k', { type: 'string', value: 'v' }).state
+    expect(state.keyVersions['k']).toBe(1)
+    state = writeKey(state, 'k', { type: 'string', value: 'v2' }).state
+    expect(state.keyVersions['k']).toBe(2)
+    state = deleteKey(state, 'k').state
+    expect(state.keyVersions['k']).toBe(3)
+    // Recreating the key must not restart the counter — a WATCH taken before
+    // the delete must still see this as "changed" relative to a version-0 read.
+    state = writeKey(state, 'k', { type: 'string', value: 'v3' }).state
+    expect(state.keyVersions['k']).toBe(4)
+  })
+
+  it('bumps the version of a key removed by lazy expiry inside readKey', () => {
+    let state = writeKey(emptyState(), 'k', { type: 'string', value: 'v' }, { expiresAt: 100 }).state
+    state = { ...state, now: 200 }
+    const { state: afterRead } = readKey(state, 'k', 'read')
+    expect(afterRead.keyVersions['k']).toBe(2) // 1 from the write, 1 from the lazy-expiry removal
   })
 })

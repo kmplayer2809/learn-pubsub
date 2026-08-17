@@ -17,6 +17,7 @@ function stateWith(keys: Record<string, { bytes: number; expiresAt?: number; las
     inFlight: [],
     blocked: [],
     commandCounter: 0,
+    keyVersions: {},
   }
 }
 

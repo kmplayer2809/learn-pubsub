@@ -98,4 +98,10 @@ export interface RedisState extends KernelState {
   /** Clients parked on BLPOP, oldest first — the wake order must be deterministic. */
   blocked: BlockedClient[]
   commandCounter: number
+  /** Monotonic per-key counter, bumped on every write, delete, eviction, and
+   *  lazy-expiry removal. Never reset when a key is deleted — WATCH stores a
+   *  key's version at watch time and EXEC compares it against this map, so a
+   *  delete-then-recreate must still read as "changed" even though the new
+   *  KeyRecord itself starts fresh. */
+  keyVersions: Record<string, number>
 }

@@ -101,6 +101,7 @@ function createState(topology: RedisTopology, seed: number): RedisState {
     inFlight: [],
     blocked: [],
     commandCounter: 0,
+    keyVersions: {},
   }
 }
 
