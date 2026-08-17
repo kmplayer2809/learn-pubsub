@@ -124,6 +124,32 @@ function nextSeq(state: RedisState): [number, RedisState] {
   return [state.seq + 1, { ...state, seq: state.seq + 1 }]
 }
 
+/** Schedules a `replicate` event per declared replica, carrying the
+ *  `writeCounter` value as of *this* command. `applyReplicate` just needs to
+ *  record it — it does not need to know which command produced it, only how
+ *  far the primary had gotten. Scheduling this after every command (not only
+ *  ones that actually wrote something) is deliberate: it keeps this call
+ *  site simple, and a no-op replicate (the counter unchanged since the last
+ *  one) is harmless. */
+function scheduleReplication(state: RedisState): [SimEvent<RedisEventType>[], RedisState] {
+  const replicas = state.topology.replicas ?? []
+  if (replicas.length === 0) return [[], state]
+
+  let working = state
+  const events: SimEvent<RedisEventType>[] = []
+  for (const replica of replicas) {
+    const [seq, afterSeq] = nextSeq(working)
+    working = afterSeq
+    events.push({
+      at: working.now + replica.lagMs,
+      seq,
+      type: 'replicate',
+      payload: { replicaId: replica.id, writeCounter: working.writeCounter },
+    })
+  }
+  return [events, working]
+}
+
 /** Drops any `InFlight` whose animation has already arrived as of `state.now`. */
 function pruneFlights(state: RedisState): RedisState {
   const kept = state.inFlight.filter((flight) => flight.toT > state.now)
@@ -178,12 +204,7 @@ function seedEvents(options: RedisSimulationOptions): SimEvent<RedisEventType>[]
   const faultEvents: SimEvent<RedisEventType>[] = (options.failures ?? []).map((fault) => ({
     at: fault.at,
     seq: seq++,
-    // `RedisFault.kind` already carries `'sentinelFailover'` (Task 14 wires up
-    // its behaviour); `RedisEventType`/`REDUCERS` don't recognise it yet, by
-    // this task's own design (see the `RedisEventType` comment in types.ts).
-    // No lesson schedules that kind of fault before Task 14 lands, so this
-    // cast is sound in practice even though the type alone can't prove it.
-    type: fault.kind as RedisEventType,
+    type: fault.kind,
     payload: { target: fault.target },
   }))
 
@@ -296,16 +317,14 @@ function applyReply(state: RedisState, event: SimEvent<RedisEventType>): ReduceR
   const isPush = name === 'LPUSH' || name === 'RPUSH'
   const pushedKey = args[0]
   const hasWaiter = isPush && pushedKey !== undefined && withFlight.blocked.some((entry) => entry.keys.includes(pushedKey))
-  if (!hasWaiter) return { state: withFlight, newEvents: [] }
 
-  const [unblockSeq, afterUnblockSeq] = nextSeq(withFlight)
-  const unblockEvent: SimEvent<RedisEventType> = {
-    at: withFlight.now,
-    seq: unblockSeq,
-    type: 'unblock',
-    payload: {},
-  }
-  return { state: afterUnblockSeq, newEvents: [unblockEvent] }
+  const [replicateEvents, afterReplicate] = scheduleReplication(withFlight)
+
+  if (!hasWaiter) return { state: afterReplicate, newEvents: replicateEvents }
+
+  const [unblockSeq, afterUnblockSeq] = nextSeq(afterReplicate)
+  const unblockEvent: SimEvent<RedisEventType> = { at: afterUnblockSeq.now, seq: unblockSeq, type: 'unblock', payload: {} }
+  return { state: afterUnblockSeq, newEvents: [...replicateEvents, unblockEvent] }
 }
 
 /** Builds the return `RedisFlight` a woken or timed-out BLPOP client sees, server back to client. */
@@ -469,6 +488,26 @@ function applyRestart(state: RedisState, event: SimEvent<RedisEventType>): Reduc
   }
 }
 
+function applyReplicate(state: RedisState, event: SimEvent<RedisEventType>): ReduceResult {
+  const replicaId = asString(event.payload.replicaId, 'replicaId')
+  const writeCounter = event.payload.writeCounter
+  if (typeof writeCounter !== 'number') throw new Error('redis engine: payload.writeCounter is not a number')
+  const current = state.replicaState[replicaId]?.appliedWriteCounter ?? 0
+  if (writeCounter <= current) return { state, newEvents: [] } // a later replicate already applied a higher counter
+  return {
+    state: { ...state, replicaState: { ...state.replicaState, [replicaId]: { appliedWriteCounter: writeCounter } } },
+    newEvents: [],
+  }
+}
+
+function applySentinelFailover(state: RedisState, event: SimEvent<RedisEventType>): ReduceResult {
+  const target = asString(event.payload.target, 'target')
+  return {
+    state: { ...state, primaryId: target, journal: [...state.journal, { at: state.now, type: 'sentinelFailover', text: `# sentinel promoted ${target}` }] },
+    newEvents: [],
+  }
+}
+
 function withPrune(reducer: Reducer): Reducer {
   return (state, event) => reducer(pruneFlights(state), event)
 }
@@ -486,6 +525,8 @@ const REDUCERS: Record<RedisEventType, Reducer> = {
   snapshotWrite: withPrune(applySnapshotWrite),
   crash: withPrune(applyCrash),
   restart: withPrune(applyRestart),
+  replicate: withPrune(applyReplicate),
+  sentinelFailover: withPrune(applySentinelFailover),
 }
 
 export function createRedisSimulation(

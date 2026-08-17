@@ -83,7 +83,9 @@ export interface RedisMetrics {
   memoryUsed: number
 }
 
-export type RedisEventType = 'command' | 'reply' | 'activeExpire' | 'evict' | 'unblock' | 'snapshotWrite' | 'crash' | 'restart'
+export type RedisEventType =
+  | 'command' | 'reply' | 'activeExpire' | 'evict' | 'unblock'
+  | 'snapshotWrite' | 'crash' | 'restart' | 'replicate' | 'sentinelFailover'
 
 export interface RedisFlight {
   message: { id: string; label: string; solid: boolean }

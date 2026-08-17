@@ -299,3 +299,38 @@ describe('persistence: crash and restart', () => {
     expect(sim.snapshot().primaryDown).toBe(false)
   })
 })
+
+describe('replication lag and Sentinel failover', () => {
+  const topology: RedisTopology = {
+    clients: [{ id: 'app', label: 'App', position: { x: 0, y: 0 } }],
+    server: { id: 'redis', label: 'Redis', position: { x: 200, y: 50 } },
+    replicas: [{ id: 'replica-1', label: 'Replica', position: { x: 400, y: 50 }, lagMs: 300 }],
+    sentinels: [{ id: 'sentinel-1', label: 'Sentinel', position: { x: 400, y: 150 } }],
+  }
+
+  it('a replica applies a write lagMs after the primary does', () => {
+    const sim = createRedisSimulation({
+      topology,
+      script: [{ at: 0, clientId: 'app', name: 'SET', args: ['a', '1'] }],
+      seed: 1,
+    })
+    sim.advanceTo(200) // primary has applied (command travel 120ms), replica has not (needs +300ms more)
+    expect(sim.snapshot().replicaState['replica-1']!.appliedWriteCounter).toBe(0)
+    sim.advanceTo(500)
+    expect(sim.snapshot().replicaState['replica-1']!.appliedWriteCounter).toBe(1)
+  })
+
+  it('sentinelFailover repoints primaryId at the named replica', () => {
+    const sim = createRedisSimulation({
+      topology,
+      script: [],
+      failures: [
+        { at: 100, kind: 'crash', target: 'redis' },
+        { at: 200, kind: 'sentinelFailover', target: 'replica-1' },
+      ],
+      seed: 1,
+    })
+    sim.advanceTo(400)
+    expect(sim.snapshot().primaryId).toBe('replica-1')
+  })
+})
