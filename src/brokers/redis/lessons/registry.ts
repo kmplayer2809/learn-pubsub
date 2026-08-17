@@ -11,6 +11,8 @@ import { cacheAside } from './08-cache-aside'
 import { writeThrough } from './09-write-through'
 import { stampede } from './10-stampede'
 import { eviction } from './11-eviction'
+import { transactions } from './12-transactions'
+import { lua } from './13-lua'
 
 /**
  * `messaging` and `advanced` carry no lessons until the next plan. That is
@@ -37,4 +39,6 @@ export const LESSONS: RedisLesson[] = [
   writeThrough,
   stampede,
   eviction,
+  transactions,
+  lua,
 ]
