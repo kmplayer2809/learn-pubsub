@@ -1,4 +1,4 @@
-import { readKey, writeKey } from '../keyspace'
+import { deleteKey, readKey, writeKey } from '../keyspace'
 import type { CommandContext, CommandHandler, CommandResult } from '../reply'
 import { oomReply, wrongTypeReply } from '../reply'
 
@@ -159,6 +159,7 @@ const zremrangebyscore: CommandHandler = (context: CommandContext): CommandResul
   const removed = record.value.value.length - kept.length
   if (removed === 0) return { state: afterRead, reply: { kind: 'integer', value: 0 } }
 
+  if (kept.length === 0) return { state: deleteKey(afterRead, key!).state, reply: { kind: 'integer', value: removed } }
   const result = writeKey(afterRead, key!, { type: 'zset', value: kept })
   return { state: result.state, reply: { kind: 'integer', value: removed } }
 }

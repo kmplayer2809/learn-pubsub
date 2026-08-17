@@ -87,4 +87,11 @@ describe('ZREMRANGEBYSCORE / ZCOUNT', () => {
     expect(run(stringState, 'ZCOUNT', ['z', '0', '10']).reply.kind).toBe('error')
     expect(run(stringState, 'ZREMRANGEBYSCORE', ['z', '0', '10']).reply.kind).toBe('error')
   })
+
+  it('deletes the key when ZREMRANGEBYSCORE removes every member', () => {
+    const add = run(emptyState(), 'ZADD', ['z', '1', 'a', '2', 'b', '3', 'c'])
+    const afterRemove = run(add.state, 'ZREMRANGEBYSCORE', ['z', '-inf', '+inf'])
+    expect(afterRemove.reply).toEqual({ kind: 'integer', value: 3 })
+    expect(run(afterRemove.state, 'EXISTS', ['z']).reply).toEqual({ kind: 'integer', value: 0 })
+  })
 })
