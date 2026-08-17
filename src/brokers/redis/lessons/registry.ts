@@ -13,6 +13,8 @@ import { stampede } from './10-stampede'
 import { eviction } from './11-eviction'
 import { transactions } from './12-transactions'
 import { lua } from './13-lua'
+import { distributedLock } from './14-distributed-lock'
+import { rateLimit } from './15-rate-limit'
 
 /**
  * `messaging` and `advanced` carry no lessons until the next plan. That is
@@ -41,4 +43,6 @@ export const LESSONS: RedisLesson[] = [
   eviction,
   transactions,
   lua,
+  distributedLock,
+  rateLimit,
 ]

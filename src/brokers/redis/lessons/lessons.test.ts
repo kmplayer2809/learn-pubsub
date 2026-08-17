@@ -87,9 +87,9 @@ describe.each(LESSONS.map((l) => [l.id, l] as const))('%s', (_id, lesson) => {
   })
 })
 
-it('ships thirteen lessons with unique ids, in the order the sidebar renders them', () => {
-  expect(LESSONS).toHaveLength(13)
-  expect(new Set(LESSONS.map((l) => l.id)).size).toBe(13)
+it('ships fifteen lessons with unique ids, in the order the sidebar renders them', () => {
+  expect(LESSONS).toHaveLength(15)
+  expect(new Set(LESSONS.map((l) => l.id)).size).toBe(15)
   expect(LESSONS.map((l) => l.id)).toEqual([
     '01-strings',
     '02-hash',
@@ -104,5 +104,7 @@ it('ships thirteen lessons with unique ids, in the order the sidebar renders the
     '11-eviction',
     '12-transactions',
     '13-lua',
+    '14-distributed-lock',
+    '15-rate-limit',
   ])
 })
