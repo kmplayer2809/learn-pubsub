@@ -14,6 +14,15 @@ export type Reply =
   | { kind: 'nil' } // (nil)
   | { kind: 'array'; value: string[] } // 1) "a"  2) "b"
   | { kind: 'error'; value: string } // (error) OOM ...
+  /**
+   * EXEC's reply: each entry is already the *fully formatted* reply text of
+   * one queued command (e.g. `OK`, `(integer) 2`, `"alice"`), produced by
+   * calling `formatReply` on that command's own `Reply` before it lands here.
+   * Distinct from `array` (whose entries are raw bulk-string values redis-cli
+   * quotes uniformly) because EXEC's entries must render with whatever
+   * quoting their own type already carries, not be quoted again.
+   */
+  | { kind: 'multi'; value: string[] } // 1) OK  2) (integer) 2
 
 /** Renders a `Reply` the way `redis-cli` prints it. */
 export function formatReply(reply: Reply): string {
@@ -29,6 +38,9 @@ export function formatReply(reply: Reply): string {
     case 'array':
       if (reply.value.length === 0) return '(empty array)'
       return reply.value.map((entry, index) => `${index + 1}) "${entry}"`).join(' ')
+    case 'multi':
+      if (reply.value.length === 0) return '(empty array)'
+      return reply.value.map((entry, index) => `${index + 1}) ${entry}`).join(' ')
     case 'error':
       return `(error) ${reply.value}`
   }

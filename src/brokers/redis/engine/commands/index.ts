@@ -5,6 +5,7 @@ import * as list from './list'
 import * as server from './server'
 import * as set from './set'
 import * as string from './string'
+import * as tx from './tx'
 import * as zset from './zset'
 
 /** The full command dispatch table: every command name the engine understands maps to its handler. */
@@ -16,6 +17,7 @@ export const HANDLERS = {
   ...set.handlers,
   ...zset.handlers,
   ...server.handlers,
+  ...tx.handlers,
 } satisfies Record<string, CommandHandler>
 
 export type RedisCommandName = keyof typeof HANDLERS

@@ -24,6 +24,8 @@ describe('RedisState', () => {
       blocked: [],
       commandCounter: 0,
       keyVersions: {},
+      txQueues: {},
+      watched: {},
     }
     expect(state.keys['user:1']!.value.type).toBe('string')
     expect(state.keyOrder).toEqual(['user:1'])

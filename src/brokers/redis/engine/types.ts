@@ -88,6 +88,16 @@ export interface BlockedClient {
   timeoutAt?: number
 }
 
+export interface QueuedCommand {
+  name: string
+  args: string[]
+}
+
+export interface WatchedKey {
+  key: string
+  version: number
+}
+
 export interface RedisState extends KernelState {
   topology: RedisTopology
   /** Insertion-ordered by construction: never reorder, the panel reads it directly. */
@@ -104,4 +114,9 @@ export interface RedisState extends KernelState {
    *  delete-then-recreate must still read as "changed" even though the new
    *  KeyRecord itself starts fresh. */
   keyVersions: Record<string, number>
+  /** Presence of a `clientId` entry (even an empty array) means that client is
+   *  between MULTI and EXEC/DISCARD. `engine/index.ts`'s `applyReply` checks
+   *  this before dispatching a command. */
+  txQueues: Record<string, QueuedCommand[]>
+  watched: Record<string, WatchedKey[]>
 }

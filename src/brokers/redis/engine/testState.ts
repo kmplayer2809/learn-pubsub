@@ -16,5 +16,7 @@ export function emptyState(): RedisState {
     blocked: [],
     commandCounter: 0,
     keyVersions: {},
+    txQueues: {},
+    watched: {},
   }
 }

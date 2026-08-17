@@ -18,6 +18,8 @@ function stateWith(keys: Record<string, { bytes: number; expiresAt?: number; las
     blocked: [],
     commandCounter: 0,
     keyVersions: {},
+    txQueues: {},
+    watched: {},
   }
 }
 

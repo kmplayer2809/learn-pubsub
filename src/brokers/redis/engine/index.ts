@@ -1,4 +1,5 @@
 import { HANDLERS, isCommandName, type RedisCommandName } from './commands'
+import { isInTransaction, queueCommand } from './commands/tx'
 import { applyActiveExpire } from './expiry'
 import { formatCommand, formatReply, type Reply } from './reply'
 import type { BlockedClient, RedisEventType, RedisFlight, RedisState, RedisTopology } from './types'
@@ -102,6 +103,8 @@ function createState(topology: RedisTopology, seed: number): RedisState {
     blocked: [],
     commandCounter: 0,
     keyVersions: {},
+    txQueues: {},
+    watched: {},
   }
 }
 
@@ -182,7 +185,11 @@ function applyReply(state: RedisState, event: SimEvent<RedisEventType>): ReduceR
   const tone = asOptionalString(event.payload.tone, 'tone') ?? DEFAULT_TONE
   const commandId = asString(event.payload.commandId, 'commandId')
 
-  const handled = HANDLERS[name]({ state, clientId, args, commandId })
+  const shouldQueue =
+    isInTransaction(state, clientId) && name !== 'MULTI' && name !== 'EXEC' && name !== 'DISCARD' && name !== 'WATCH'
+  const handled = shouldQueue
+    ? { state: queueCommand(state, clientId, name, args), reply: { kind: 'status' as const, value: 'QUEUED' } }
+    : HANDLERS[name]({ state, clientId, args, commandId })
 
   // The command was issued and counted the instant the client sent it, same
   // as real Redis — whether it completes now or parks. Parking must not count
