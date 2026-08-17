@@ -35,6 +35,15 @@ export interface RedisServerSpec {
   evictionPolicy?: EvictionPolicy
   /** How often the active expire cycle runs. Redis' own default is 100ms. */
   activeExpireEveryMs?: number
+  /** Absent means "no persistence configured": a crash loses everything.
+   *  `rdb.everySec` models Redis' periodic snapshot; `aof` models the
+   *  append-only file's fsync policy. A server declares at most one of
+   *  these two in a given lesson — see `engine/index.ts`'s `snapshotWrite`
+   *  scheduling for how the interval is picked. */
+  persistence?: {
+    rdb?: { everySec: number }
+    aof?: 'always' | 'everysec' | 'no'
+  }
 }
 
 export interface RedisClientSpec {
@@ -43,9 +52,25 @@ export interface RedisClientSpec {
   position: { x: number; y: number }
 }
 
+export interface RedisReplicaSpec {
+  id: NodeId
+  label: string
+  position: { x: number; y: number }
+  /** Virtual ms between a write landing on the primary and reaching this replica. */
+  lagMs: number
+}
+
+export interface RedisSentinelSpec {
+  id: NodeId
+  label: string
+  position: { x: number; y: number }
+}
+
 export interface RedisTopology {
   clients: RedisClientSpec[]
   server: RedisServerSpec
+  replicas?: RedisReplicaSpec[]
+  sentinels?: RedisSentinelSpec[]
 }
 
 export interface RedisMetrics {
@@ -88,6 +113,15 @@ export interface BlockedClient {
   timeoutAt?: number
 }
 
+/** A full-keyspace snapshot, captured by the `snapshotWrite` event and
+ *  restored by `crash` when the server has no `persistence.aof: 'always'`. */
+export interface RedisSnapshot {
+  keys: Record<string, KeyRecord>
+  keyOrder: string[]
+  keyVersions: Record<string, number>
+  writeCounter: number
+}
+
 export interface QueuedCommand {
   name: string
   args: string[]
@@ -119,4 +153,14 @@ export interface RedisState extends KernelState {
    *  this before dispatching a command. */
   txQueues: Record<string, QueuedCommand[]>
   watched: Record<string, WatchedKey[]>
+  /** How many writes (SET/DEL/eviction/lazy-expiry — anything `touchKey` sees)
+   *  the primary has applied since the run started. Compared against each
+   *  replica's `replicaState[id].appliedWriteCounter` to show lag. */
+  writeCounter: number
+  replicaState: Record<NodeId, { appliedWriteCounter: number }>
+  /** Which node id is currently treated as primary. Starts as `topology.server.id`;
+   *  a `sentinelFailover` fault can repoint it at a replica id. */
+  primaryId: NodeId
+  lastSnapshot?: RedisSnapshot
+  primaryDown: boolean
 }

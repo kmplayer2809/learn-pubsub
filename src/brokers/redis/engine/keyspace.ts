@@ -4,7 +4,11 @@ import type { KeyRecord, RedisState, RedisValue } from './types'
 /** Bumps `key`'s version. Every place a `KeyRecord` is written, evicted, deleted,
  *  or lazily expired must call this — see the field doc on `RedisState.keyVersions`. */
 export function touchKey(state: RedisState, key: string): RedisState {
-  return { ...state, keyVersions: { ...state.keyVersions, [key]: (state.keyVersions[key] ?? 0) + 1 } }
+  return {
+    ...state,
+    keyVersions: { ...state.keyVersions, [key]: (state.keyVersions[key] ?? 0) + 1 },
+    writeCounter: state.writeCounter + 1,
+  }
 }
 
 /**

@@ -26,6 +26,10 @@ describe('RedisState', () => {
       keyVersions: {},
       txQueues: {},
       watched: {},
+      writeCounter: 0,
+      replicaState: {},
+      primaryId: 'redis',
+      primaryDown: false,
     }
     expect(state.keys['user:1']!.value.type).toBe('string')
     expect(state.keyOrder).toEqual(['user:1'])

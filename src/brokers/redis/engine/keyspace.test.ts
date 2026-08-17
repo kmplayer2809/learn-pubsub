@@ -181,6 +181,15 @@ describe('touchKey', () => {
     state = touchKey(state, 'a')
     expect(state.keyVersions['a']).toBe(2)
   })
+
+  it('touchKey also advances the global writeCounter', () => {
+    let state = emptyState()
+    expect(state.writeCounter).toBe(0)
+    state = touchKey(state, 'a')
+    expect(state.writeCounter).toBe(1)
+    state = touchKey(state, 'b')
+    expect(state.writeCounter).toBe(2)
+  })
 })
 
 describe('writeKey / deleteKey version stamping', () => {

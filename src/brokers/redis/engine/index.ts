@@ -105,6 +105,10 @@ function createState(topology: RedisTopology, seed: number): RedisState {
     keyVersions: {},
     txQueues: {},
     watched: {},
+    writeCounter: 0,
+    replicaState: Object.fromEntries((topology.replicas ?? []).map((r) => [r.id, { appliedWriteCounter: 0 }])),
+    primaryId: topology.server.id,
+    primaryDown: false,
   }
 }
 

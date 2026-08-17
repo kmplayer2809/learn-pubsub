@@ -20,6 +20,10 @@ function stateWith(keys: Record<string, { bytes: number; expiresAt?: number; las
     keyVersions: {},
     txQueues: {},
     watched: {},
+    writeCounter: 0,
+    replicaState: {},
+    primaryId: 'redis',
+    primaryDown: false,
   }
 }
 

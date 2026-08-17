@@ -18,5 +18,9 @@ export function emptyState(): RedisState {
     keyVersions: {},
     txQueues: {},
     watched: {},
+    writeCounter: 0,
+    replicaState: {},
+    primaryId: 'redis',
+    primaryDown: false,
   }
 }
