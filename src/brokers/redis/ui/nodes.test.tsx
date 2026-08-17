@@ -1,7 +1,7 @@
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react'
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { ClientNode, ServerNode } from './nodes'
+import { ClientNode, ReplicaNode, SentinelNode, ServerNode } from './nodes'
 
 // NodeProps carries a large React Flow surface (positionAbsoluteX, dragging, ...) that
 // none of these components read. Only `data` and `selected` matter here.
@@ -113,5 +113,33 @@ describe('ServerNode', () => {
       false,
     )
     expect(shell.textContent).not.toContain('undefined')
+  })
+})
+
+describe('ReplicaNode', () => {
+  it('shows the lag between writeCounter and appliedWriteCounter', () => {
+    const shell = renderNode(
+      ReplicaNode,
+      { label: 'Replica', lagMs: 400, appliedWriteCounter: 2, writeCounter: 5, highlighted: false },
+      false,
+    )
+    expect(shell.textContent).toContain('chậm 3 ghi')
+  })
+
+  it('says so rather than "chậm 0 ghi" once the replica has caught up', () => {
+    const shell = renderNode(
+      ReplicaNode,
+      { label: 'Replica', lagMs: 400, appliedWriteCounter: 5, writeCounter: 5, highlighted: false },
+      false,
+    )
+    expect(shell.textContent).toContain('đã bắt kịp')
+    expect(shell.textContent).not.toContain('chậm')
+  })
+})
+
+describe('SentinelNode', () => {
+  it('renders its label', () => {
+    const shell = renderNode(SentinelNode, { label: 'Sentinel', highlighted: false }, false)
+    expect(shell.textContent).toContain('Sentinel')
   })
 })

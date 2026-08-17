@@ -51,3 +51,35 @@ export function ServerNode({ data, selected }: NodeProps) {
     </div>
   )
 }
+
+// amber/violet: the two remaining hues RabbitMQ doesn't use (see the client/server comment
+// above — client took cyan, server took rose), keeping all four Redis node kinds visually
+// distinct from one another and from any RabbitMQ node on the same screen.
+export function ReplicaNode({ data, selected }: NodeProps) {
+  const appliedWriteCounter = Number(data.appliedWriteCounter)
+  const writeCounter = Number(data.writeCounter)
+  const behind = writeCounter - appliedWriteCounter
+
+  return (
+    <div
+      className={`${SHELL} border-amber-500 bg-amber-950 ${selected ? 'ring-2 ring-amber-300' : ''} ${highlightClass(data)}`}
+    >
+      <Handle type="target" position={Position.Left} />
+      <div className="font-semibold text-amber-200">{String(data.label)}</div>
+      <div className="text-[10px] text-amber-400">lag {String(data.lagMs)}ms</div>
+      <div className="text-[10px] text-amber-400">{behind === 0 ? 'đã bắt kịp' : `chậm ${behind} ghi`}</div>
+    </div>
+  )
+}
+
+export function SentinelNode({ data, selected }: NodeProps) {
+  return (
+    <div
+      className={`${SHELL} border-violet-500 bg-violet-950 ${selected ? 'ring-2 ring-violet-300' : ''} ${highlightClass(data)}`}
+    >
+      <Handle type="target" position={Position.Left} />
+      <div className="font-semibold text-violet-200">{String(data.label)}</div>
+      <div className="text-[10px] text-violet-400">sentinel</div>
+    </div>
+  )
+}

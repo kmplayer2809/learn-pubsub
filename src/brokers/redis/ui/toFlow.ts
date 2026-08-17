@@ -37,7 +37,27 @@ export function toFlowNodes(topology: RedisTopology, state: RedisState, highligh
     },
   }
 
-  return [...clients, serverNode]
+  const replicaNodes = (topology.replicas ?? []).map<Node>((replica) => ({
+    id: replica.id,
+    type: 'replica',
+    position: replica.position,
+    data: {
+      label: replica.label,
+      lagMs: replica.lagMs,
+      appliedWriteCounter: state.replicaState[replica.id]?.appliedWriteCounter ?? 0,
+      writeCounter: state.writeCounter,
+      highlighted: emphasised.has(replica.id),
+    },
+  }))
+
+  const sentinelNodes = (topology.sentinels ?? []).map<Node>((sentinel) => ({
+    id: sentinel.id,
+    type: 'sentinel',
+    position: sentinel.position,
+    data: { label: sentinel.label, highlighted: emphasised.has(sentinel.id) },
+  }))
+
+  return [...clients, serverNode, ...replicaNodes, ...sentinelNodes]
 }
 
 function edge(source: string, target: string): Edge {
@@ -64,6 +84,12 @@ export function toFlowEdges(topology: RedisTopology): Edge[] {
   for (const client of topology.clients) {
     edges.push(edge(client.id, serverId))
     edges.push(edge(serverId, client.id))
+  }
+  for (const replica of topology.replicas ?? []) {
+    edges.push({ ...edge(serverId, replica.id), style: { stroke: '#475569', strokeDasharray: '4 4' } })
+  }
+  for (const sentinel of topology.sentinels ?? []) {
+    edges.push(edge(sentinel.id, serverId))
   }
   return edges
 }

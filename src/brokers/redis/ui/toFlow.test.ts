@@ -92,6 +92,19 @@ describe('toFlowNodes', () => {
     }
     expect(ticks).toBeGreaterThan(10)
   })
+
+  it('includes a node per replica and per sentinel when the topology declares them', () => {
+    const topo = topology({
+      replicas: [{ id: 'r1', label: 'Replica 1', position: { x: 0, y: 300 }, lagMs: 200 }],
+      sentinels: [{ id: 's1', label: 'Sentinel 1', position: { x: 300, y: 300 } }],
+    })
+    const sim = createRedisSimulation({ topology: topo, script: [], seed: 1 })
+    const nodes = toFlowNodes(topo, sim.snapshot())
+    const replicaNode = nodes.find((n) => n.id === 'r1')
+    const sentinelNode = nodes.find((n) => n.id === 's1')
+    expect(replicaNode?.type).toBe('replica')
+    expect(sentinelNode?.type).toBe('sentinel')
+  })
 })
 
 describe('toFlowEdges', () => {
@@ -116,5 +129,17 @@ describe('toFlowEdges', () => {
     const first = toFlowEdges(topo)
     const second = toFlowEdges(topo)
     expect(first.map((e) => e.id)).toEqual(second.map((e) => e.id))
+  })
+
+  it('adds a dashed server->replica edge and a sentinel->server edge', () => {
+    const topo = topology({
+      replicas: [{ id: 'r1', label: 'Replica 1', position: { x: 0, y: 300 }, lagMs: 200 }],
+      sentinels: [{ id: 's1', label: 'Sentinel 1', position: { x: 300, y: 300 } }],
+    })
+    const edges = toFlowEdges(topo)
+    const replicaEdge = edges.find((e) => e.id === 'redis->r1')
+    expect(replicaEdge).toBeDefined()
+    expect(replicaEdge?.style).toMatchObject({ strokeDasharray: '4 4' })
+    expect(edges.find((e) => e.id === 's1->redis')).toBeDefined()
   })
 })

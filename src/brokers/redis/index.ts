@@ -10,7 +10,7 @@ import { LESSONS, REDIS_LESSON_GROUPS } from './lessons/registry'
 import { KeyspacePanel } from './ui/KeyspacePanel'
 import { issueText } from './ui/issueText'
 import { NodeConfig } from './ui/NodeConfig'
-import { ClientNode, ServerNode } from './ui/nodes'
+import { ClientNode, ReplicaNode, SentinelNode, ServerNode } from './ui/nodes'
 import { toFlowEdges, toFlowNodes } from './ui/toFlow'
 import type { BrokerModule } from '../types'
 
@@ -35,7 +35,7 @@ export const redis: BrokerModule<RedisState, RedisTopology, RedisScriptedCommand
       failures: options.failures as RedisFault[] | undefined,
       maxEvents: options.maxEvents,
     }),
-  nodeTypes: { client: ClientNode, server: ServerNode },
+  nodeTypes: { client: ClientNode, server: ServerNode, replica: ReplicaNode, sentinel: SentinelNode },
   toNodes: (topology, state, highlight) => toFlowNodes(topology, state, highlight),
   // Redis' `toFlowEdges` takes only the topology: a client always has exactly the two
   // edges to and from the server, so no script can change the graph (see `ui/toFlow.ts`).
