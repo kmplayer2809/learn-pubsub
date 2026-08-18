@@ -59,6 +59,7 @@ export function ReplicaNode({ data, selected }: NodeProps) {
   const appliedWriteCounter = Number(data.appliedWriteCounter)
   const writeCounter = Number(data.writeCounter)
   const behind = writeCounter - appliedWriteCounter
+  const isPromotedPrimary = Boolean(data.isPromotedPrimary)
 
   return (
     <div
@@ -66,8 +67,14 @@ export function ReplicaNode({ data, selected }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} />
       <div className="font-semibold text-amber-200">{String(data.label)}</div>
-      <div className="text-[10px] text-amber-400">lag {String(data.lagMs)}ms</div>
-      <div className="text-[10px] text-amber-400">{behind === 0 ? 'đã bắt kịp' : `chậm ${behind} ghi`}</div>
+      {isPromotedPrimary ? (
+        <div className="text-[10px] text-amber-400">primary (đã được promote)</div>
+      ) : (
+        <>
+          <div className="text-[10px] text-amber-400">lag {String(data.lagMs)}ms</div>
+          <div className="text-[10px] text-amber-400">{behind === 0 ? 'đã bắt kịp' : `chậm ${behind} ghi`}</div>
+        </>
+      )}
     </div>
   )
 }
@@ -77,7 +84,7 @@ export function SentinelNode({ data, selected }: NodeProps) {
     <div
       className={`${SHELL} border-violet-500 bg-violet-950 ${selected ? 'ring-2 ring-violet-300' : ''} ${highlightClass(data)}`}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle type="source" position={Position.Left} />
       <div className="font-semibold text-violet-200">{String(data.label)}</div>
       <div className="text-[10px] text-violet-400">sentinel</div>
     </div>

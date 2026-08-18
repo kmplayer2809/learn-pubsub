@@ -6,7 +6,7 @@ export const persistence: RedisLesson = {
   group: 'advanced',
   title: 'RDB vs AOF',
   summary:
-    'Cùng một chuỗi ghi, một server chỉ có RDB định kỳ và một server AOF `everysec` — cùng crash ở một thời điểm, nhưng mất dữ liệu khác nhau.',
+    'Một server chỉ dùng RDB `everySec`: chụp toàn bộ keyspace theo chu kỳ rồi crash đúng vào khoảng hở giữa hai lần chụp — ghi nào rơi vào khoảng hở đó sẽ mất. Checkpoint đối chiếu kết quả này với `aof: "always"` (giả định) để thấy vì sao fsync mỗi lệnh tránh được khoảng hở đó.',
   seed: 16,
   durationMs: 3000,
   topology: {

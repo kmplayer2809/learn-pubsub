@@ -105,6 +105,30 @@ describe('toFlowNodes', () => {
     expect(replicaNode?.type).toBe('replica')
     expect(sentinelNode?.type).toBe('sentinel')
   })
+
+  it('marks a replica isPromotedPrimary only after Sentinel failover repoints primaryId at it', () => {
+    const topo = topology({
+      replicas: [{ id: 'r1', label: 'Replica 1', position: { x: 0, y: 300 }, lagMs: 200 }],
+      sentinels: [{ id: 's1', label: 'Sentinel 1', position: { x: 300, y: 300 } }],
+    })
+    const sim = createRedisSimulation({
+      topology: topo,
+      script: [],
+      failures: [
+        { at: 100, kind: 'crash', target: 'redis' },
+        { at: 200, kind: 'sentinelFailover', target: 'r1' },
+      ],
+      seed: 1,
+    })
+
+    sim.advanceTo(150)
+    const beforeFailover = toFlowNodes(topo, sim.snapshot()).find((n) => n.id === 'r1')!
+    expect(beforeFailover.data.isPromotedPrimary).toBe(false)
+
+    sim.advanceTo(400)
+    const afterFailover = toFlowNodes(topo, sim.snapshot()).find((n) => n.id === 'r1')!
+    expect(afterFailover.data.isPromotedPrimary).toBe(true)
+  })
 })
 
 describe('toFlowEdges', () => {

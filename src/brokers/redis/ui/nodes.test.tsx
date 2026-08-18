@@ -135,6 +135,25 @@ describe('ReplicaNode', () => {
     expect(shell.textContent).toContain('đã bắt kịp')
     expect(shell.textContent).not.toContain('chậm')
   })
+
+  it('renders a promoted-primary label instead of a lag line once isPromotedPrimary is set', () => {
+    const shell = renderNode(
+      ReplicaNode,
+      {
+        label: 'Replica',
+        lagMs: 400,
+        appliedWriteCounter: 0,
+        writeCounter: 3, // would otherwise read as negative lag ("chậm -3 ghi")
+        highlighted: false,
+        isPromotedPrimary: true,
+      },
+      false,
+    )
+    expect(shell.textContent).toContain('primary')
+    expect(shell.textContent).not.toContain('chậm')
+    expect(shell.textContent).not.toContain('đã bắt kịp')
+    expect(shell.textContent).not.toContain('lag')
+  })
 })
 
 describe('SentinelNode', () => {

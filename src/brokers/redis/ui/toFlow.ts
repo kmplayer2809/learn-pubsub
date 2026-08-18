@@ -47,6 +47,10 @@ export function toFlowNodes(topology: RedisTopology, state: RedisState, highligh
       appliedWriteCounter: state.replicaState[replica.id]?.appliedWriteCounter ?? 0,
       writeCounter: state.writeCounter,
       highlighted: emphasised.has(replica.id),
+      // Once Sentinel has promoted this replica (state.primaryId points at it instead of the
+      // original server), the "behind a primary" lag framing is stale — this node IS the
+      // primary now. ReplicaNode swaps in a promoted label instead of computing a lag line.
+      isPromotedPrimary: state.primaryId !== server.id && state.primaryId === replica.id,
     },
   }))
 

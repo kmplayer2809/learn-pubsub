@@ -333,4 +333,22 @@ describe('replication lag and Sentinel failover', () => {
     sim.advanceTo(400)
     expect(sim.snapshot().primaryId).toBe('replica-1')
   })
+
+  it('a crash clamps replicaState.appliedWriteCounter down to the restored writeCounter, never leaving it negative-lag ahead', () => {
+    const sim = createRedisSimulation({
+      topology, // no persistence configured: a crash restores to an empty keyspace, writeCounter 0
+      script: [{ at: 0, clientId: 'app', name: 'SET', args: ['a', '1'] }],
+      failures: [{ at: 700, kind: 'crash', target: 'redis' }],
+      seed: 1,
+    })
+    sim.advanceTo(500) // replica has caught up to the primary's single write by now
+    expect(sim.snapshot().replicaState['replica-1']!.appliedWriteCounter).toBe(1)
+
+    sim.advanceTo(1000) // crash at 700 restores an empty keyspace: writeCounter resets to 0
+    const state = sim.snapshot()
+    expect(state.writeCounter).toBe(0)
+    // The replica's applied counter must be clamped down too, or ReplicaNode's
+    // `writeCounter - appliedWriteCounter` lag calculation goes negative.
+    expect(state.replicaState['replica-1']!.appliedWriteCounter).toBe(0)
+  })
 })

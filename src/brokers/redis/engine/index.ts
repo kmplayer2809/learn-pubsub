@@ -471,6 +471,17 @@ function applyCrash(state: RedisState, event: SimEvent<RedisEventType>): ReduceR
       keyOrder: restored.keyOrder,
       keyVersions: restored.keyVersions,
       writeCounter: restored.writeCounter,
+      // A crash can truncate the primary's write history (restore from an older snapshot, or
+      // lose everything with no persistence). A replica cannot legitimately be "ahead of" a
+      // primary whose history was just truncated in this simulation's single-dataset model, so
+      // clamp every replica's applied counter down to the restored counter too — otherwise
+      // `ReplicaNode`'s `writeCounter - appliedWriteCounter` lag calculation goes negative.
+      replicaState: Object.fromEntries(
+        Object.entries(state.replicaState).map(([id, replica]) => [
+          id,
+          { appliedWriteCounter: Math.min(replica.appliedWriteCounter, restored.writeCounter) },
+        ]),
+      ),
       metrics: { ...state.metrics, keysCount, memoryUsed },
       primaryDown: true,
       journal: [...state.journal, { at: state.now, type: 'crash', text: `# ${target} crashed — ${reason}` }],
