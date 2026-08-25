@@ -32,3 +32,9 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 if (typeof globalThis.DOMMatrixReadOnly === 'undefined') {
   globalThis.DOMMatrixReadOnly = DOMMatrixReadOnlyStub as unknown as typeof DOMMatrixReadOnly
 }
+
+import { installMatchMedia } from './viewport'
+
+// Cài một lần cho mọi test file. Mặc định 1280px, nên test nào không tự đổi
+// viewport vẫn nhận desktop layout y như trước khi có responsive.
+installMatchMedia()
