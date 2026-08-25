@@ -4,6 +4,8 @@ import { BROKER_CATALOG, DEFAULT_BROKER_ID, catalogEntry } from '../brokers/cata
 export const SPEEDS = [0.25, 0.5, 1, 2, 4] as const
 export type Speed = (typeof SPEEDS)[number]
 
+export type MobilePane = 'lessons' | 'canvas' | 'state'
+
 export interface AppState {
   brokerId: string
   lessonId: string
@@ -15,6 +17,12 @@ export interface AppState {
   selectedNodeId?: string
   /** Incremented whenever the engine must be rebuilt and replayed. */
   replayToken: number
+  /** Pane đang hiển thị ở layout mobile. Sống ở store chứ không phải `useState`
+   *  trong `App` vì `setLesson`/`openSandbox` phải đẩy nó về `'canvas'` — một
+   *  action của store không với tới được state cục bộ của component. */
+  mobilePane: MobilePane
+  /** Drawer sidebar ở layout tablet. */
+  drawerOpen: boolean
   setBroker(id: string): void
   setLesson(id: string): void
   openSandbox(): void
@@ -24,6 +32,8 @@ export interface AppState {
   seek(virtualMs: number): void
   tickTo(virtualMs: number): void
   selectNode(id?: string): void
+  setMobilePane(pane: MobilePane): void
+  setDrawerOpen(open: boolean): void
 }
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -38,6 +48,8 @@ export const useAppStore = create<AppState>((set, get) => {
     speed: 1,
     virtualTime: 0,
     replayToken: 0,
+    mobilePane: 'canvas',
+    drawerOpen: false,
 
     setBroker(id) {
       // An unknown id would leave the shell rendering a module that does not exist.
@@ -51,6 +63,7 @@ export const useAppStore = create<AppState>((set, get) => {
         virtualTime: 0,
         selectedNodeId: undefined,
         replayToken: s.replayToken + 1,
+        drawerOpen: false,
       }))
     },
 
@@ -62,11 +75,22 @@ export const useAppStore = create<AppState>((set, get) => {
         virtualTime: 0,
         selectedNodeId: undefined,
         replayToken: s.replayToken + 1,
+        // Vừa chọn bài xong thì thứ người học muốn thấy là mô phỏng, không phải
+        // danh sách bài — ở mobile, đứng nguyên tab `lessons` trông như bấm hụt.
+        mobilePane: 'canvas',
+        drawerOpen: false,
       }))
     },
 
     openSandbox() {
-      set((s) => ({ sandbox: true, playing: false, virtualTime: 0, replayToken: s.replayToken + 1 }))
+      set((s) => ({
+        sandbox: true,
+        playing: false,
+        virtualTime: 0,
+        replayToken: s.replayToken + 1,
+        mobilePane: 'canvas',
+        drawerOpen: false,
+      }))
     },
 
     play() {
@@ -95,6 +119,14 @@ export const useAppStore = create<AppState>((set, get) => {
 
     selectNode(id) {
       set({ selectedNodeId: id })
+    },
+
+    setMobilePane(pane) {
+      set({ mobilePane: pane })
+    },
+
+    setDrawerOpen(open) {
+      set({ drawerOpen: open })
     },
   }
 })

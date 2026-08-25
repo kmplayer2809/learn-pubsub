@@ -79,3 +79,38 @@ describe('broker selection', () => {
     expect(useAppStore.getState().brokerId).toBe('rabbitmq')
   })
 })
+
+describe('mobilePane', () => {
+  beforeEach(() => {
+    useAppStore.setState({ mobilePane: 'canvas', drawerOpen: false, sandbox: false })
+  })
+
+  it('mặc định là canvas — người học mở app là muốn thấy mô phỏng', () => {
+    expect(useAppStore.getState().mobilePane).toBe('canvas')
+  })
+
+  it('setMobilePane đổi pane', () => {
+    useAppStore.getState().setMobilePane('state')
+    expect(useAppStore.getState().mobilePane).toBe('state')
+  })
+
+  it('chọn lesson đẩy pane về canvas và đóng drawer', () => {
+    useAppStore.setState({ mobilePane: 'lessons', drawerOpen: true })
+    useAppStore.getState().setLesson('02-direct')
+    expect(useAppStore.getState().mobilePane).toBe('canvas')
+    expect(useAppStore.getState().drawerOpen).toBe(false)
+  })
+
+  it('mở sandbox cũng đẩy pane về canvas và đóng drawer', () => {
+    useAppStore.setState({ mobilePane: 'lessons', drawerOpen: true })
+    useAppStore.getState().openSandbox()
+    expect(useAppStore.getState().mobilePane).toBe('canvas')
+    expect(useAppStore.getState().drawerOpen).toBe(false)
+  })
+
+  it('đổi broker đóng drawer', () => {
+    useAppStore.setState({ drawerOpen: true })
+    useAppStore.getState().setBroker('redis')
+    expect(useAppStore.getState().drawerOpen).toBe(false)
+  })
+})
