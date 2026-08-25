@@ -1,6 +1,17 @@
 import { SPEEDS, useAppStore, type Speed } from '../../store'
 
-export function Transport({ durationMs, onStep }: { durationMs: number; onStep(): void }) {
+export function Transport({
+  durationMs,
+  onStep,
+  compact = false,
+}: {
+  durationMs: number
+  onStep(): void
+  /** Bật ở mobile: nút thu về icon, tap target nâng lên 44px. Prop chứ không phải
+   *  `useIsMobile()` bên trong — giữ component thuần và test được cả hai chế độ
+   *  mà không phải giả lập viewport. */
+  compact?: boolean
+}) {
   const playing = useAppStore((s) => s.playing)
   const speed = useAppStore((s) => s.speed)
   const virtualTime = useAppStore((s) => s.virtualTime)
@@ -10,15 +21,20 @@ export function Transport({ durationMs, onStep }: { durationMs: number; onStep()
   const setSpeed = useAppStore((s) => s.setSpeed)
 
   const max = durationMs + 5000
+  const tap = compact ? 'min-h-11 min-w-11' : ''
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2" data-testid="transport">
-      <button onClick={() => seek(0)} className="rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800">
-        Chạy lại
+    <div className={`flex items-center px-3 py-2 ${compact ? 'gap-1.5' : 'gap-3'}`} data-testid="transport">
+      <button
+        onClick={() => seek(0)}
+        aria-label="Chạy lại"
+        className={`rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 ${tap}`}
+      >
+        {compact ? '⟲' : 'Chạy lại'}
       </button>
       <button
         onClick={() => (playing ? pause() : play())}
-        className="rounded bg-sky-600 px-3 py-1 text-xs font-medium text-white hover:bg-sky-500"
+        className={`rounded bg-sky-600 px-3 py-1 text-xs font-medium text-white hover:bg-sky-500 ${tap}`}
         data-testid="play-pause"
       >
         {playing ? 'Tạm dừng' : 'Chạy'}
@@ -28,9 +44,10 @@ export function Transport({ durationMs, onStep }: { durationMs: number; onStep()
           pause()
           onStep()
         }}
-        className="rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+        aria-label="Bước"
+        className={`rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 ${tap}`}
       >
-        Bước
+        {compact ? '⏭' : 'Bước'}
       </button>
 
       <input
@@ -40,17 +57,17 @@ export function Transport({ durationMs, onStep }: { durationMs: number; onStep()
         step={50}
         value={Math.min(virtualTime, max)}
         onChange={(e) => seek(Number(e.target.value))}
-        className="flex-1 accent-sky-500"
+        className="min-w-0 flex-1 accent-sky-500"
         aria-label="scrub"
       />
-      <span className="w-16 text-right font-mono text-[11px] text-slate-400">
+      <span className={`shrink-0 text-right font-mono text-[11px] text-slate-400 ${compact ? 'w-11' : 'w-16'}`}>
         {(virtualTime / 1000).toFixed(1)}s
       </span>
 
       <select
         value={speed}
         onChange={(e) => setSpeed(Number(e.target.value) as Speed)}
-        className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200"
+        className={`shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-200 ${compact ? 'min-h-11' : ''}`}
         aria-label="speed"
       >
         {SPEEDS.map((s) => (

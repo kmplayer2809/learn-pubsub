@@ -33,6 +33,12 @@ if (typeof globalThis.DOMMatrixReadOnly === 'undefined') {
   globalThis.DOMMatrixReadOnly = DOMMatrixReadOnlyStub as unknown as typeof DOMMatrixReadOnly
 }
 
+// jest-dom's matchers (toBeInTheDocument, toHaveTextContent, …) aren't wired
+// into vitest's `expect` by default — this registers them once for every
+// test file instead of each one importing '@testing-library/jest-dom/vitest'
+// itself.
+import '@testing-library/jest-dom/vitest'
+
 import { installMatchMedia } from './viewport'
 
 // Cài một lần cho mọi test file. Mặc định 1280px, nên test nào không tự đổi
