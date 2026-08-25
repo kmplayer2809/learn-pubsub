@@ -1,3 +1,11 @@
+// jest-dom's matchers (toBeInTheDocument, toHaveTextContent, …) aren't wired
+// into vitest's `expect` by default — this registers them once for every
+// test file instead of each one importing '@testing-library/jest-dom/vitest'
+// itself.
+import '@testing-library/jest-dom/vitest'
+
+import { installMatchMedia } from './viewport'
+
 // This jsdom version provides neither ResizeObserver nor DOMMatrixReadOnly,
 // both of which @xyflow/react touches at mount (ResizeObserver to watch pane
 // and node dimensions, DOMMatrixReadOnly to read the current zoom out of the
@@ -32,14 +40,6 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 if (typeof globalThis.DOMMatrixReadOnly === 'undefined') {
   globalThis.DOMMatrixReadOnly = DOMMatrixReadOnlyStub as unknown as typeof DOMMatrixReadOnly
 }
-
-// jest-dom's matchers (toBeInTheDocument, toHaveTextContent, …) aren't wired
-// into vitest's `expect` by default — this registers them once for every
-// test file instead of each one importing '@testing-library/jest-dom/vitest'
-// itself.
-import '@testing-library/jest-dom/vitest'
-
-import { installMatchMedia } from './viewport'
 
 // Cài một lần cho mọi test file. Mặc định 1280px, nên test nào không tự đổi
 // viewport vẫn nhận desktop layout y như trước khi có responsive.

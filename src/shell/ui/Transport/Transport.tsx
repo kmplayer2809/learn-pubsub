@@ -57,17 +57,19 @@ export function Transport({
         step={50}
         value={Math.min(virtualTime, max)}
         onChange={(e) => seek(Number(e.target.value))}
-        className="min-w-0 flex-1 accent-sky-500"
+        className={`${compact ? 'min-w-0 ' : ''}flex-1 accent-sky-500`}
         aria-label="scrub"
       />
-      <span className={`shrink-0 text-right font-mono text-[11px] text-slate-400 ${compact ? 'w-11' : 'w-16'}`}>
+      <span
+        className={`${compact ? 'w-11' : 'w-16'} text-right font-mono text-[11px] text-slate-400${compact ? ' shrink-0' : ''}`}
+      >
         {(virtualTime / 1000).toFixed(1)}s
       </span>
 
       <select
         value={speed}
         onChange={(e) => setSpeed(Number(e.target.value) as Speed)}
-        className={`shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-200 ${compact ? 'min-h-11' : ''}`}
+        className={`rounded bg-slate-800 px-2 py-1 text-xs text-slate-200${compact ? ' shrink-0 min-h-11' : ''}`}
         aria-label="speed"
       >
         {SPEEDS.map((s) => (
