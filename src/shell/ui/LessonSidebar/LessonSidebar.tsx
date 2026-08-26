@@ -47,7 +47,7 @@ export function LessonSidebar({
       {broker.sandbox && (
         <button
           onClick={openSandbox}
-          className={`mt-auto border-t border-slate-800 px-3 py-2 text-left text-xs ${
+          className={`mt-auto min-h-11 border-t border-slate-800 px-3 py-2 text-left text-xs md:min-h-0 ${
             sandbox ? 'bg-slate-800 text-sky-300' : 'text-slate-400 hover:bg-slate-900'
           }`}
           data-testid="open-sandbox"
