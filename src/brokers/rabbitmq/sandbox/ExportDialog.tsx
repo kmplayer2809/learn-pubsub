@@ -53,7 +53,7 @@ export function ExportDialog({ topology, onClose }: { topology: Topology; onClos
       role="presentation"
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-3xl min-w-0 flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-xl"
+        className="fixed inset-0 z-30 flex flex-col bg-slate-900 md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[80vh] md:w-[42rem] md:max-w-[90vw] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded md:border md:border-slate-700"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

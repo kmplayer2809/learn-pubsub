@@ -92,7 +92,7 @@ function SelectedNodeConfig() {
                   <button
                     onClick={() => removeBinding(b.id)}
                     aria-label={`xóa binding tới ${b.destinationId}`}
-                    className="shrink-0 rounded border border-rose-800 px-1.5 text-rose-300 hover:bg-rose-950"
+                    className="min-h-11 shrink-0 rounded border border-rose-800 px-1.5 text-rose-300 hover:bg-rose-950 md:min-h-0"
                   >
                     ×
                   </button>
@@ -200,7 +200,7 @@ function SelectedNodeConfig() {
 
       <button
         onClick={remove}
-        className="mt-1 w-full rounded border border-rose-800 px-2 py-1 text-rose-300 hover:bg-rose-950"
+        className="mt-1 min-h-11 w-full rounded border border-rose-800 px-2 py-1 text-rose-300 hover:bg-rose-950 md:min-h-0"
       >
         Xóa node
       </button>
@@ -269,7 +269,7 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
           <button
             onClick={() => setExportOpen(true)}
             data-testid="export-button"
-            className="shrink-0 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+            className="min-h-11 shrink-0 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800 md:min-h-0"
           >
             Xuất code
           </button>
@@ -291,7 +291,7 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
             <button
               key={kind}
               onClick={() => addNode(kind, nextPosition(topology))}
-              className="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+              className="min-h-11 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800 md:min-h-0"
             >
               + {label}
             </button>
@@ -351,7 +351,7 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
           <button
             type="submit"
             disabled={!canPublish}
-            className="w-full rounded bg-sky-600 px-2 py-1 font-medium text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+            className="min-h-11 w-full rounded bg-sky-600 px-2 py-1 font-medium text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 md:min-h-0"
           >
             Publish
           </button>
@@ -383,13 +383,13 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
       <section className="mt-auto flex gap-2 border-t border-slate-800 pt-3">
         <button
           onClick={save}
-          className="flex-1 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+          className="min-h-11 flex-1 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800 md:min-h-0"
         >
           Lưu
         </button>
         <button
           onClick={reset}
-          className="flex-1 rounded border border-rose-800 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-950"
+          className="min-h-11 flex-1 rounded border border-rose-800 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-950 md:min-h-0"
         >
           Đặt lại
         </button>

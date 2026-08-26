@@ -19,7 +19,7 @@ export function NodeConfig({
 
   if (server) {
     return (
-      <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
         <dt>maxmemory</dt>
         <dd className="text-slate-200">{server.maxmemoryBytes ?? '—'}</dd>
         <dt>eviction policy</dt>
@@ -56,7 +56,7 @@ export function NodeConfig({
     // client would mean parsing an edge id back apart.
     const parked = state.blocked.find((entry) => entry.clientId === client.id)
     return (
-      <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
         <dt>client</dt>
         <dd className="text-slate-200">{client.label}</dd>
         <dt>commands</dt>

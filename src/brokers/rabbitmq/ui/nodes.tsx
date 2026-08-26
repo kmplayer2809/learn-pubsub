@@ -28,7 +28,7 @@ export function PublisherNode({ data, selected }: NodeProps) {
     <div
       className={`${SHELL} border-sky-500 bg-sky-950 ${selected ? 'ring-2 ring-sky-300' : ''} ${highlightClass(data)}`}
     >
-      <div className="font-semibold text-sky-200">{String(data.label)}</div>
+      <div className="max-w-[200px] truncate font-semibold text-sky-200">{String(data.label)}</div>
       <div className="text-[10px] text-sky-400">publisher</div>
       <Handle type="source" position={Position.Right} />
     </div>
@@ -44,7 +44,7 @@ export function ExchangeNode({ data, selected }: NodeProps) {
       style={{ borderRadius: 999 }}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="font-semibold text-violet-200">{String(data.label)}</div>
+      <div className="max-w-[200px] truncate font-semibold text-violet-200">{String(data.label)}</div>
       <div className="text-[10px] text-violet-400">{String(data.exchangeType)} exchange</div>
       <Handle type="source" position={Position.Right} />
     </div>
@@ -62,7 +62,7 @@ export function QueueNode({ data, selected }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} />
       <div className="flex items-center gap-2">
-        <span className="font-semibold text-emerald-200">{String(data.label)}</span>
+        <span className="max-w-[200px] truncate font-semibold text-emerald-200">{String(data.label)}</span>
         <span className="rounded bg-emerald-800 px-1 text-[10px] text-emerald-100">{depth}</span>
       </div>
       <div className="mt-1 flex gap-[2px]">
@@ -93,7 +93,7 @@ export function ConsumerNode({ data, selected }: NodeProps) {
       } ${highlightClass(data)}`}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="font-semibold text-amber-200">{String(data.label)}</div>
+      <div className="max-w-[200px] truncate font-semibold text-amber-200">{String(data.label)}</div>
       <div className="text-[10px] text-amber-400">
         prefetch {String(data.prefetch)} · unacked {String(data.unacked)}
         {data.autoAck ? ' · auto-ack' : ''}

@@ -117,4 +117,15 @@ describe('NodeConfig', () => {
     render(<NodeConfig lesson={lesson(topology)} state={emptyState()} nodeId="ghost" />)
     expect(document.body.textContent).toBe('Node này không có cấu hình.')
   })
+
+  it('lưới thuộc tính xuống một cột ở màn hẹp', () => {
+    const topology: RedisTopology = {
+      clients: [],
+      server: { id: 'redis', label: 'Redis', position: { x: 0, y: 0 } },
+    }
+    const { container } = render(<NodeConfig lesson={lesson(topology)} state={emptyState()} nodeId="redis" />)
+    const grid = container.querySelector('[class*="grid-cols"]')
+    expect(grid?.className).toContain('grid-cols-1')
+    expect(grid?.className).toContain('sm:grid-cols-2')
+  })
 })

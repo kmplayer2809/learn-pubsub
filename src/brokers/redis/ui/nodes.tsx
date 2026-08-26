@@ -21,7 +21,7 @@ export function ClientNode({ data, selected }: NodeProps) {
       className={`${SHELL} border-cyan-500 bg-cyan-950 ${selected ? 'ring-2 ring-cyan-300' : ''} ${highlightClass(data)}`}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="font-semibold text-cyan-200">{String(data.label)}</div>
+      <div className="max-w-[200px] truncate font-semibold text-cyan-200">{String(data.label)}</div>
       <div className="text-[10px] text-cyan-400">client</div>
       <Handle type="source" position={Position.Right} />
     </div>
@@ -39,7 +39,7 @@ export function ServerNode({ data, selected }: NodeProps) {
       className={`${SHELL} border-rose-500 bg-rose-950 ${selected ? 'ring-2 ring-rose-300' : ''} ${highlightClass(data)}`}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="font-semibold text-rose-200">{String(data.label)}</div>
+      <div className="max-w-[200px] truncate font-semibold text-rose-200">{String(data.label)}</div>
       <div className="text-[10px] text-rose-400">{keysCount} keys</div>
       <div className="text-[10px] text-rose-400">
         {/* No limit set: say so explicitly rather than rendering `memoryUsed / undefined`. */}
@@ -66,7 +66,7 @@ export function ReplicaNode({ data, selected }: NodeProps) {
       className={`${SHELL} border-amber-500 bg-amber-950 ${selected ? 'ring-2 ring-amber-300' : ''} ${highlightClass(data)}`}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="font-semibold text-amber-200">{String(data.label)}</div>
+      <div className="max-w-[200px] truncate font-semibold text-amber-200">{String(data.label)}</div>
       {isPromotedPrimary ? (
         <div className="text-[10px] text-amber-400">primary (đã được promote)</div>
       ) : (
@@ -85,7 +85,7 @@ export function SentinelNode({ data, selected }: NodeProps) {
       className={`${SHELL} border-violet-500 bg-violet-950 ${selected ? 'ring-2 ring-violet-300' : ''} ${highlightClass(data)}`}
     >
       <Handle type="source" position={Position.Left} />
-      <div className="font-semibold text-violet-200">{String(data.label)}</div>
+      <div className="max-w-[200px] truncate font-semibold text-violet-200">{String(data.label)}</div>
       <div className="text-[10px] text-violet-400">sentinel</div>
     </div>
   )

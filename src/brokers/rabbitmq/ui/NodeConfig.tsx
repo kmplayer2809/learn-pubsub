@@ -20,7 +20,7 @@ export function NodeConfig({
 
   if (queue) {
     return (
-      <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
         <dt>kind</dt><dd className="text-slate-200">{queue.kind}</dd>
         <dt>depth</dt><dd className="text-slate-200">{(state.queues[queue.id] ?? []).length}</dd>
         <dt>ttl</dt><dd className="text-slate-200">{queue.messageTtlMs ?? '—'}</dd>
@@ -33,7 +33,7 @@ export function NodeConfig({
 
   if (consumer) {
     return (
-      <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
         <dt>queue</dt><dd className="text-slate-200">{consumer.queueId}</dd>
         <dt>prefetch</dt><dd className="text-slate-200">{consumer.prefetch || 'không giới hạn'}</dd>
         <dt>ack mode</dt><dd className="text-slate-200">{consumer.autoAck ? 'auto' : 'manual'}</dd>

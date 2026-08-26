@@ -137,4 +137,12 @@ describe('SandboxPanel', () => {
 
     expect(useSandboxStore.getState().topology.bindings).toEqual([])
   })
+
+  it('buttons meet the 44px mobile tap target and shrink back down from md', () => {
+    render(<SandboxPanel state={engineState()} issues={[]} />)
+
+    const exportButton = screen.getByTestId('export-button')
+    expect(exportButton.className).toContain('min-h-11')
+    expect(exportButton.className).toContain('md:min-h-0')
+  })
 })
