@@ -2,7 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root { height: 100%; }
+html, body, #root {
+  height: 100vh;   /* fallback cho browser chưa có dvh */
+  height: 100dvh;  /* Safari iOS co giãn thanh địa chỉ; 100% ở đó nhảy khi cuộn */
+}
+
+body {
+  /* Chặn bounce và pull-to-refresh của Safari iOS: canvas được pan bằng một
+     ngón, và không có dòng này thì mỗi cú pan dọc lại kéo cả trang. */
+  overscroll-behavior: none;
+}
+
+/* Tailwind không có utility cho safe area, và thêm hẳn một plugin chỉ vì hai
+   class là thừa. iPhone 15 có Dynamic Island trên đỉnh và home indicator ~34px
+   dưới đáy; thiếu hai class này thì TopBar bị che và tab cuối bị nuốt. */
+@layer utilities {
+  .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
 
 /*
  * React Flow ships a light control strip. Match the slate-950 canvas instead.
