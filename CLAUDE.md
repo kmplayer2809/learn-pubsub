@@ -16,7 +16,7 @@ Redis (17 lessons, no sandbox, no export).
 
 ```bash
 npm run dev        # Vite dev server (default http://localhost:5173, auto-picks a free port)
-npm test           # vitest run — whole suite (~68 files, ~910 tests, ~6s)
+npm test           # vitest run — whole suite (~74 files, ~950 tests, ~7s)
 npm run test:watch # vitest watch
 npm run typecheck  # tsc -b --noEmit — MUST use this script (see below)
 npm run build      # tsc -b && vite build
