@@ -31,7 +31,10 @@ export interface BrokerModule<S extends KernelState, T, A, I extends ValidationI
    *  the lesson or the sandbox's topology changes — not on every simulation tick. */
   toEdges(topology: T, script: A[]): Edge[]
   inFlight(state: S): InFlight[]
-  StatePanel: ComponentType<{ state: S }>
+  /** `dense` bật ở layout mobile/tablet, nơi panel này chia chiều cao với canvas.
+   *  Optional nên broker chưa dùng tới vẫn compile — shell luôn truyền, broker tự
+   *  quyết định có nghe hay không. */
+  StatePanel: ComponentType<{ state: S; dense?: boolean }>
   issueText(issue: I): string
   /** Counters for the inspector's metrics grid. Keys render verbatim, so each
    *  broker names its own — the grid stays driven by Object.entries. */

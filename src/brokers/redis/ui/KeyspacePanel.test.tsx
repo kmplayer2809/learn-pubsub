@@ -191,4 +191,14 @@ describe('KeyspacePanel', () => {
     render(<KeyspacePanel state={state} />)
     expect(screen.getByTestId('keyspace-row').getAttribute('data-expiring')).toBeNull()
   })
+
+  it('dense siết chiều cao lại cho màn hình nhỏ', () => {
+    const state = withKeys({ k: record({ type: 'string', value: 'x' }) }, ['k'])
+    const { rerender } = render(<KeyspacePanel state={state} />)
+    expect(screen.getByTestId('keyspace-panel').className).toContain('max-h-32')
+
+    rerender(<KeyspacePanel state={state} dense />)
+    expect(screen.getByTestId('keyspace-panel').className).toContain('max-h-24')
+    expect(screen.getByTestId('keyspace-panel').className).not.toContain('max-h-32')
+  })
 })

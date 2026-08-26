@@ -7,14 +7,14 @@ function routeOf(edgeId: string): [string, string] {
   return [from, to]
 }
 
-export function InFlightPanel({ state }: { state: EngineState }) {
+export function InFlightPanel({ state, dense = false }: { state: EngineState; dense?: boolean }) {
   // Sorted by departure, not array order: rows must not jump when a message lands.
   const flights = [...state.inFlight].sort(
     (a, b) => a.fromT - b.fromT || a.message.id.localeCompare(b.message.id),
   )
 
   return (
-    <div className="max-h-32 overflow-y-auto px-3 py-2" data-testid="inflight-panel">
+    <div className={`overflow-y-auto px-3 py-2 ${dense ? 'max-h-24' : 'max-h-32'}`} data-testid="inflight-panel">
       <div className="mb-1 flex items-baseline gap-2">
         <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Message đang bay</h3>
         <span className="font-mono text-[10px] text-slate-600">{flights.length}</span>

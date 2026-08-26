@@ -38,7 +38,7 @@ function ttlText(expiresAt: number | undefined, now: number): string {
  * to `now` inline would silently duplicate the engine's own liveness rule instead of
  * deferring to it, and the two are exactly the kind of thing that drifts apart later.
  */
-export function KeyspacePanel({ state }: { state: RedisState }) {
+export function KeyspacePanel({ state, dense = false }: { state: RedisState; dense?: boolean }) {
   const liveKeys = state.keyOrder.filter((key) => livesAt(state, key, state.now))
 
   // `metrics.keysCount` counts every record the keyspace holds; the rows show only
@@ -50,7 +50,7 @@ export function KeyspacePanel({ state }: { state: RedisState }) {
   const unreclaimed = state.metrics.keysCount - liveKeys.length
 
   return (
-    <div className="max-h-32 overflow-y-auto px-3 py-2" data-testid="keyspace-panel">
+    <div className={`overflow-y-auto px-3 py-2 ${dense ? 'max-h-24' : 'max-h-32'}`} data-testid="keyspace-panel">
       <div className="mb-1 flex items-baseline gap-2" data-testid="keyspace-header">
         <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Keyspace</h3>
         <span className="font-mono text-[10px] text-slate-600">

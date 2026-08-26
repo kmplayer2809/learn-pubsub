@@ -79,4 +79,13 @@ describe('InFlightPanel', () => {
     const ids = screen.getAllByTestId('inflight-row').map((r) => r.getAttribute('data-message-id'))
     expect(ids).toEqual(['m1', 'm2'])
   })
+
+  it('dense siết chiều cao lại cho màn hình nhỏ', () => {
+    const { rerender } = render(<InFlightPanel state={state([])} />)
+    expect(screen.getByTestId('inflight-panel').className).toContain('max-h-32')
+
+    rerender(<InFlightPanel state={state([])} dense />)
+    expect(screen.getByTestId('inflight-panel').className).toContain('max-h-24')
+    expect(screen.getByTestId('inflight-panel').className).not.toContain('max-h-32')
+  })
 })
