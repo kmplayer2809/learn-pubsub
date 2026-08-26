@@ -1,6 +1,7 @@
 import { Background, Controls, ReactFlow, type Connection, type Node, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import type { ReactFlowInstance } from '@xyflow/react'
 import type { AnyBrokerModule } from '../../../brokers/types'
 import type { KernelState } from '../../kernel/types'
 import { useAppStore } from '../../store'
@@ -12,6 +13,16 @@ import { MessageLayer } from '../canvas/MessageLayer'
 // that omits `script` — the same class of bug `useSimulation`'s `EMPTY_SCRIPT` exists to
 // avoid for `useSyncExternalStore`.
 const EMPTY_SCRIPT: never[] = []
+
+/**
+ * React Flow mặc định `minZoom` là 0.5. Một cluster ba broker sáu partition không
+ * lọt vào bề ngang 393px ở mức đó, nên người dùng iPhone chỉ thấy một góc canvas
+ * và không zoom ra xa hơn được.
+ */
+export const MIN_ZOOM = 0.25
+/** Chừa mép để node ngoài cùng không dính sát viền — hằng số vì cả `fitView` lúc
+ *  mount lẫn hai effect fit lại bên dưới đều phải dùng đúng một giá trị. */
+export const FIT_VIEW_OPTIONS = { padding: 0.15 }
 
 export function CanvasView({
   broker,
@@ -67,13 +78,51 @@ export function CanvasView({
     [broker, topology],
   )
 
+  const containerRef = useRef<HTMLDivElement>(null)
+  // Typed to the exact node/edge shapes React Flow infers from `nodes`/`edges` below
+  // (our mapped nodes make `selected` required, unlike the library's default optional
+  // `Node`) — the bare `ReactFlowInstance` default generic rejects `onInit`'s instance.
+  const flowRef = useRef<ReactFlowInstance<(typeof nodes)[number], (typeof edges)[number]> | null>(null)
+
+  // Xoay máy, đổi tab ở mobile, hay bàn phím ảo hiện lên đều đổi kích thước
+  // container mà không đổi prop nào — không có `ResizeObserver` thì viewport giữ
+  // nguyên transform cũ và topology nằm lệch ngoài khung.
+  useEffect(() => {
+    const element = containerRef.current
+    if (!element) return
+    let frame = 0
+    const observer = new ResizeObserver(() => {
+      // Gộp nhiều lần báo kích thước trong cùng một frame. `requestAnimationFrame`
+      // chứ không phải `setTimeout` — file này ở `src/shell/ui/`, ngoài vùng
+      // `purity.test.ts` soi, nhưng không tạo tiền lệ dùng timer trong repo.
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => flowRef.current?.fitView(FIT_VIEW_OPTIONS))
+    })
+    observer.observe(element)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [])
+
+  // Đổi lesson hay đổi broker là đổi hẳn bộ node; viewport cũ gần như chắc chắn
+  // sai khung.
+  useEffect(() => {
+    flowRef.current?.fitView(FIT_VIEW_OPTIONS)
+  }, [broker, topology])
+
   return (
-    <div className="relative h-full w-full" data-testid="canvas">
+    <div ref={containerRef} className="relative h-full w-full" data-testid="canvas">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={broker.nodeTypes}
         fitView
+        fitViewOptions={FIT_VIEW_OPTIONS}
+        minZoom={MIN_ZOOM}
+        onInit={(instance) => {
+          flowRef.current = instance
+        }}
         proOptions={{ hideAttribution: true }}
         onNodeClick={(_, node: Node) => selectNode(node.id)}
         onPaneClick={() => selectNode(undefined)}
