@@ -48,6 +48,8 @@ export function CanvasView({
 }) {
   const selectNode = useAppStore((s) => s.selectNode)
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
+  const brokerId = useAppStore((s) => s.brokerId)
+  const lessonId = useAppStore((s) => s.lessonId)
 
   // Nodes depend on the live simulation state and rerun every tick; edges depend only
   // on the topology and script, which change on a lesson/sandbox-topology switch — not
@@ -106,10 +108,19 @@ export function CanvasView({
   }, [])
 
   // Đổi lesson hay đổi broker là đổi hẳn bộ node; viewport cũ gần như chắc chắn
-  // sai khung.
+  // sai khung. Cố tình khoá theo `brokerId`/`lessonId` từ store — KHÔNG theo
+  // `topology` object reference. Trong Sandbox, `useSandboxStore.updateNode`
+  // (src/brokers/rabbitmq/sandbox/sandboxStore.ts) trả về một `topology` mới
+  // trên mỗi mutation, và `onNodesChange` (src/brokers/rabbitmq/ui/editing.ts)
+  // gọi `updateNode` cho mỗi thay đổi `'position'` — tức mỗi frame con trỏ di
+  // chuyển khi kéo node. Nếu effect này khoá theo `topology`, mỗi frame kéo sẽ
+  // gọi lại `fitView()`, recenter/rescale viewport ngay giữa lúc React Flow còn
+  // đang theo dõi thao tác kéo dựa trên transform mà lệnh đó vừa đổi — kéo node
+  // trong Sandbox trở nên không dùng được. `brokerId`/`lessonId` chỉ đổi khi
+  // người dùng thực sự chuyển bài/broker, nên không bị churn theo từng lần kéo.
   useEffect(() => {
     flowRef.current?.fitView(FIT_VIEW_OPTIONS)
-  }, [broker, topology])
+  }, [brokerId, lessonId])
 
   return (
     <div ref={containerRef} className="relative h-full w-full" data-testid="canvas">
