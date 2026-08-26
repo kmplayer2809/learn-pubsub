@@ -17,7 +17,7 @@ export function MobileLayout(props: LayoutProps) {
       <TopBar title={inSandbox ? 'Sandbox' : (lesson?.title ?? '')} />
 
       <div className="min-h-0 flex-1">
-        {pane === 'lessons' && <LessonSidebar />}
+        {pane === 'lessons' && <LessonSidebar hideBrokerSwitcher />}
 
         {pane === 'canvas' && (
           <div className="flex h-full flex-col">

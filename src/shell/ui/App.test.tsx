@@ -293,4 +293,27 @@ describe('layout responsive', () => {
     act(() => setViewportWidth(393))
     expect(screen.getByTestId('mobile-tabbar')).toBeInTheDocument()
   })
+
+  it('chỉ đúng một broker switcher trên màn hình, ở mọi layout', async () => {
+    // TopBar (mobile/tablet) và LessonSidebar đều có thể render BrokerSwitcher —
+    // hai nơi cùng sống trên màn hình một lúc là bug (mobile: tab `lessons` luôn
+    // hiện cả hai; tablet: mở drawer là hiện cả hai ở 820px).
+    setViewportWidth(1280)
+    const desktop = render(<App />)
+    expect(desktop.getAllByTestId('broker-switcher')).toHaveLength(1)
+    desktop.unmount()
+
+    setViewportWidth(393)
+    const mobile = render(<App />)
+    await userEvent.click(screen.getByRole('tab', { name: 'Bài học' }))
+    expect(screen.getByTestId('lesson-sidebar')).toBeInTheDocument()
+    expect(screen.getAllByTestId('broker-switcher')).toHaveLength(1)
+    mobile.unmount()
+
+    setViewportWidth(820)
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: 'Mở danh sách bài học' }))
+    expect(screen.getByTestId('lesson-sidebar')).toBeInTheDocument()
+    expect(screen.getAllByTestId('broker-switcher')).toHaveLength(1)
+  })
 })

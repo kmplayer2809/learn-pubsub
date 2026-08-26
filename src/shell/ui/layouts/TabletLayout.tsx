@@ -52,7 +52,7 @@ export function TabletLayout(props: LayoutProps) {
             className="fixed inset-0 z-10 bg-slate-950/70"
           />
           <aside className="fixed inset-y-0 left-0 z-20 w-64 border-r border-slate-800 bg-slate-950">
-            <LessonSidebar />
+            <LessonSidebar hideBrokerSwitcher />
           </aside>
         </>
       )}

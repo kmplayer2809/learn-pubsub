@@ -2,7 +2,19 @@ import { getBroker } from '../../../brokers/registry'
 import { useAppStore } from '../../store'
 import { BrokerSwitcher } from '../BrokerSwitcher/BrokerSwitcher'
 
-export function LessonSidebar() {
+export function LessonSidebar({
+  hideBrokerSwitcher = false,
+}: {
+  /**
+   * Mobile và tablet đã có `BrokerSwitcher` riêng ở `TopBar` — `LessonSidebar` của
+   * chúng (pane `lessons` trên mobile, drawer trên tablet) phải tắt bản của mình đi,
+   * nếu không màn hình có hai broker picker sống cùng lúc (mobile: cả hai luôn hiện
+   * chung một lượt; tablet: cả hai cùng hiện khi mở drawer ở 820px). Desktop không
+   * có `TopBar`, nên không truyền prop này — mặc định `false` giữ nguyên y hệt bản
+   * cũ, không đổi một pixel nào.
+   */
+  hideBrokerSwitcher?: boolean
+} = {}) {
   const broker = getBroker(useAppStore((s) => s.brokerId))
   const lessonId = useAppStore((s) => s.lessonId)
   const sandbox = useAppStore((s) => s.sandbox)
@@ -11,7 +23,7 @@ export function LessonSidebar() {
 
   return (
     <nav className="flex h-full flex-col overflow-y-auto" data-testid="lesson-sidebar">
-      <BrokerSwitcher />
+      {!hideBrokerSwitcher && <BrokerSwitcher />}
       {broker.lessonGroups.map((group) => (
         <div key={group.id} className="mb-3">
           <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500">
