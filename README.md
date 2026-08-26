@@ -51,10 +51,29 @@ tự động dò cổng trống nếu cổng đó đang bận). Mở trình duy�
 sidebar để vào chế độ tự xây topology — nút này không xuất hiện khi đang ở
 Redis, vì Redis chưa có Sandbox.
 
+## Màn hình nhỏ
+
+Shell chạy được từ 375px trở lên. Ba layout, chọn bằng `useMediaQuery`
+(`src/shell/ui/useMediaQuery.ts`) và render bởi `src/shell/ui/layouts/`:
+
+- **mobile** (`< 768px`) — một pane tại một thời điểm, chọn bằng tab bar dưới đáy
+  (`Bài học` / `Canvas` / `Trạng thái`). Transport hiện ở cả ba tab.
+- **tablet** (`768–1023px`) — canvas và inspector cạnh nhau, sidebar nằm sau drawer
+  mở bằng nút hamburger.
+- **desktop** (`≥ 1024px`) — ba cột như cũ.
+
+Pane đang chọn sống ở `mobilePane` trong `src/shell/store.ts`, không phải state cục
+bộ của component: `setLesson`/`openSandbox` phải đẩy nó về `canvas`.
+
+Test chạy trong jsdom, không có layout thật, nên chúng khẳng định **cấu trúc** (pane
+nào render, class nào có mặt). Phần "trông có đúng không" kiểm thủ công bằng DevTools
+ở 393×852, 430×932 và 375×667. Sandbox kéo-thả trên điện thoại vẫn là trải nghiệm
+kém — mục tiêu của mobile là xem lesson, không phải xây topology.
+
 ## Kiểm thử và build
 
 ```bash
-npm test          # vitest run — 910 test trên 68 file
+npm test          # vitest run — 945 test trên 73 file
 npm run typecheck  # tsc -b --noEmit — BẮT BUỘC dùng script này, không dùng `npx tsc --noEmit` trực tiếp
 npm run build      # tsc -b && vite build — xuất ra dist/
 npm run lint       # oxlint
