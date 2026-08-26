@@ -23,7 +23,7 @@ export function BrokerSwitcher() {
           data-testid="broker-tab"
           data-broker-id={broker.id}
           onClick={() => setBroker(broker.id)}
-          className={`flex-1 rounded px-2 py-1 text-xs ${
+          className={`min-h-11 flex-1 rounded px-2 py-1 text-xs md:min-h-0 ${
             broker.id === brokerId
               ? 'bg-slate-800 text-sky-300'
               : 'text-slate-400 hover:bg-slate-900'

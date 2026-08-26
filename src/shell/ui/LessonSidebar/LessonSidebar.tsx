@@ -33,7 +33,7 @@ export function LessonSidebar({
             <button
               key={lesson.id}
               onClick={() => setLesson(lesson.id)}
-              className={`block w-full px-3 py-1.5 text-left text-xs ${
+              className={`block min-h-11 w-full px-3 py-1.5 text-left text-xs md:min-h-0 ${
                 !sandbox && lesson.id === lessonId
                   ? 'bg-slate-800 text-sky-300'
                   : 'text-slate-400 hover:bg-slate-900'

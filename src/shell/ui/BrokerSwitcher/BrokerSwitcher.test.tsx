@@ -38,4 +38,12 @@ describe('BrokerSwitcher', () => {
     expect(after.selectedNodeId).toBeUndefined()
     expect(after.replayToken).toBe(before + 1)
   })
+
+  it('buttons meet the 44px mobile tap target and shrink back down from md', () => {
+    render(<BrokerSwitcher />)
+    for (const tab of screen.getAllByTestId('broker-tab')) {
+      expect(tab.className).toContain('min-h-11')
+      expect(tab.className).toContain('md:min-h-0')
+    }
+  })
 })

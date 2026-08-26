@@ -115,7 +115,7 @@ export function Inspector({
             <button
               onClick={() => setExportOpen(true)}
               data-testid="export-button"
-              className="shrink-0 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+              className="min-h-11 shrink-0 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800 md:min-h-0"
             >
               Xuất code
             </button>

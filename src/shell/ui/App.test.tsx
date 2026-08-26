@@ -147,6 +147,13 @@ describe('App', () => {
     expect(screen.getByTestId('export-button')).toBeTruthy()
   })
 
+  it('Inspector export button meets the 44px mobile tap target and shrinks back down from md', () => {
+    render(<App />)
+    const exportButton = screen.getByTestId('export-button')
+    expect(exportButton.className).toContain('min-h-11')
+    expect(exportButton.className).toContain('md:min-h-0')
+  })
+
   it('renders the Redis keyspace panel, with no inflight panel or sandbox button', () => {
     // Redis ships neither `sandbox` nor `ExportDialog` (both optional slots); this is
     // the proof the shell reads that as genuinely optional rather than crashing or
