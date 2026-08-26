@@ -1,10 +1,12 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { act } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { BROKER_CATALOG } from '../../brokers/catalog'
 import { BROKERS, getBroker } from '../../brokers/registry'
 import type { AnyBrokerModule } from '../../brokers/types'
 import { useSandboxStore } from '../../brokers/rabbitmq/sandbox/sandboxStore'
+import { resetViewport, setViewportWidth } from '../../test/viewport'
 import { useAppStore } from '../store'
 import App from './App'
 
@@ -222,5 +224,73 @@ describe('App', () => {
       BROKERS.pop()
       BROKER_CATALOG.pop()
     }
+  })
+})
+
+describe('layout responsive', () => {
+  beforeEach(() => {
+    resetViewport()
+    useAppStore.setState({ mobilePane: 'canvas', drawerOpen: false })
+  })
+
+  it('desktop dựng cả sidebar, canvas lẫn inspector cùng lúc', () => {
+    setViewportWidth(1280)
+    render(<App />)
+    expect(screen.getByTestId('lesson-sidebar')).toBeInTheDocument()
+    expect(screen.getByTestId('canvas')).toBeInTheDocument()
+    expect(screen.getByTestId('inspector')).toBeInTheDocument()
+    expect(screen.queryByTestId('mobile-tabbar')).toBeNull()
+    expect(screen.queryByTestId('top-bar')).toBeNull()
+  })
+
+  it('mobile chỉ dựng đúng một pane, cộng top bar và tab bar', () => {
+    setViewportWidth(393)
+    render(<App />)
+    expect(screen.getByTestId('top-bar')).toBeInTheDocument()
+    expect(screen.getByTestId('mobile-tabbar')).toBeInTheDocument()
+    expect(screen.getByTestId('canvas')).toBeInTheDocument()
+    expect(screen.queryByTestId('lesson-sidebar')).toBeNull()
+    expect(screen.queryByTestId('inspector')).toBeNull()
+  })
+
+  it('mobile đổi tab đổi pane', async () => {
+    setViewportWidth(393)
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Bài học' }))
+    expect(screen.getByTestId('lesson-sidebar')).toBeInTheDocument()
+    expect(screen.queryByTestId('canvas')).toBeNull()
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Trạng thái' }))
+    expect(screen.getByTestId('inspector')).toBeInTheDocument()
+    expect(screen.queryByTestId('lesson-sidebar')).toBeNull()
+  })
+
+  it('mobile giữ Transport ở cả ba tab', async () => {
+    setViewportWidth(393)
+    render(<App />)
+    for (const name of ['Bài học', 'Canvas', 'Trạng thái']) {
+      await userEvent.click(screen.getByRole('tab', { name }))
+      expect(screen.getByTestId('transport')).toBeInTheDocument()
+    }
+  })
+
+  it('tablet ẩn sidebar sau drawer, mở bằng hamburger', async () => {
+    setViewportWidth(820)
+    render(<App />)
+    expect(screen.queryByTestId('lesson-sidebar')).toBeNull()
+    expect(screen.getByTestId('inspector')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mở danh sách bài học' }))
+    expect(screen.getByTestId('lesson-sidebar')).toBeInTheDocument()
+  })
+
+  it('đổi viewport lúc đang chạy thì đổi layout, không phải reload', () => {
+    setViewportWidth(1280)
+    render(<App />)
+    expect(screen.queryByTestId('mobile-tabbar')).toBeNull()
+
+    act(() => setViewportWidth(393))
+    expect(screen.getByTestId('mobile-tabbar')).toBeInTheDocument()
   })
 })
