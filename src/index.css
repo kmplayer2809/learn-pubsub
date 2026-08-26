@@ -3,8 +3,16 @@
 @tailwind utilities;
 
 html, body, #root {
-  height: 100vh;   /* fallback cho browser chưa có dvh */
   height: 100dvh;  /* Safari iOS co giãn thanh địa chỉ; 100% ở đó nhảy khi cuộn */
+}
+
+/* Fallback cho browser chưa có `dvh`. Không viết `height: 100vh; height: 100dvh;`
+   trong cùng một rule: minifier của bản build gộp hai khai báo cùng thuộc tính và
+   chỉ giữ cái sau, nên fallback biến mất khỏi CSS thật sự được ship. */
+@supports not (height: 100dvh) {
+  html, body, #root {
+    height: 100vh;
+  }
 }
 
 body {
