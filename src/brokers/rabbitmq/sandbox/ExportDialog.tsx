@@ -53,7 +53,7 @@ export function ExportDialog({ topology, onClose }: { topology: Topology; onClos
       role="presentation"
     >
       <div
-        className="fixed inset-0 z-30 flex flex-col bg-slate-900 md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[80vh] md:w-[42rem] md:max-w-[90vw] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded md:border md:border-slate-700"
+        className="fixed inset-0 flex flex-col overflow-hidden bg-slate-900 shadow-xl md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[80vh] md:w-[42rem] md:max-w-[90vw] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded md:border md:border-slate-700"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -65,7 +65,7 @@ export function ExportDialog({ topology, onClose }: { topology: Topology; onClos
           <button
             onClick={onClose}
             aria-label="Đóng"
-            className="rounded px-2 py-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            className="min-h-11 rounded px-2 py-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 md:min-h-0"
           >
             ×
           </button>
