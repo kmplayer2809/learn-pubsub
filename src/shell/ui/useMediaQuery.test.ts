@@ -38,11 +38,47 @@ describe('useMediaQuery', () => {
   })
 
   it('gỡ listener khi unmount, không rò rỉ qua các test sau', () => {
-    const { result, unmount } = renderHook(() => useMediaQuery('(max-width: 500px)'))
-    expect(result.current).toBe(false)
-    unmount()
-    // Không throw, và listener đã bị gỡ — nếu còn, React sẽ cảnh báo set state
-    // trên component đã unmount ở dòng dưới.
-    act(() => setViewportWidth(400))
+    // Bản cũ chỉ khẳng định `setViewportWidth` sau `unmount()` không throw — điều
+    // này đúng y hệt cả khi hàm cleanup của effect bị xoá hẳn, vì `installMatchMedia`
+    // bắn listener bằng cách lặp qua `Set`, và `Set.forEach` không throw dù listener
+    // gọi `setState` trên component đã unmount. Bọc `addEventListener`/
+    // `removeEventListener` của mock để bắt đúng listener nào được gỡ, thay vì suy
+    // luận gián tiếp qua việc không throw.
+    const original = window.matchMedia
+    const addEventListener = vi.fn()
+    const removeEventListener = vi.fn()
+    window.matchMedia = ((query: string) => {
+      const list = original(query)
+      const realAdd = list.addEventListener.bind(list)
+      const realRemove = list.removeEventListener.bind(list)
+      list.addEventListener = (...args: Parameters<typeof realAdd>) => {
+        addEventListener(...args)
+        realAdd(...args)
+      }
+      list.removeEventListener = (...args: Parameters<typeof realRemove>) => {
+        removeEventListener(...args)
+        realRemove(...args)
+      }
+      return list
+    }) as typeof window.matchMedia
+
+    try {
+      const { result, unmount } = renderHook(() => useMediaQuery('(max-width: 500px)'))
+      expect(result.current).toBe(false)
+      expect(addEventListener).toHaveBeenCalledTimes(1)
+      const [, handler] = addEventListener.mock.calls[0] ?? []
+
+      unmount()
+
+      expect(removeEventListener).toHaveBeenCalledTimes(1)
+      const [, removedHandler] = removeEventListener.mock.calls[0] ?? []
+      expect(removedHandler).toBe(handler)
+
+      // Không throw, và listener đã thực sự bị gỡ khỏi `Set` bên dưới — nếu còn,
+      // React sẽ cảnh báo set state trên component đã unmount ở dòng dưới.
+      act(() => setViewportWidth(400))
+    } finally {
+      window.matchMedia = original
+    }
   })
 })
