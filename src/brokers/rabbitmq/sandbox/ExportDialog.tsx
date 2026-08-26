@@ -78,7 +78,7 @@ export function ExportDialog({ topology, onClose }: { topology: Topology; onClos
               onClick={() => setTab(key)}
               aria-current={tab === key}
               data-testid={`export-tab-${key}`}
-              className={`rounded-t px-3 py-1.5 text-xs font-medium ${
+              className={`min-h-11 rounded-t px-3 py-1.5 text-xs font-medium md:min-h-0 ${
                 tab === key
                   ? 'border border-b-0 border-slate-700 bg-slate-950 text-slate-100'
                   : 'text-slate-500 hover:text-slate-300'
@@ -108,7 +108,7 @@ export function ExportDialog({ topology, onClose }: { topology: Topology; onClos
           <button
             onClick={handleCopy}
             disabled={isEmpty}
-            className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent"
+            className="min-h-11 rounded border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent md:min-h-0"
           >
             {copyState === 'copied'
               ? 'Đã sao chép'
