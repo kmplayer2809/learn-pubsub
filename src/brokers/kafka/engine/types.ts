@@ -245,6 +245,12 @@ export function partitionKey(topic: string, index: number): string {
  * thẳng `Object.keys`. Thứ tự lặp của một object là hợp đồng mong manh; một
  * mảng đã sort tường minh thì không.
  */
+// `.sort()` here is the default lexicographic string sort, deliberately not a numeric
+// one: `"orders-10" < "orders-2"` lexicographically, so a topic with ten or more
+// partitions does NOT get its partitions in numeric order. That is fine — the only
+// thing determinism needs is that the order be a pure function of the key set,
+// independent of insertion order, and lexicographic sort is exactly that. Switching
+// this to a numeric sort later would change every journal byte-for-byte, so don't.
 export function sortedPartitionKeys(state: KafkaState): string[] {
   return Object.keys(state.partitions).sort()
 }

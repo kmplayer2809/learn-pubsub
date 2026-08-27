@@ -26,6 +26,7 @@ export function validateKafkaTopology(
   const issues: KafkaValidationIssue[] = []
   const topicNames = new Set(topology.topics.map((t) => t.name))
   const brokerIds = new Set(topology.brokers.map((b) => b.id))
+  const consumerIds = new Set(topology.consumers.map((c) => c.id))
 
   // Id đụng nhau giữa ba loại node: canvas định danh node bằng id, nên hai node
   // trùng id là hai node không phân biệt được — vẽ đè lên nhau và click sai node.
@@ -61,7 +62,6 @@ export function validateKafkaTopology(
         message: `${topic.name}: ${minIsr} > ${topic.replicationFactor}`,
       })
     }
-    if (!topology.producers.length) continue
   }
 
   for (const producer of topology.producers) {
@@ -86,14 +86,20 @@ export function validateKafkaTopology(
     }
   }
 
+  // Topic thực sự được ghi là topic một lệnh `produce` trong script nhắm tới —
+  // đây là lý do `validateKafkaTopology` nhận `script` chứ không chỉ topology.
+  const producedTopics = new Set<string>()
   for (const command of script) {
     if (command.kind === 'produce') {
+      producedTopics.add(command.topic)
       if (!topicNames.has(command.topic)) {
         issues.push({ code: 'unknown-topic', severity: 'error', nodeId: command.producerId, message: command.topic })
       }
       if (!topology.producers.some((p) => p.id === command.producerId)) {
         issues.push({ code: 'unknown-producer', severity: 'error', message: command.producerId })
       }
+    } else if ('consumerId' in command && !consumerIds.has(command.consumerId)) {
+      issues.push({ code: 'unknown-consumer', severity: 'error', message: command.consumerId })
     }
   }
 
@@ -120,6 +126,9 @@ export function validateKafkaTopology(
   }
 
   for (const topic of topology.topics) {
+    if (!producedTopics.has(topic.name)) {
+      issues.push({ code: 'topic-unproduced', severity: 'warning', message: topic.name })
+    }
     if (!topology.consumers.some((c) => c.subscriptions.includes(topic.name))) {
       issues.push({ code: 'topic-unconsumed', severity: 'warning', message: topic.name })
     }
