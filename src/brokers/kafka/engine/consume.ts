@@ -77,15 +77,20 @@ function putRuntime(state: KafkaState, id: NodeId, runtime: ConsumerRuntime): Ka
 // --- API ---------------------------------------------------------------
 
 /**
- * Một lần poll của consumer. Đi qua mọi partition đã subscribe theo đúng thứ tự
- * `sortedPartitionKeys` (không lặp thẳng `state.partitions` — đây là chỗ dễ vỡ
- * determinism nhất của file này với consumer subscribe nhiều partition), bỏ qua
- * partition đang `paused`, đọc tối đa `maxPollRecords` record TỔNG CỘNG cho cả
- * lần gọi — đúng ngữ nghĩa `max.poll.records` của Kafka thật: giới hạn số record
- * một `poll()` trả về, không phải số record mỗi partition.
+ * Một lần poll của consumer, hai vòng tách biệt trên cùng một `assignedKeys`
+ * (mọi partition đã subscribe, theo đúng thứ tự `sortedPartitionKeys` — không
+ * lặp thẳng `state.partitions`, đây là chỗ dễ vỡ determinism nhất của file này
+ * với consumer subscribe nhiều partition):
  *
- * `readFrom` (Task 3, `log.ts`) đã tự chặn ở `highWatermark`; hàm này không lặp
- * lại việc đó, chỉ truyền đúng vị trí đọc xuống.
+ * 1. Gán `position` cho mọi partition chưa có, không phụ thuộc ngân sách còn
+ *    lại — xem why-comment ngay trong thân hàm.
+ * 2. Đọc thật, tối đa `maxPollRecords` record TỔNG CỘNG cho cả lần gọi — đúng
+ *    ngữ nghĩa `max.poll.records` của Kafka thật: giới hạn số record một
+ *    `poll()` trả về, không phải số record mỗi partition.
+ *
+ * Partition đang `paused` bị cả hai vòng bỏ qua. `readFrom` (Task 3, `log.ts`)
+ * đã tự chặn ở `highWatermark`; hàm này không lặp lại việc đó, chỉ truyền đúng
+ * vị trí đọc xuống.
  */
 export function fetchRecords(
   state: KafkaState,
@@ -97,34 +102,58 @@ export function fetchRecords(
   const autoOffsetReset = consumer.autoOffsetReset ?? DEFAULT_AUTO_OFFSET_RESET
   const subscribed = new Set(consumer.subscriptions)
 
-  const records: LogEntry[] = []
-  let workingRuntime = runtime
-  let remaining = maxPollRecords
-
-  for (const key of sortedPartitionKeys(state)) {
-    if (remaining <= 0) break
+  // Partition "assigned" cho lần poll này: đã subscribe, có mặt trong
+  // `state.partitions`, theo đúng thứ tự `sortedPartitionKeys` — dùng chung
+  // cho cả hai vòng dưới đây để không tính lại và không lệch thứ tự giữa
+  // chúng.
+  const assignedKeys = sortedPartitionKeys(state).filter((key) => {
     const partition = state.partitions[key]
-    if (!partition || !subscribed.has(partition.topic)) continue
-    // Partition đang pause: không đụng gì tới `position` của nó — pause không
-    // phải seek, xem `applyPause`.
-    if (workingRuntime.paused.includes(key)) continue
+    return partition !== undefined && subscribed.has(partition.topic)
+  })
 
+  let workingRuntime = runtime
+
+  // Gán vị trí bắt đầu cho MỌI partition đã assign, không pause, TRƯỚC khi
+  // tiêu bất kỳ đơn vị `maxPollRecords` nào — tách hẳn khỏi vòng đọc record ở
+  // dưới. Kafka thật gán offset bắt đầu ngay khi partition được assign cho
+  // consumer, không trì hoãn tới lúc partition đó "có lượt" trong ngân sách
+  // record của một poll. Bản trước của hàm này resolve lồng trong vòng ngân
+  // sách rồi `break` sớm khi hết budget — một partition bị partition khác ăn
+  // hết budget nhiều poll liên tiếp thì không bao giờ được resolve, và tới
+  // khi cuối cùng nó "có lượt", `'latest'` neo vào high watermark tại THỜI
+  // ĐIỂM MUỘN đó thay vì thời điểm nó lẽ ra phải được gán — mọi record đã
+  // tới trong lúc "đói" bị mất trắng, không phục hồi được (bug thật, xem test
+  // "partition bị đói ngân sách nhiều lần liên tiếp..."). Vòng này không đọc
+  // record, không đụng ngân sách.
+  for (const key of assignedKeys) {
+    if (workingRuntime.paused.includes(key)) continue // pause: không đụng position, xem applyPause
+    const partition = state.partitions[key]
+    if (!partition) continue
     const resolved = resolvePosition({
       position: workingRuntime.position[key],
       logStartOffset: partition.logStartOffset,
       highWatermark: partition.highWatermark,
       autoOffsetReset,
     })
+    workingRuntime = { ...workingRuntime, position: { ...workingRuntime.position, [key]: resolved } }
+  }
 
-    const fetched = readFrom(partition, resolved, remaining)
-    // Luôn ghi lại vị trí mới dù `fetched` rỗng: đây chính là chỗ
-    // `auto.offset.reset` "chốt" một lần. Lần poll sau, position đã hợp lệ
-    // (>= logStartOffset) nên `resolvePosition` không áp lại earliest/latest
-    // nữa — kể cả khi lần này chưa đọc được record nào (ví dụ `latest` mà
-    // chưa có record mới, hoặc partition vừa hết record khả dụng dưới HW).
-    workingRuntime = { ...workingRuntime, position: { ...workingRuntime.position, [key]: resolved + fetched.length } }
+  const records: LogEntry[] = []
+  let remaining = maxPollRecords
 
+  for (const key of assignedKeys) {
+    if (remaining <= 0) break
+    if (workingRuntime.paused.includes(key)) continue
+    const partition = state.partitions[key]
+    if (!partition) continue
+
+    // Đã được gán ở vòng trên cho mọi partition không pause tới đây —
+    // `?? partition.logStartOffset` chỉ là rào chắn kiểu cho
+    // `noUncheckedIndexedAccess`, không phải một nhánh thật sự chạy được.
+    const position = workingRuntime.position[key] ?? partition.logStartOffset
+    const fetched = readFrom(partition, position, remaining)
     if (fetched.length === 0) continue
+    workingRuntime = { ...workingRuntime, position: { ...workingRuntime.position, [key]: position + fetched.length } }
     records.push(...fetched)
     remaining -= fetched.length
   }

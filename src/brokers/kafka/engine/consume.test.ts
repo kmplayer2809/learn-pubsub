@@ -148,6 +148,37 @@ describe('consume', () => {
     expect(newEvents).toEqual([])
   })
 
+  it('partition bị đói ngân sách nhiều lần liên tiếp không mất record đến trong lúc đói (auto.offset.reset=latest)', () => {
+    // orders-0 có sẵn backlog 10 record, seek về 0 — nó luôn có việc để đọc và
+    // luôn xếp trước orders-1 trong sortedPartitionKeys ("orders-0" < "orders-1").
+    // orders-1 chưa có position, autoOffsetReset=latest. maxPollRecords=3 nhỏ hơn
+    // backlog của orders-0 nên vài lần poll liên tiếp orders-0 ăn hết ngân sách,
+    // orders-1 hoàn toàn "đói" — không lần nào readFrom được gọi trên nó.
+    let state = testState({ topics: [{ name: orders, partitions: 2, replicationFactor: 1 }] })
+    state = seed(state, key0, Array.from({ length: 10 }, (_, i) => `o0-${i}`))
+    state = withConsumer(state, 'c1')
+    state = applySeek(state, { consumerId: 'c1', topic: orders, partition: 0, offset: 0 })
+
+    const c = consumerSpec({ maxPollRecords: 3, autoOffsetReset: 'latest' })
+
+    // Ba lần poll đầu: orders-0 (10 record, budget 3/lần) ăn hết ngân sách mỗi
+    // lần — orders-1 chưa từng được resolvePosition chạm tới.
+    let s = state
+    for (let i = 0; i < 3; i++) {
+      s = fetchRecords(s, { consumer: c, at: i }).state
+    }
+
+    // Record tới trong lúc orders-1 còn đang đói — phải còn nguyên khi tới lượt,
+    // không được coi là "cũ" chỉ vì orders-1 chưa từng được đọc.
+    s = seed(s, key1, ['p1-a', 'p1-b', 'p1-c', 'p1-d', 'p1-e'])
+
+    // Lần poll thứ tư: orders-0 chỉ còn 1 record (offset 9), dư 2 đơn vị ngân
+    // sách cho orders-1 — lần đầu tiên orders-1 thực sự được đọc.
+    const fourth = fetchRecords(s, { consumer: c, at: 3 })
+    const p1Records = fourth.records.filter((r) => r.value?.startsWith('p1-'))
+    expect(p1Records.map((r) => r.value)).toEqual(['p1-a', 'p1-b'])
+  })
+
   it('metrics.recordsConsumed tăng đúng bằng số record giao đi', () => {
     let state = testState({ topics: [{ name: orders, partitions: 2, replicationFactor: 1 }] })
     state = seed(state, key0, ['a', 'b'])
