@@ -13,7 +13,12 @@ export interface PickPartitionArgs {
 export interface PickPartitionResult {
   partition: number
   nextRoundRobinCounter: number
-  nextSticky: number
+  // `undefined` nghĩa là "chưa có sticky partition nào được chọn" — khác với `0`,
+  // vốn là một partition thật. Gộp hai trạng thái đó lại (`?? 0`) khiến nhánh chưa
+  // hề pick nào giả vờ đã pick partition 0, và nếu caller thread giá trị đó vào
+  // lần gọi tiếp theo thì producer 'sticky' dính cứng vào partition 0 mà chưa từng
+  // gọi `nextInt` — đúng cái hot-partition giả mà lesson 08 dạy phải tránh.
+  nextSticky: number | undefined
   rng: RngState
 }
 
@@ -27,7 +32,9 @@ export function pickPartition(args: PickPartitionArgs): PickPartitionResult {
     return {
       partition: toPositive(murmur2(key)) % partitionCount,
       nextRoundRobinCounter: roundRobinCounter,
-      nextSticky: stickyPartition ?? 0,
+      // Record có key không thiết lập stickiness — giữ nguyên trạng thái sticky
+      // hiện có (kể cả khi đó là "chưa chọn", tức `undefined`) thay vì đoán ra 0.
+      nextSticky: stickyPartition,
       rng,
     }
   }
@@ -36,7 +43,9 @@ export function pickPartition(args: PickPartitionArgs): PickPartitionResult {
     return {
       partition: roundRobinCounter % partitionCount,
       nextRoundRobinCounter: roundRobinCounter + 1,
-      nextSticky: stickyPartition ?? 0,
+      // round-robin cũng không dùng khái niệm sticky — không được phép biến
+      // "chưa chọn" thành partition 0 chỉ vì nhánh này không đọc `stickyPartition`.
+      nextSticky: stickyPartition,
       rng,
     }
   }
