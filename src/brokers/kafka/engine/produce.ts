@@ -6,9 +6,10 @@ import type { JournalEntry, SimEvent } from '../../../shell/kernel/types'
 
 // ---------------------------------------------------------------------------
 // Producer path — batching (`enqueueRecord`), flush (`flushBatch`), và cách
-// `acks` quyết định khi nào một produce coi là xong (`resolveAcks`). Reducer
-// thật gọi các hàm này từ bảng dispatch theo `KafkaEventType` — đó là Task 6,
-// chưa nối ở đây. File này chỉ đảm bảo state/event sinh ra đúng.
+// `acks` quyết định khi nào một produce coi là xong (`checkIsrSufficient`,
+// `isAckSatisfied`). Reducer thật gọi các hàm này từ bảng dispatch theo
+// `KafkaEventType` — đó là Task 6, chưa nối ở đây. File này chỉ đảm bảo
+// state/event sinh ra đúng.
 // ---------------------------------------------------------------------------
 
 // Kafka thật mặc định 16 KiB — một batch nhỏ hơn ngưỡng này không bao giờ flush
@@ -41,13 +42,25 @@ export interface FlushBatchArgs {
   at: number
 }
 
-export interface ResolveAcksArgs {
+// Tách làm hai thay vì một `resolveAcks` gộp chung (bản trước của file này):
+// ISR có đủ hay không không cần offset — nó đúng/sai TRƯỚC khi append, dùng
+// làm gate cho `acks=all`. HW đã vượt offset hay chưa chỉ có ý nghĩa SAU khi
+// append. Gộp hai câu hỏi vào một hàm buộc gate tiền-append phải bịa ra một
+// `offset` không tồn tại — vô hại hôm nay vì nhánh ISR luôn short-circuit
+// trước, nhưng là một bẫy nằm chờ: một lần sửa sau (rất có thể Task 11, retry)
+// tin vào `.satisfied` từ lệnh gọi tiền-append sẽ nhận một `false` sai mà
+// không có lỗi kiểu nào báo trước.
+export interface CheckIsrSufficientArgs {
+  topic: KafkaTopicSpec
+  partition: number
+}
+
+export interface IsAckSatisfiedArgs {
   acks: 0 | 1 | 'all'
   topic: KafkaTopicSpec
   partition: number
-  /** Offset của record mới nhất trong batch vừa flush — chỉ có ý nghĩa SAU khi
-   *  append; gọi trước khi append (gate ISR trong `flushBatch`) thì chỉ nhánh
-   *  `.error` được đọc, giá trị `offset` lúc đó không quan trọng. */
+  /** Offset của record mới nhất vừa append — hàm này chỉ có ý nghĩa GỌI SAU
+   *  khi append đã xảy ra. */
   offset: number
 }
 
@@ -184,30 +197,36 @@ export function enqueueRecord(
 }
 
 /**
- * `acks=1`/`acks=all` chỉ cần trả lời "satisfied" — không tự sinh event, không
- * tự append. `flushBatch` gọi hàm này cả TRƯỚC khi append (gate ISR không đủ
- * cho `acks=all`, chỉ nhánh `.error` được đọc) lẫn SAU khi append (xác nhận
- * response thật). Ở plan này chưa có replication (Task 3's design: mỗi
- * `appendRecord` coi như đã tới toàn bộ ISR ngay lập tức), nên nhánh
- * HW-vs-offset sau khi append luôn `true` — plan sau thay `appendRecord` bằng
- * follower fetch thật, lúc đó nhánh này mới có thể `false` một cách hợp lệ, và
- * chữ ký hàm không cần đổi.
+ * Gate dùng TRƯỚC khi append cho `acks=all`: ISR có đủ `minInsyncReplicas`
+ * không, không liên quan gì tới offset — real Kafka's `Partition.
+ * appendRecordsToLeader` cũng từ chối ở đúng bước này, trước khi chạm log của
+ * leader, nên không có ghi một phần nào xảy ra trên nhánh này.
  */
-export function resolveAcks(
+export function checkIsrSufficient(
   state: KafkaState,
-  args: ResolveAcksArgs,
-): { satisfied: boolean; error?: 'NOT_ENOUGH_REPLICAS' } {
-  if (args.acks !== 'all') {
-    // acks=0 không chờ ai gọi hàm này thay mặt nó; acks=1 chỉ cần leader đã
-    // append — không đợi follower, nên luôn thoả ngay khi hàm được gọi.
-    return { satisfied: true }
-  }
+  args: CheckIsrSufficientArgs,
+): { ok: boolean; error?: 'NOT_ENOUGH_REPLICAS' } {
   const partition = getPartitionState(state, partitionKey(args.topic.name, args.partition))
   const minInsyncReplicas = args.topic.config?.minInsyncReplicas ?? 1
   if (partition.isr.length < minInsyncReplicas) {
-    return { satisfied: false, error: 'NOT_ENOUGH_REPLICAS' }
+    return { ok: false, error: 'NOT_ENOUGH_REPLICAS' }
   }
-  return { satisfied: partition.highWatermark > args.offset }
+  return { ok: true }
+}
+
+/**
+ * Gọi SAU khi append đã xảy ra, để xác nhận response thật. `acks=1` chỉ cần
+ * leader đã append — không đợi follower, nên luôn `true` ngay khi hàm được
+ * gọi. `acks=all` cần HW đã vượt qua offset vừa ghi; ở plan này chưa có
+ * replication (Task 3's design: mỗi `appendRecord` coi như đã tới toàn bộ ISR
+ * ngay lập tức), nên nhánh đó luôn `true` — plan sau thay `appendRecord` bằng
+ * follower fetch thật, lúc đó hàm này mới có thể trả `false` một cách hợp lệ,
+ * và chữ ký không cần đổi.
+ */
+export function isAckSatisfied(state: KafkaState, args: IsAckSatisfiedArgs): boolean {
+  if (args.acks !== 'all') return true
+  const partition = getPartitionState(state, partitionKey(args.topic.name, args.partition))
+  return partition.highWatermark > args.offset
 }
 
 /**
@@ -234,7 +253,22 @@ export function flushBatch(
 
   const clearBatch = (s: KafkaState): KafkaState => {
     const r = getProducerRuntime(s, producer.id)
-    return putRuntime(s, producer.id, { ...r, batches: withoutBatch(r.batches, pKey) })
+    const batches = withoutBatch(r.batches, pKey)
+    // KIP-480: sticky partitioner đổi partition khi batch ĐÓNG (đầy hoặc hết
+    // linger), không phải khi request thành công — spec §B5.1 dòng 437: "gắn
+    // với một partition tới khi batch đầy hoặc linger.ms hết, rồi mới đổi".
+    // `flushBatch` là nơi duy nhất biết một batch vừa đóng, nên reset thuộc về
+    // đây, cho MỌI nhánh gọi `clearBatch` (leader offline, NOT_ENOUGH_REPLICAS,
+    // hay append thành công) — batch đã đóng dù request sau đó có lỗi hay
+    // không. So khớp đúng partition trước khi xoá: một record có key (không hề
+    // đụng stickyPartition) flush ở partition khác không được phép xoá sticky
+    // đang dính ở một partition khác.
+    const clearedRuntime: ProducerRuntime = { ...r, batches }
+    // Xoá hẳn property thay vì gán `undefined` tường minh — "chưa từng chọn"
+    // là trạng thái vắng mặt, không phải một giá trị (xem ProducerRuntime ở
+    // types.ts và testState.ts).
+    if (r.stickyPartition === partition) delete clearedRuntime.stickyPartition
+    return putRuntime(s, producer.id, clearedRuntime)
   }
 
   if (leaderOffline) {
@@ -251,7 +285,7 @@ export function flushBatch(
   }
 
   if (acks === 'all') {
-    const gate = resolveAcks(state, { acks: 'all', topic, partition, offset: partitionState.leo })
+    const gate = checkIsrSufficient(state, { topic, partition })
     if (gate.error === 'NOT_ENOUGH_REPLICAS') {
       const cleared = clearBatch(state)
       const [seq, afterSeq] = nextSeq(cleared)
@@ -279,6 +313,22 @@ export function flushBatch(
     lastOffset = appended.offset
     bytesWritten += record.bytes
   }
+  // `appendRecord` (log.ts) chỉ cập nhật `replicaState` của LEADER, và tự đặt
+  // `highWatermark = leo` trực tiếp — đúng cho trường hợp một replica, nhưng
+  // với nhiều replica thì `recomputeHighWatermark` (min LEO trên ISR) sẽ đọc
+  // lại `replicaState` của follower vẫn còn kẹt ở giá trị khởi tạo (`leo: 0`)
+  // vì plan này chưa có reducer follower-fetch nào từng đụng tới nó — kéo HW
+  // tụt về 0 dù `appendRecord` vừa đặt đúng. Rule 6 của brief nói thẳng: "ở
+  // plan này chưa có replication nên replicaState của MỌI replica được coi là
+  // bắt kịp ngay" — tức phần việc "coi như bắt kịp" đó thuộc về `produce.ts`
+  // (nơi duy nhất gọi `recomputeHighWatermark` ở plan này), không phải một
+  // hành vi ẩn bên trong `appendRecord`. Plan sau thay đoạn này bằng follower
+  // fetch thật cập nhật `replicaState` theo thời gian, và dòng dưới đây biến
+  // mất.
+  const caughtUpReplicaState = Object.fromEntries(
+    workingPartition.replicas.map((replicaId) => [replicaId, { leo: workingPartition.leo, lastFetchAt: at }]),
+  )
+  workingPartition = { ...workingPartition, replicaState: { ...workingPartition.replicaState, ...caughtUpReplicaState } }
   workingPartition = recomputeHighWatermark(workingPartition)
 
   let next: KafkaState = {
@@ -299,9 +349,13 @@ export function flushBatch(
     return { state: next, newEvents: [] }
   }
 
-  const resolved = resolveAcks(next, { acks, topic, partition, offset: lastOffset })
+  // ISR đã được gate ở trên cho `acks=all`, và `acks=1` không cần ISR — tới
+  // đây không còn đường nào tạo lỗi nữa trong plan này, nên response luôn
+  // thành công. `isAckSatisfied` vẫn được gọi (thay vì bỏ qua) để giữ đúng chỗ
+  // móc vào cho plan sau, khi nó có thể thật sự trả `false`.
+  const satisfied = isAckSatisfied(next, { acks, topic, partition, offset: lastOffset })
   const [seq, afterSeq] = nextSeq(next)
-  const extra = resolved.error ? { error: resolved.error } : { offset: lastOffset }
+  const extra = satisfied ? { offset: lastOffset } : {}
   return {
     state: afterSeq,
     newEvents: [responseEvent(seq, at + PRODUCE_RESPONSE_TRAVEL_MS, producer.id, topic.name, partition, extra)],

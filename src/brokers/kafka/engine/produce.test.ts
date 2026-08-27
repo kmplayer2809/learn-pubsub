@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { estimateBytes } from './log'
 import { murmur2, toPositive } from './murmur2'
-import { enqueueRecord, flushBatch, PRODUCE_RESPONSE_TRAVEL_MS, resolveAcks } from './produce'
+import { checkIsrSufficient, enqueueRecord, flushBatch, isAckSatisfied, PRODUCE_RESPONSE_TRAVEL_MS } from './produce'
 import { testState } from './testState'
 import type { KafkaProducerSpec, KafkaTopicSpec } from './types'
 import { partitionKey } from './types'
@@ -176,6 +176,37 @@ describe('produce', () => {
     expect(afterNullKeyed.producers['p1']?.stickyPartition).toBeDefined()
   })
 
+  it('sticky: sau khi batch đóng (flush) thì đổi partition — không dính cứng mãi mãi (KIP-480)', () => {
+    // Spec §B5.1 (dòng 437): "gắn với một partition tới khi batch đầy hoặc
+    // linger.ms hết, RỒI MỚI ĐỔI". `flushBatch` là nơi duy nhất biết một batch
+    // vừa đóng (do đầy hoặc do hết linger) — nên reset `stickyPartition` phải
+    // xảy ra ở đó, không phải ở `enqueueRecord`.
+    const fourPartitions: KafkaTopicSpec = { name: 'orders', partitions: 4, replicationFactor: 1 }
+    let state = testState({ topics: [fourPartitions] })
+    const p = producer({ partitioner: 'sticky', acks: 1, batchSize: 100_000, lingerMs: 0 })
+
+    const firstEnqueue = enqueueRecord(state, { producer: p, topic: fourPartitions, key: null, value: 'a', at: 0 })
+    state = firstEnqueue.state
+    const flushEvent = firstEnqueue.newEvents.find((e) => e.type === 'batch-flush')
+    if (!flushEvent) throw new Error('test setup: expected a batch-flush event')
+    const firstPickedPartition = flushEvent.payload.partition as number
+
+    state = flushBatch(state, { producer: p, topic: fourPartitions, partition: firstPickedPartition, at: 0 }).state
+
+    // Batch đầu đã đóng: sticky phải trở về "chưa chọn", không phải dính lại
+    // đúng partition cũ.
+    expect(state.producers['p1']?.stickyPartition).toBeUndefined()
+
+    const rngBeforeSecondPick = state.producers['p1']?.rng
+    state = enqueueRecord(state, { producer: p, topic: fourPartitions, key: null, value: 'b', at: 1 }).state
+    const rngAfterSecondPick = state.producers['p1']?.rng
+
+    // Nếu `stickyPartition` không được reset, nhánh early-return của
+    // `pickPartition` (đã có sticky) sẽ trả về ngay mà không hề gọi `nextInt` —
+    // rng đứng yên là dấu hiệu bug tái xuất hiện.
+    expect(rngAfterSecondPick).not.toEqual(rngBeforeSecondPick)
+  })
+
   it('flushBatch gọi lần hai trên cùng batch là no-op — không flush lại, không lỗi', () => {
     // Kịch bản thật: record đầu tiên vừa mở batch vừa vượt batchSize, nên
     // `enqueueRecord` sinh CẢ HAI event batch-flush (size ngay tại `at`, linger ở
@@ -196,9 +227,23 @@ describe('produce', () => {
     expect(secondFlush.state.metrics.recordsProduced).toBe(1) // không tăng thêm
   })
 
-  it('resolveAcks: acks=1 luôn satisfied ngay khi có offset (không cần isr)', () => {
+  it('isAckSatisfied: acks=1 luôn thoả ngay khi có offset (không cần isr)', () => {
     const state = testState()
-    const result = resolveAcks(state, { acks: 1, topic: orders, partition: 0, offset: 0 })
-    expect(result).toEqual({ satisfied: true })
+    expect(isAckSatisfied(state, { acks: 1, topic: orders, partition: 0, offset: 0 })).toBe(true)
+  })
+
+  it('checkIsrSufficient: ok khi isr đạt minInsyncReplicas, không cần offset', () => {
+    const twoReplicaTopic: KafkaTopicSpec = { name: 'orders', partitions: 1, replicationFactor: 2, config: { minInsyncReplicas: 2 } }
+    const state = testState({ topics: [twoReplicaTopic], replicas: ['b1', 'b2'] })
+    expect(checkIsrSufficient(state, { topic: twoReplicaTopic, partition: 0 })).toEqual({ ok: true })
+  })
+
+  it('checkIsrSufficient: NOT_ENOUGH_REPLICAS khi isr nhỏ hơn minInsyncReplicas', () => {
+    const twoReplicaTopic: KafkaTopicSpec = { name: 'orders', partitions: 1, replicationFactor: 2, config: { minInsyncReplicas: 2 } }
+    let state = testState({ topics: [twoReplicaTopic], replicas: ['b1', 'b2'] })
+    const partition = state.partitions[key0]
+    if (!partition) throw new Error('test setup: missing partition')
+    state = { ...state, partitions: { ...state.partitions, [key0]: { ...partition, isr: ['b1'] } } }
+    expect(checkIsrSufficient(state, { topic: twoReplicaTopic, partition: 0 })).toEqual({ ok: false, error: 'NOT_ENOUGH_REPLICAS' })
   })
 })

@@ -43,7 +43,14 @@ export function testState(overrides?: {
     }
   }
 
-  const brokersOnline = overrides?.brokersOnline ?? Object.fromEntries(replicas.map((r) => [r, true]))
+  // Merge, không thay thế: một override một phần như `{ b1: false }` với
+  // nhiều replica phải chỉ tắt `b1`, các broker còn lại vẫn `true` mặc định —
+  // thay thế hoàn toàn sẽ để chúng `undefined`, và `=== false` đọc `undefined`
+  // là "không offline", một footgun im lặng cho test nhiều replica.
+  const brokersOnline = {
+    ...Object.fromEntries(replicas.map((r) => [r, true])),
+    ...(overrides?.brokersOnline ?? {}),
+  }
 
   return {
     now: 0,
