@@ -1,4 +1,5 @@
 import type { InFlight, KernelState } from '../../../shell/kernel/types'
+import type { RngState } from '../../../shell/kernel/rng'
 
 export type NodeId = string
 
@@ -168,6 +169,16 @@ export interface ProducerRuntime {
   epoch?: number
   nextSequence: Record<string, number> // theo partition
   txnState?: 'Empty' | 'Ongoing' | 'PrepareCommit' | 'PrepareAbort'
+  // Ba trường dưới đây phục vụ `pickPartition` (Task 4, `partitioner.ts`) — không
+  // khai báo ở Task 1 vì spec §B3 cũng không liệt kê chúng, nhưng `enqueueRecord`
+  // cần một chỗ thuần (không phải biến ngoài) để thread trạng thái partitioner
+  // qua từng lần gọi mà vẫn giữ engine pure. `stickyPartition` optional và
+  // `nextSticky` từ `pickPartition` có thể là `undefined` một cách có chủ đích —
+  // đó là "chưa từng chọn", khác `0` (đã chọn partition 0). Không bao giờ ép nó
+  // thành số bằng `?? 0` khi ghi lại vào đây — xem partitioner.ts.
+  roundRobinCounter: number
+  stickyPartition?: number
+  rng: RngState
 }
 
 export interface ConsumerRuntime {
