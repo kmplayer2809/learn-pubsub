@@ -30,6 +30,7 @@ export function createPartition(args: { topic: string; index: number; leader: No
     replicaState,
     segments: [{ baseOffset: 0, bytes: 0, createdAt: 0, sealed: false }],
     leaderEpoch: 0,
+    producerState: {},
   }
 }
 

@@ -78,5 +78,6 @@ export function testState(overrides?: {
       recordsCompacted: 0,
     },
     inFlight: [],
+    nextProducerId: 0,
   }
 }

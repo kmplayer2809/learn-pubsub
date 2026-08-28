@@ -96,11 +96,14 @@ export interface KafkaState extends KernelState {
   controller: { brokerId: NodeId; epoch: number }
   metrics: KafkaMetrics
   inFlight: InFlight[]
+  // Bộ đếm cấp `producerId` số cho `assignProducerId` (`produce.ts`) — mô phỏng
+  // InitProducerId thật của Kafka. Sống ở `KafkaState` (không phải trong từng
+  // `ProducerRuntime`) vì producerId phải DUY NHẤT trên toàn cluster, không chỉ
+  // trong phạm vi một producer node — hai producer node khác nhau không bao giờ
+  // được cấp trùng số, kể cả khi chúng gọi `assignProducerId` cùng một `at`.
+  nextProducerId: number
 }
 
-// `PartitionState` chưa có trường `producerState` ở task này — Task 11 (idempotent
-// producer) thêm nó, sau `PartitionState.producerState: Record<number, { epoch: number;
-// lastSequence: number }>`. Đừng thêm sớm ở đây.
 export interface PartitionState {
   topic: string
   index: number
@@ -115,6 +118,13 @@ export interface PartitionState {
   replicaState: Record<NodeId, { leo: number; lastFetchAt: number }>
   segments: { baseOffset: number; bytes: number; createdAt: number; sealed: boolean }[]
   leaderEpoch: number
+  // Broker nhớ sequence cuối cùng đã CHẤP NHẬN cho từng producerId trên chính
+  // partition này — đúng cách Kafka thật chặn duplicate/out-of-order cho idempotent
+  // producer, xem `checkSequence` (`produce.ts`). Khoá theo `producerId` (số,
+  // `assignProducerId` cấp), không phải theo `NodeId` — nhiều producer node có thể
+  // lần lượt tái sử dụng cùng một `producerId` số trong một plan sau (transaction
+  // epoch bump); ở plan này mỗi node giữ đúng một producerId suốt đời chạy.
+  producerState: Record<number, { epoch: number; lastSequence: number }>
 }
 
 export interface LogEntry {
@@ -159,7 +169,18 @@ export interface ProducerRuntime {
   batches: Record<
     string,
     {
-      records: { key: string | null; value: string | null; headers?: Record<string, string>; timestamp: number; bytes: number }[]
+      records: {
+        key: string | null
+        value: string | null
+        headers?: Record<string, string>
+        timestamp: number
+        bytes: number
+        // Chỉ có ở record của producer idempotent — gán MỘT LẦN lúc `enqueueRecord`
+        // (không phải lúc flush, xem why-comment ở đó), và đi theo record suốt đời
+        // của nó qua mọi lần retry, dù batch có bị dọn khỏi accumulator hay không.
+        producerId?: number
+        sequence?: number
+      }[]
       bytes: number
       openedAt: number
     }
@@ -168,6 +189,11 @@ export interface ProducerRuntime {
   producerId?: number
   epoch?: number
   nextSequence: Record<string, number> // theo partition
+  // Ngân sách lỗi produce-error còn lại (Task 11) — `applyProduceErrorArm`
+  // (`engine/index.ts`) cộng vào khi fault kích hoạt ở đúng `at` của nó;
+  // `flushBatch` (`produce.ts`) trừ đi mỗi lần một lượt gửi bị buộc thất bại. `0`
+  // và "chưa từng có fault nào" (`undefined`) coi như nhau — đọc qua `?? 0`.
+  pendingErrors?: number
   txnState?: 'Empty' | 'Ongoing' | 'PrepareCommit' | 'PrepareAbort'
   // Ba trường dưới đây phục vụ `pickPartition` (Task 4, `partitioner.ts`) — không
   // khai báo ở Task 1 vì spec §B3 cũng không liệt kê chúng, nhưng `enqueueRecord`
@@ -272,6 +298,11 @@ export type KafkaEventType =
   | 'append'
   | 'produce-response'
   | 'produce-retry'
+  // Trùng tên với `KafkaFault['kind']` một cách có chủ đích — cùng quy ước với
+  // `broker-down`/`broker-up`: fault được seed thẳng thành một event cùng tên,
+  // kích hoạt tại đúng `at` của nó (`applyProduceErrorArm`, `engine/index.ts`),
+  // chứ không phải một fault "ngoài luồng" bị `flushBatch` tự dò state.
+  | 'produce-error'
   | 'fetch-request'
   | 'deliver'
   | 'process-done'

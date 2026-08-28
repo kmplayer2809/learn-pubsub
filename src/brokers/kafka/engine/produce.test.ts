@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import { createKafkaSimulation } from './index'
 import { estimateBytes } from './log'
 import { murmur2, toPositive } from './murmur2'
-import { checkIsrSufficient, enqueueRecord, flushBatch, isAckSatisfied, PRODUCE_RESPONSE_TRAVEL_MS } from './produce'
+import {
+  checkIsrSufficient,
+  checkSequence,
+  enqueueRecord,
+  flushBatch,
+  isAckSatisfied,
+  PRODUCE_RESPONSE_TRAVEL_MS,
+  PRODUCE_RETRY_BACKOFF_MS,
+} from './produce'
 import { testState } from './testState'
-import type { KafkaProducerSpec, KafkaTopicSpec } from './types'
+import type { KafkaProducerSpec, KafkaState, KafkaTopicSpec, KafkaTopology, ProducerRuntime } from './types'
 import { partitionKey } from './types'
 
 const orders: KafkaTopicSpec = { name: 'orders', partitions: 1, replicationFactor: 1 }
@@ -11,6 +20,31 @@ const key0 = partitionKey('orders', 0)
 
 function producer(overrides?: Partial<KafkaProducerSpec>): KafkaProducerSpec {
   return { id: 'p1', label: 'Producer', position: { x: 0, y: 0 }, ...overrides }
+}
+
+// --- Tiện ích riêng cho test retry/idempotence -----------------------------
+
+/**
+ * Mô phỏng "client gửi lại chính xác request đã gửi trước đó" — ghi thẳng một
+ * batch vào accumulator thay vì đi qua `enqueueRecord` (thứ luôn cấp sequence
+ * MỚI cho một lệnh `.send()` mới, đúng — không phải một lần gửi lại của CÙNG một
+ * record). Đây là cách duy nhất tái hiện "ack bị mất, client resend" ở mức test
+ * function-level, không cần dựng một fault type riêng cho nó.
+ */
+function injectBatch(state: KafkaState, producerId: string, pKey: string, records: ProducerRuntime['batches'][string]['records']): KafkaState {
+  const runtime = state.producers[producerId]
+  if (!runtime) throw new Error('test setup: missing producer runtime')
+  return {
+    ...state,
+    producers: { ...state.producers, [producerId]: { ...runtime, batches: { ...runtime.batches, [pKey]: { records, bytes: 0, openedAt: 0 } } } },
+  }
+}
+
+/** Mô phỏng fault `produce-error` đã kích hoạt (`applyProduceErrorArm`, `engine/index.ts`) mà không cần chạy cả kernel. */
+function withPendingErrors(state: KafkaState, producerId: string, times: number): KafkaState {
+  const runtime = state.producers[producerId]
+  if (!runtime) throw new Error('test setup: missing producer runtime')
+  return { ...state, producers: { ...state.producers, [producerId]: { ...runtime, pendingErrors: (runtime.pendingErrors ?? 0) + times } } }
 }
 
 describe('produce', () => {
@@ -245,5 +279,214 @@ describe('produce', () => {
     if (!partition) throw new Error('test setup: missing partition')
     state = { ...state, partitions: { ...state.partitions, [key0]: { ...partition, isr: ['b1'] } } }
     expect(checkIsrSufficient(state, { topic: twoReplicaTopic, partition: 0 })).toEqual({ ok: false, error: 'NOT_ENOUGH_REPLICAS' })
+  })
+})
+
+describe('idempotent producer', () => {
+  it('retry cùng một record không tạo bản ghi thứ hai trong log', () => {
+    let state = testState()
+    const p = producer({ idempotent: true, acks: 1, batchSize: 100_000, lingerMs: 0 })
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'a', at: 0 }).state
+    state = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 0 }).state
+    expect(state.partitions[key0]?.log).toHaveLength(1)
+
+    // Mô phỏng client resend: ack bị mất trên đường về, producer gửi lại CHÍNH
+    // record đã thành công, với cùng producerId/sequence đã được stamp lúc
+    // enqueue lần đầu.
+    const entry = state.partitions[key0]?.log[0]
+    if (!entry || entry.producerId === undefined || entry.sequence === undefined) throw new Error('test setup: record chưa stamp producerId/sequence')
+    state = injectBatch(state, 'p1', key0, [
+      { key: null, value: 'a', timestamp: 0, bytes: estimateBytes(null, 'a'), producerId: entry.producerId, sequence: entry.sequence },
+    ])
+
+    const { state: after, newEvents } = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 100 })
+    expect(after.partitions[key0]?.log).toHaveLength(1) // không ghi lần hai
+    expect(after.metrics.duplicatesPrevented).toBe(1)
+    expect(newEvents[0]).toMatchObject({ type: 'produce-response' })
+    expect(newEvents[0]?.payload.error).toBeUndefined() // duplicate vẫn coi là "đã gửi", không phải lỗi
+  })
+
+  it('duplicatesPrevented tăng đúng số lần retry bị chặn', () => {
+    let state = testState()
+    const p = producer({ idempotent: true, acks: 1, batchSize: 100_000, lingerMs: 0 })
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'a', at: 0 }).state
+    state = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 0 }).state
+    const entry = state.partitions[key0]?.log[0]
+    if (!entry || entry.producerId === undefined || entry.sequence === undefined) throw new Error('test setup')
+
+    for (let i = 0; i < 3; i++) {
+      state = injectBatch(state, 'p1', key0, [
+        { key: null, value: 'a', timestamp: 0, bytes: estimateBytes(null, 'a'), producerId: entry.producerId, sequence: entry.sequence },
+      ])
+      state = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 100 + i }).state
+    }
+
+    expect(state.metrics.duplicatesPrevented).toBe(3)
+    expect(state.partitions[key0]?.log).toHaveLength(1)
+  })
+
+  it('sequence nhảy cóc bị từ chối là out-of-order, không âm thầm ghi', () => {
+    const state = testState()
+    const partition = state.partitions[key0]
+    if (!partition) throw new Error('test setup')
+    expect(checkSequence(partition, { producerId: 0, sequence: 5 })).toBe('out-of-order')
+
+    // Qua flushBatch: record nhảy cóc không được ghi, và một `produce-retry` được
+    // hẹn thay vì âm thầm biến mất.
+    const p = producer({ idempotent: true, acks: 1, retries: 5, batchSize: 100_000, lingerMs: 0 })
+    const injected = injectBatch(state, 'p1', key0, [{ key: null, value: 'x', timestamp: 0, bytes: estimateBytes(null, 'x'), producerId: 0, sequence: 5 }])
+    const { state: after, newEvents } = flushBatch(injected, { producer: p, topic: orders, partition: 0, at: 0 })
+
+    expect(after.partitions[key0]?.log).toHaveLength(0)
+    expect(newEvents).toHaveLength(1)
+    expect(newEvents[0]).toMatchObject({ type: 'produce-retry', at: PRODUCE_RETRY_BACKOFF_MS })
+  })
+
+  it('producer không idempotent thì retry tạo duplicate thật — đó là điều bài 09 dạy', () => {
+    let state = testState()
+    const p = producer({ idempotent: false, acks: 1, batchSize: 100_000, lingerMs: 0 })
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'a', at: 0 }).state
+    state = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 0 }).state
+    expect(state.partitions[key0]?.log).toHaveLength(1)
+
+    // Client tự ý gửi lại (ack bị mất, không có idempotence bảo vệ) — cùng nội
+    // dung, nhưng không có producerId/sequence nào để broker so khớp.
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'a', at: 100 }).state
+    state = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 100 }).state
+
+    expect(state.partitions[key0]?.log).toHaveLength(2) // duplicate thật — không có gì chặn
+    expect(state.metrics.duplicatesPrevented).toBe(0)
+  })
+})
+
+describe('retry và thứ tự', () => {
+  it('maxInFlight = 1 giữ nguyên thứ tự kể cả khi request đầu phải retry', () => {
+    let state = testState()
+    const p = producer({ maxInFlight: 1, retries: 5, acks: 1, batchSize: 100_000, lingerMs: 0 })
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'first', at: 0 }).state
+    state = withPendingErrors(state, 'p1', 1)
+
+    const firstAttempt = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 0 })
+    expect(firstAttempt.state.partitions[key0]?.log).toHaveLength(0) // chưa ghi gì — bị fault chặn
+    const retryEvent = firstAttempt.newEvents.find((e) => e.type === 'produce-retry')
+    if (!retryEvent) throw new Error('test setup: expected a produce-retry event')
+    expect(retryEvent.payload.records).toBeUndefined() // maxInFlight<=1: batch còn nguyên trong accumulator, không cần snapshot
+    state = firstAttempt.state
+
+    // Record thứ hai được enqueue TRONG LÚC record đầu đang chờ retry — nối vào
+    // CÙNG batch (accumulator chưa bị dọn), không mở batch riêng.
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'second', at: 50 }).state
+    expect(state.producers['p1']?.batches[key0]?.records).toHaveLength(2)
+
+    // Retry cuối cùng thành công: cả hai record ra log CÙNG một lượt, đúng thứ tự.
+    const retried = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 200, attempt: 1 })
+    expect(retried.state.partitions[key0]?.log.map((e) => e.value)).toEqual(['first', 'second'])
+  })
+
+  it('maxInFlight > 1 không idempotent: retry đẩy record ra sau record gửi sau nó', () => {
+    // Khẳng định log ra thứ tự KHÁC thứ tự produce — đây là bug thật, không phải
+    // lỗi cài đặt. Test chốt nó để lesson 10 dạy được.
+    let state = testState()
+    const p = producer({ maxInFlight: 5, retries: 5, idempotent: false, acks: 1, batchSize: 100_000, lingerMs: 0 })
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'first', at: 0 }).state
+    state = withPendingErrors(state, 'p1', 1)
+
+    const firstAttempt = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 0 })
+    expect(firstAttempt.state.partitions[key0]?.log).toHaveLength(0)
+    expect(firstAttempt.state.producers['p1']?.batches[key0]).toBeUndefined() // maxInFlight>1: batch bị dọn ngay, coi như đã "gửi"
+    const retryEvent = firstAttempt.newEvents.find((e) => e.type === 'produce-retry')
+    if (!retryEvent) throw new Error('test setup: expected a produce-retry event')
+    expect(Array.isArray(retryEvent.payload.records)).toBe(true) // snapshot đi kèm — accumulator không còn giữ nó
+    state = firstAttempt.state
+
+    // Record thứ hai enqueue SAU khi accumulator đã trống — mở batch MỚI, độc lập.
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'second', at: 50 }).state
+    const second = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 50 })
+    expect(second.state.partitions[key0]?.log.map((e) => e.value)).toEqual(['second']) // record sau lại tới TRƯỚC
+
+    const retried = flushBatch(second.state, {
+      producer: p,
+      topic: orders,
+      partition: 0,
+      at: 200,
+      attempt: 1,
+      retryRecords: retryEvent.payload.records as ProducerRuntime['batches'][string]['records'],
+    })
+    expect(retried.state.partitions[key0]?.log.map((e) => e.value)).toEqual(['second', 'first']) // ĐẢO NGƯỢC thứ tự produce
+  })
+
+  it('maxInFlight > 1 CÓ idempotent: broker sắp lại theo sequence, thứ tự được giữ', () => {
+    let state = testState()
+    const p = producer({ maxInFlight: 5, retries: 5, idempotent: true, acks: 1, batchSize: 100_000, lingerMs: 0 })
+
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'first', at: 0 }).state
+    state = withPendingErrors(state, 'p1', 1)
+    const firstAttempt = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 0 })
+    state = firstAttempt.state
+    const firstRetry = firstAttempt.newEvents.find((e) => e.type === 'produce-retry')
+    if (!firstRetry) throw new Error('test setup: expected produce-retry for record1')
+
+    // record2 enqueue SAU khi accumulator trống — sequence kế tiếp (1), flush ngay
+    // (không có fault chặn) nhưng bị TỪ CHỐI vì record1 (sequence 0) chưa tới.
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'second', at: 50 }).state
+    const secondAttempt = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 50 })
+    expect(secondAttempt.state.partitions[key0]?.log).toHaveLength(0) // out-of-order — không ghi
+    state = secondAttempt.state
+    const secondRetry = secondAttempt.newEvents.find((e) => e.type === 'produce-retry')
+    if (!secondRetry) throw new Error('test setup: expected produce-retry for record2 (out-of-order)')
+
+    // record1's retry (attempt 1) tới trước, thành công — sequence 0 khớp.
+    const record1Records = firstRetry.payload.records as ProducerRuntime['batches'][string]['records']
+    const record1Retried = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 200, attempt: 1, retryRecords: record1Records })
+    state = record1Retried.state
+    expect(state.partitions[key0]?.log.map((e) => e.value)).toEqual(['first'])
+
+    // record2's retry (attempt 1) tới sau, giờ mới thành công — sequence 1 khớp.
+    const record2Records = secondRetry.payload.records as ProducerRuntime['batches'][string]['records']
+    const record2Retried = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 250, attempt: 1, retryRecords: record2Records })
+    state = record2Retried.state
+    expect(state.partitions[key0]?.log.map((e) => e.value)).toEqual(['first', 'second']) // thứ tự được giữ
+  })
+
+  it('retries = 0 thì lỗi là lỗi luôn, không thử lại', () => {
+    let state = testState()
+    const p = producer({ retries: 0, acks: 1, batchSize: 100_000, lingerMs: 0 })
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'a', at: 0 }).state
+    state = withPendingErrors(state, 'p1', 1)
+
+    const { state: after, newEvents } = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 0 })
+    expect(after.partitions[key0]?.log).toHaveLength(0)
+    expect(after.producers['p1']?.batches[key0]).toBeUndefined() // batch dọn, không chờ gì nữa
+    expect(newEvents).toHaveLength(1)
+    expect(newEvents[0]).toMatchObject({ type: 'produce-response', payload: { error: 'PRODUCE_ERROR' } })
+    expect(after.metrics.retries).toBe(0) // không có retry nào thực sự xảy ra
+  })
+})
+
+describe('produce-error fault qua toàn bộ simulation (wiring engine/index.ts)', () => {
+  it('produce-error trong script khiến flush đầu tiên retry rồi thành công', () => {
+    const topology: KafkaTopology = {
+      brokers: [{ id: 'b1', label: 'b1', position: { x: 0, y: 0 } }],
+      topics: [{ name: 'orders', partitions: 1, replicationFactor: 1 }],
+      producers: [{ id: 'p1', label: 'Producer', position: { x: 0, y: 0 }, acks: 1, batchSize: 100_000, lingerMs: 0, retries: 5 }],
+      consumers: [],
+      controllerBrokerId: 'b1',
+    }
+    const sim = createKafkaSimulation({
+      topology,
+      script: [{ at: 0, kind: 'produce', producerId: 'p1', topic: 'orders', key: null, value: 'a' }],
+      failures: [{ at: 0, kind: 'produce-error', producerId: 'p1', times: 1 }],
+      seed: 1,
+    })
+
+    sim.advanceTo(1000)
+    const snap = sim.snapshot()
+
+    // Nếu `produce-error` bị bỏ qua (như trước Task 11), record vẫn vào log ngay
+    // lần gửi đầu và `metrics.retries` đứng ở 0 — lesson sẽ chạy xanh mà không
+    // chứng minh được gì. Assertion `retries === 1` chính là cái phân biệt hai
+    // trường hợp đó.
+    expect(snap.partitions[partitionKey('orders', 0)]?.log).toHaveLength(1)
+    expect(snap.metrics.retries).toBe(1)
   })
 })

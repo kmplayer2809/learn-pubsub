@@ -5,16 +5,26 @@ import type { KafkaEventType, KafkaProducerSpec, KafkaState, KafkaTopicSpec, Nod
 import type { JournalEntry, SimEvent } from '../../../shell/kernel/types'
 
 // ---------------------------------------------------------------------------
-// Producer path — batching (`enqueueRecord`), flush (`flushBatch`), và cách
-// `acks` quyết định khi nào một produce coi là xong (`checkIsrSufficient`,
-// `isAckSatisfied`). Reducer thật gọi các hàm này từ bảng dispatch theo
-// `KafkaEventType` — đó là Task 6, chưa nối ở đây. File này chỉ đảm bảo
-// state/event sinh ra đúng.
+// Producer path — batching (`enqueueRecord`), flush (`flushBatch`), retry và
+// idempotence (`assignProducerId`, `checkSequence`, Task 11), và cách `acks`
+// quyết định khi nào một produce coi là xong (`checkIsrSufficient`,
+// `isAckSatisfied`). Reducer thật (`engine/index.ts`) gọi các hàm này từ bảng
+// dispatch theo `KafkaEventType`. File này chỉ đảm bảo state/event sinh ra đúng.
 // ---------------------------------------------------------------------------
 
 // Kafka thật mặc định 16 KiB — một batch nhỏ hơn ngưỡng này không bao giờ flush
 // vì đầy, chỉ flush khi hết `linger.ms`.
 const DEFAULT_BATCH_SIZE_BYTES = 16_384
+
+// `max.in.flight.requests.per.connection` mặc định của Kafka thật.
+const DEFAULT_MAX_IN_FLIGHT = 5
+
+/**
+ * Backoff cố định cho `produce-retry` — Kafka thật dùng `retry.backoff.ms` (mặc
+ * định 100ms) cộng jitter; bài học ở đây không cần độ trung thực đó, chỉ cần một
+ * độ trễ đủ để tách rõ "lần gửi lại" khỏi "lần gửi đầu" trên trục thời gian ảo.
+ */
+export const PRODUCE_RETRY_BACKOFF_MS = 200
 
 /**
  * Round trip mạng ảo cho `produce-response` quay lại producer sau khi leader
@@ -40,6 +50,17 @@ export interface FlushBatchArgs {
   topic: KafkaTopicSpec
   partition: number
   at: number
+  /** Lần thử thứ mấy — `0` (mặc định) là lần gửi đầu tiên. So với `producer.retries`
+   *  để quyết định retry tiếp hay trả lỗi hẳn (`retries = 0` ⇒ không bao giờ retry). */
+  attempt?: number
+  /**
+   * Chỉ có khi đây là một lần retry của một batch đã bị dọn khỏi accumulator
+   * (nhánh `maxInFlight > 1` trong `flushBatch`) — nội dung cần gửi lại nằm ở đây,
+   * KHÔNG đọc từ `runtime.batches[pKey]`: chỗ đó rất có thể đang gom một batch MỚI,
+   * không liên quan, cho lần gửi tiếp theo. Vắng mặt (`undefined`) nghĩa là đọc từ
+   * accumulator như một flush bình thường.
+   */
+  retryRecords?: ProducerRuntime['batches'][string]['records']
 }
 
 // Tách làm hai thay vì một `resolveAcks` gộp chung (bản trước của file này):
@@ -115,6 +136,57 @@ function responseEvent(
 // --- API ---------------------------------------------------------------
 
 /**
+ * Cấp `producerId` (PID) số, tăng dần, cho một producer idempotent — mô phỏng
+ * InitProducerId thật của Kafka (broker cấp PID trước khi producer gửi record đầu
+ * tiên). Lười và idempotent-với-chính-nó: gọi lại trên một producer đã có PID chỉ
+ * trả nguyên giá trị cũ, không cấp thêm. Đếm trong `KafkaState.nextProducerId`,
+ * KHÔNG dùng RNG — PID không cần ngẫu nhiên, chỉ cần duy nhất và xác định.
+ * `epoch` luôn `0` ở plan này: transaction/epoch-bump là một plan sau (§B5.5).
+ */
+export function assignProducerId(
+  state: KafkaState,
+  producerId: NodeId,
+): { state: KafkaState; producerId: number; epoch: number } {
+  const runtime = getProducerRuntime(state, producerId)
+  if (runtime.producerId !== undefined) {
+    return { state, producerId: runtime.producerId, epoch: runtime.epoch ?? 0 }
+  }
+  const assigned = state.nextProducerId
+  const nextState = putRuntime(
+    { ...state, nextProducerId: assigned + 1 },
+    producerId,
+    { ...runtime, producerId: assigned, epoch: 0 },
+  )
+  return { state: nextState, producerId: assigned, epoch: 0 }
+}
+
+export type SequenceCheckResult = 'ok' | 'duplicate' | 'out-of-order'
+
+/**
+ * So khớp sequence của một record với sequence cuối broker đã CHẤP NHẬN cho đúng
+ * `producerId` này trên partition này (`PartitionState.producerState`) — đúng cách
+ * Kafka thật chặn duplicate và ép thứ tự cho idempotent producer:
+ *   - `sequence === lastSequence + 1` ⇒ `'ok'`: đúng cái tiếp theo được mong đợi.
+ *   - `sequence <= lastSequence` ⇒ `'duplicate'`: broker đã thấy record này rồi
+ *     (hoặc cũ hơn) — một retry lặp lại vô hại, không ghi lần hai.
+ *   - `sequence > lastSequence + 1` ⇒ `'out-of-order'`: nhảy cóc — một record ĐỨNG
+ *     TRƯỚC nó (theo sequence) chưa từng tới broker. Từ chối thẳng, không bao giờ
+ *     âm thầm ghi rồi để lỗ hổng lại phía sau.
+ * Producer chưa từng gửi gì cho `producerId` này trên partition này thì coi
+ * `lastSequence` là `-1` — sequence `0` (số đầu tiên `assignProducerId`/
+ * `enqueueRecord` từng gán) khớp đúng `-1 + 1`.
+ */
+export function checkSequence(
+  partition: PartitionState,
+  record: { producerId: number; sequence: number },
+): SequenceCheckResult {
+  const lastSequence = partition.producerState[record.producerId]?.lastSequence ?? -1
+  if (record.sequence === lastSequence + 1) return 'ok'
+  if (record.sequence <= lastSequence) return 'duplicate'
+  return 'out-of-order'
+}
+
+/**
  * Đưa một record vào batch accumulator của producer. Trả về event `batch-flush`
  * mới **chỉ khi** batch vừa được mở: một batch chỉ cần đúng một hẹn giờ flush,
  * và hẹn thêm lần nữa cho record thứ hai sẽ flush cùng batch đó hai lần.
@@ -124,7 +196,17 @@ export function enqueueRecord(
   args: EnqueueArgs,
 ): { state: KafkaState; newEvents: SimEvent<KafkaEventType>[] } {
   const { producer, topic, key, value, headers, at } = args
-  const runtime = getProducerRuntime(state, producer.id)
+
+  // Producer idempotent cần một PID trước khi có thể gán sequence — gán MỘT LẦN,
+  // lười, đúng lúc `.send()` được gọi (không phải lúc flush): hai batch cùng
+  // partition hoàn toàn có thể race nhau lúc flush (retry, `maxInFlight > 1` —
+  // xem `flushBatch`), nhưng thứ tự app gọi `.send()` thì không bao giờ mơ hồ. Đó
+  // là nơi DUY NHẤT sequence có thể gán một cách xác định.
+  const idAssignment = producer.idempotent ? assignProducerId(state, producer.id) : undefined
+  const baseState = idAssignment?.state ?? state
+  const assignedProducerId = idAssignment?.producerId
+
+  const runtime = getProducerRuntime(baseState, producer.id)
 
   let partition: number
   let nextRuntime = runtime
@@ -158,11 +240,29 @@ export function enqueueRecord(
 
   const pKey = partitionKey(topic.name, partition)
   const bytes = estimateBytes(key, value)
-  const record = { key, value, headers, timestamp: at, bytes }
+
+  // Sequence tăng dần mỗi record được app gọi enqueue cho producer idempotent —
+  // không phải mỗi record broker chấp nhận. Gán TRƯỚC khi biết batch này rồi sẽ
+  // thành công, thất bại, hay phải retry: đúng cách client Kafka thật giữ số thứ
+  // tự ổn định qua mọi lần gửi lại, và là lý do `checkSequence` (`flushBatch`) có
+  // thể phát hiện một batch khác đã "chen ngang" trước nó (nhánh `out-of-order`).
+  let sequence: number | undefined
+  if (assignedProducerId !== undefined) {
+    sequence = nextRuntime.nextSequence[pKey] ?? 0
+    nextRuntime = { ...nextRuntime, nextSequence: { ...nextRuntime.nextSequence, [pKey]: sequence + 1 } }
+  }
+  const record = {
+    key,
+    value,
+    headers,
+    timestamp: at,
+    bytes,
+    ...(assignedProducerId !== undefined ? { producerId: assignedProducerId, sequence } : {}),
+  }
 
   const existing = nextRuntime.batches[pKey]
   const events: SimEvent<KafkaEventType>[] = []
-  let workingState = state
+  let workingState = baseState
   let batchBytes: number
   let openedAt: number
 
@@ -170,7 +270,7 @@ export function enqueueRecord(
     batchBytes = bytes
     openedAt = at
     const lingerMs = producer.lingerMs ?? 0
-    const [seq, afterSeq] = nextSeq(state)
+    const [seq, afterSeq] = nextSeq(baseState)
     workingState = afterSeq
     events.push({ at: at + lingerMs, seq, type: 'batch-flush', payload: { producerId: producer.id, topic: topic.name, partition } })
   } else {
@@ -239,9 +339,17 @@ export function flushBatch(
   args: FlushBatchArgs,
 ): { state: KafkaState; newEvents: SimEvent<KafkaEventType>[] } {
   const { producer, topic, partition, at } = args
+  const attempt = args.attempt ?? 0
   const runtime = getProducerRuntime(state, producer.id)
   const pKey = partitionKey(topic.name, partition)
-  const batch = runtime.batches[pKey]
+
+  // Nguồn record cho lần gửi này: một retry đã bị dọn khỏi accumulator
+  // (`maxInFlight > 1`, xem `retryOrTerminal` bên dưới) đọc từ `args.retryRecords`
+  // — `fromAccumulator = false` từ đây trở xuống nghĩa là hàm này KHÔNG được đụng
+  // `runtime.batches[pKey]` ở bất kỳ đâu, vì chỗ đó có thể đang gom một batch MỚI,
+  // không liên quan tới lần retry này. Mọi lần gọi khác đọc accumulator như cũ.
+  const fromAccumulator = args.retryRecords === undefined
+  const batch = args.retryRecords !== undefined ? { records: args.retryRecords, bytes: 0, openedAt: at } : runtime.batches[pKey]
 
   if (!batch || batch.records.length === 0) {
     return { state, newEvents: [] }
@@ -250,8 +358,11 @@ export function flushBatch(
   const partitionState = getPartitionState(state, pKey)
   const acks = producer.acks ?? 'all'
   const leaderOffline = state.brokersOnline[partitionState.leader] === false
+  const retries = producer.retries ?? Number.POSITIVE_INFINITY
+  const maxInFlight = producer.maxInFlight ?? DEFAULT_MAX_IN_FLIGHT
 
   const clearBatch = (s: KafkaState): KafkaState => {
+    if (!fromAccumulator) return s // batch này không sống trong accumulator — không có gì để dọn
     const r = getProducerRuntime(s, producer.id)
     const batches = withoutBatch(r.batches, pKey)
     // KIP-480: sticky partitioner đổi partition khi batch ĐÓNG (đầy hoặc hết
@@ -269,6 +380,64 @@ export function flushBatch(
     // types.ts và testState.ts).
     if (r.stickyPartition === partition) delete clearedRuntime.stickyPartition
     return putRuntime(s, producer.id, clearedRuntime)
+  }
+
+  // Dùng chung cho fault produce-error VÀ cho `checkSequence` trả `out-of-order`
+  // (bên dưới) — cả hai đều là "lần gửi này thất bại, có nên thử lại không". Nếu
+  // còn ngân sách `retries`: hẹn `produce-retry`, và với `maxInFlight > 1` dọn
+  // batch khỏi accumulator để record enqueue TIẾP THEO mở một batch MỚI thay vì
+  // nối đuôi (chính là chỗ hai batch có thể hoàn tất KHÔNG theo thứ tự — cố ý, đó
+  // là điều bài 10 dạy). Với `maxInFlight <= 1`, KHÔNG dọn batch: record enqueue
+  // tiếp theo nối vào batch đang chờ retry, nên khi retry cuối cùng thành công,
+  // mọi record đi ra theo ĐÚNG thứ tự đã enqueue. Hết ngân sách retry (kể cả
+  // `retries = 0` ngay từ lần thử đầu) thì lỗi thật, không thử lại nữa.
+  const retryOrTerminal = (
+    s: KafkaState,
+    remaining: ProducerRuntime['batches'][string]['records'],
+    errorCode: string,
+  ): { state: KafkaState; newEvents: SimEvent<KafkaEventType>[] } => {
+    if (attempt < retries) {
+      const [seq, afterSeq] = nextSeq(s)
+      let nextState = afterSeq
+      let payloadRecords: ProducerRuntime['batches'][string]['records'] | undefined
+      if (maxInFlight <= 1) {
+        payloadRecords = undefined
+      } else {
+        nextState = clearBatch(nextState)
+        payloadRecords = remaining
+      }
+      nextState = { ...nextState, metrics: { ...nextState.metrics, retries: nextState.metrics.retries + 1 } }
+      const retryEvent: SimEvent<KafkaEventType> = {
+        at: at + PRODUCE_RETRY_BACKOFF_MS,
+        seq,
+        type: 'produce-retry',
+        payload: {
+          producerId: producer.id,
+          topic: topic.name,
+          partition,
+          attempt: attempt + 1,
+          ...(payloadRecords !== undefined ? { records: payloadRecords } : {}),
+        },
+      }
+      return { state: nextState, newEvents: [retryEvent] }
+    }
+    const cleared = clearBatch(s)
+    const [seq, afterSeq] = nextSeq(cleared)
+    return {
+      state: afterSeq,
+      newEvents: [responseEvent(seq, at + PRODUCE_RESPONSE_TRAVEL_MS, producer.id, topic.name, partition, { error: errorCode })],
+    }
+  }
+
+  // Fault produce-error (Task 11, kích hoạt bởi `applyProduceErrorArm` ở
+  // `engine/index.ts`) — buộc lần gửi NÀY thất bại, tiêu một đơn vị ngân sách
+  // `pendingErrors` bất kể sau đó retry hay trả lỗi hẳn. Kiểm tra TRƯỚC mọi gate
+  // khác (leader offline, ISR): đây là fault được script cố ý gọi ra, không phải
+  // hệ quả của trạng thái cluster.
+  const pendingErrors = runtime.pendingErrors ?? 0
+  if (pendingErrors > 0) {
+    const faulted = putRuntime(state, producer.id, { ...runtime, pendingErrors: pendingErrors - 1 })
+    return retryOrTerminal(faulted, batch.records, 'PRODUCE_ERROR')
   }
 
   if (leaderOffline) {
@@ -296,22 +465,55 @@ export function flushBatch(
     }
   }
 
-  // ISR đủ (hoặc acks không cần ISR): append toàn bộ record trong batch, theo
-  // đúng thứ tự đã enqueue — offset cấp tăng dần, không xáo trộn trong một batch.
+  // ISR đủ (hoặc acks không cần ISR): append record trong batch, theo đúng thứ tự
+  // đã enqueue — offset cấp tăng dần, không xáo trộn trong một batch. Record có
+  // `producerId`/`sequence` (producer idempotent) phải qua `checkSequence` trước:
+  // `'duplicate'` thì bỏ qua (không ghi lần hai, không tiêu offset); `'out-of-order'`
+  // thì DỪNG NGAY — record này (và mọi record sau nó trong batch, luôn liền
+  // sequence) chưa thể vào log, phải retry (xem `retryOrTerminal`). Vì sequence
+  // trong một batch liền nhau (`enqueueRecord`), chỉ record ĐẦU TIÊN chưa xử lý có
+  // thể là `'out-of-order'` — một khi nó qua được, mọi record sau tự động `'ok'`.
   let workingPartition = partitionState
   let lastOffset = partitionState.leo - 1
   let bytesWritten = 0
+  let appendedCount = 0
+  let duplicatesSkipped = 0
+  let outOfOrderAt = -1
+  let idx = 0
   for (const record of batch.records) {
+    if (record.producerId !== undefined && record.sequence !== undefined) {
+      const check = checkSequence(workingPartition, { producerId: record.producerId, sequence: record.sequence })
+      if (check === 'out-of-order') {
+        outOfOrderAt = idx
+        break
+      }
+      if (check === 'duplicate') {
+        duplicatesSkipped++
+        idx++
+        continue
+      }
+    }
     const appended = appendRecord(workingPartition, {
       key: record.key,
       value: record.value,
       timestamp: record.timestamp,
       bytes: record.bytes,
       headers: record.headers,
+      producerId: record.producerId,
+      producerEpoch: record.producerId !== undefined ? (runtime.epoch ?? 0) : undefined,
+      sequence: record.sequence,
     })
     workingPartition = appended.partition
     lastOffset = appended.offset
     bytesWritten += record.bytes
+    appendedCount++
+    if (record.producerId !== undefined && record.sequence !== undefined) {
+      workingPartition = {
+        ...workingPartition,
+        producerState: { ...workingPartition.producerState, [record.producerId]: { epoch: runtime.epoch ?? 0, lastSequence: record.sequence } },
+      }
+    }
+    idx++
   }
   // `appendRecord` (log.ts) chỉ cập nhật `replicaState` của LEADER, và tự đặt
   // `highWatermark = leo` trực tiếp — đúng cho trường hợp một replica, nhưng
@@ -336,11 +538,23 @@ export function flushBatch(
     partitions: { ...state.partitions, [pKey]: workingPartition },
     metrics: {
       ...state.metrics,
-      recordsProduced: state.metrics.recordsProduced + batch.records.length,
+      recordsProduced: state.metrics.recordsProduced + appendedCount,
       bytesProduced: state.metrics.bytesProduced + bytesWritten,
+      duplicatesPrevented: state.metrics.duplicatesPrevented + duplicatesSkipped,
     },
   }
-  next = pushJournal(next, { at, type: 'produce', text: `${pKey}: +${batch.records.length} record`, nodeId: producer.id })
+  if (appendedCount > 0) {
+    next = pushJournal(next, { at, type: 'produce', text: `${pKey}: +${appendedCount} record`, nodeId: producer.id })
+  }
+
+  if (outOfOrderAt !== -1) {
+    // Phần đuôi từ `outOfOrderAt` trở đi bị broker từ chối (sequence nhảy cóc) —
+    // coi như một lần gửi thất bại cần retry/lỗi hẳn, KHÔNG đi qua đường thành
+    // công bên dưới (không dọn batch qua `clearBatch` ở đây — `retryOrTerminal` tự
+    // quyết định điều đó tuỳ `maxInFlight`).
+    return retryOrTerminal(next, batch.records.slice(outOfOrderAt), 'OUT_OF_ORDER_SEQUENCE')
+  }
+
   next = clearBatch(next)
 
   if (acks === 0) {

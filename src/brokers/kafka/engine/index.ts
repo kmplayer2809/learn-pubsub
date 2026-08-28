@@ -15,6 +15,7 @@ import type {
   KafkaTopicSpec,
   KafkaTopology,
   NodeId,
+  ProducerRuntime,
 } from './types'
 import { validateKafkaTopology, type KafkaIssueCode, type KafkaValidationIssue } from './validate'
 import { createRng } from '../../../shell/kernel/rng'
@@ -96,6 +97,32 @@ function asOptionalHeaders(value: unknown, field: string): Record<string, string
   if (value === undefined) return undefined
   if (!isStringRecord(value)) throw new Error(`kafka engine: payload.${field} is not a Record<string, string>`)
   return value
+}
+
+/**
+ * `produce-retry`'s payload carries a snapshot of the batch it must resend
+ * (`FlushBatchArgs.retryRecords`, `produce.ts`) only when `maxInFlight > 1` cleared
+ * the batch out of the accumulator at the failed attempt — see the why-comment on
+ * `flushBatch`. Written by this same file (`flushBatch`'s `retryOrTerminal`), so
+ * this never actually throws in practice, same rationale as every other `asX`
+ * helper above.
+ */
+function asOptionalRetryRecords(value: unknown): ProducerRuntime['batches'][string]['records'] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) throw new Error('kafka engine: payload.records is not an array')
+  return value.map((entry, i) => {
+    if (typeof entry !== 'object' || entry === null) throw new Error(`kafka engine: payload.records[${i}] is not an object`)
+    const e = entry as Record<string, unknown>
+    return {
+      key: asStringOrNull(e.key, `records[${i}].key`),
+      value: asStringOrNull(e.value, `records[${i}].value`),
+      headers: asOptionalHeaders(e.headers, `records[${i}].headers`),
+      timestamp: asNumber(e.timestamp, `records[${i}].timestamp`),
+      bytes: asNumber(e.bytes, `records[${i}].bytes`),
+      producerId: asOptionalNumber(e.producerId, `records[${i}].producerId`),
+      sequence: asOptionalNumber(e.sequence, `records[${i}].sequence`),
+    }
+  })
 }
 
 // --- Topology lookups ------------------------------------------------------
@@ -205,6 +232,7 @@ function createState(topology: KafkaTopology, seed: number): KafkaState {
       recordsCompacted: 0,
     },
     inFlight: [],
+    nextProducerId: 0,
   }
 }
 
@@ -291,13 +319,20 @@ function seedEvents(options: KafkaSimulationOptions): SimEvent<KafkaEventType>[]
       case 'broker-up':
         events.push({ at: fault.at, seq: seq++, type: 'broker-up', payload: { brokerId: fault.brokerId } })
         break
+      case 'produce-error':
+        // Task 11 (idempotent producer, retries): kích hoạt ngân sách lỗi cho
+        // producer NÀY tại đúng thời điểm `at` — mọi lần flush TRƯỚC `at` không bị
+        // ảnh hưởng, chỉ những lần SAU mới bị buộc thất bại. `applyProduceErrorArm`
+        // cộng `times` vào `ProducerRuntime.pendingErrors`; `flushBatch`
+        // (`produce.ts`) trừ dần mỗi lần một lượt gửi bị buộc thất bại.
+        events.push({ at: fault.at, seq: seq++, type: 'produce-error', payload: { producerId: fault.producerId, times: fault.times } })
+        break
       case 'consumer-stall':
       case 'replica-lag':
       case 'processing-error':
-      case 'produce-error':
-        // Bốn fault này thuộc phần idempotent-producer (Task 11, `produce-error`)
-        // hoặc replication (một plan sau) — cùng lý do bỏ qua như ba lệnh
-        // transaction ở trên, không phải một lỗ hổng bị quên.
+        // Ba fault này thuộc replication/consumer-processing (một plan sau) —
+        // `produce-error` (Task 11) đã tách riêng ở nhánh trên. Bỏ qua có chủ đích,
+        // không phải một lỗ hổng bị quên.
         break
     }
   }
@@ -386,6 +421,68 @@ function applyProduceResponse(state: KafkaState, event: SimEvent<KafkaEventType>
     tone: error ? 'rose' : 'emerald',
   }
   return { state: { ...withJournal, inFlight: [...withJournal.inFlight, flight] }, newEvents: [] }
+}
+
+/**
+ * Kích hoạt fault `produce-error` (Task 11) tại đúng `at` của nó — cộng `times`
+ * vào ngân sách `pendingErrors` của producer, KHÔNG trừ/đọc gì ở đây. `flushBatch`
+ * (`produce.ts`) là nơi duy nhất tiêu ngân sách này, mỗi lần một lượt gửi (kể cả
+ * retry) bị buộc thất bại. Không sinh event mới — không gọi `nextSeq` (xem
+ * why-comment ở nhóm `placeholderReducer` bên dưới về kỷ luật đó).
+ */
+function applyProduceErrorArm(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const producerId = asString(event.payload.producerId, 'producerId')
+  const times = asNumber(event.payload.times, 'times')
+  const runtime = state.producers[producerId]
+  if (!runtime) return { state, newEvents: [] } // producer không tồn tại — validate.ts đáng lẽ đã chặn, an toàn no-op
+
+  const nextRuntime: ProducerRuntime = { ...runtime, pendingErrors: (runtime.pendingErrors ?? 0) + times }
+  return {
+    state: {
+      ...state,
+      producers: { ...state.producers, [producerId]: nextRuntime },
+      journal: [
+        ...state.journal,
+        { at: event.at, type: 'produce-error', text: `${producerId}: kích hoạt lỗi produce cho ${times} lần gửi kế tiếp`, nodeId: producerId },
+      ],
+    },
+    newEvents: [],
+  }
+}
+
+/**
+ * Xử lý một lần thử lại (`produce-error` fault, hoặc `checkSequence` trả
+ * `out-of-order` — cả hai đều đi qua `flushBatch`'s `retryOrTerminal`). Về hình
+ * ảnh, một retry không khác gì một lần gửi batch bình thường (`applyBatchFlush`) —
+ * chỉ khác ở chỗ nó có thể lại thất bại và tự hẹn thêm một `produce-retry` khác.
+ */
+function applyProduceRetry(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const producerId = asString(event.payload.producerId, 'producerId')
+  const topicName = asString(event.payload.topic, 'topic')
+  const partition = asNumber(event.payload.partition, 'partition')
+  const attempt = asNumber(event.payload.attempt, 'attempt')
+  const retryRecords = asOptionalRetryRecords(event.payload.records)
+
+  const leader = state.partitions[partitionKey(topicName, partition)]?.leader
+  const flushed = flushBatch(state, {
+    producer: producerSpec(topology, producerId),
+    topic: topicSpec(topology, topicName),
+    partition,
+    at: event.at,
+    attempt,
+    retryRecords,
+  })
+
+  if (leader === undefined) return flushed // unknown partition — flushBatch đã throw trước nếu điều đó quan trọng
+
+  const flight: InFlight = {
+    message: { id: `produce-retry-${producerId}-${topicName}-${partition}-${event.seq}`, label: topicName, solid: true },
+    edgeId: `${producerId}->${leader}`,
+    fromT: event.at,
+    toT: event.at + RECORD_TRAVEL_MS,
+    tone: 'amber',
+  }
+  return { state: { ...flushed.state, inFlight: [...flushed.state.inFlight, flight] }, newEvents: flushed.newEvents }
 }
 
 // --- Reducers: consumer path -------------------------------------------------
@@ -625,25 +722,29 @@ function applyBrokerUp(state: KafkaState, event: SimEvent<KafkaEventType>): Redu
 
 // --- Reducers: chưa có ai dispatch (placeholder trung thực) --------------------
 //
-// Năm nhánh dưới đây là thành viên của `KafkaEventType` (Task 1) nhưng KHÔNG một
-// event nào trong wiring hiện tại (Task 1-6) từng sinh ra chúng — `REDUCERS` vẫn
-// phải khai đủ vì nó được gõ kiểu `Record<KafkaEventType, Reducer>`, và đó chính
-// là lý do union này tồn tại: thiếu một nhánh là lỗi compile, không phải lỗi
-// runtime im lặng. Mỗi nhánh chỉ tăng `seq` cho đúng kỷ luật (mọi event đi qua
-// kernel đều tiêu một seq) rồi trả nguyên state — không bịa hiệu ứng nào:
+// Bốn nhánh dưới đây là thành viên của `KafkaEventType` (Task 1) nhưng KHÔNG một
+// event nào trong wiring hiện tại từng sinh ra chúng — `REDUCERS` vẫn phải khai đủ
+// vì nó được gõ kiểu `Record<KafkaEventType, Reducer>`, và đó chính là lý do union
+// này tồn tại: thiếu một nhánh là lỗi compile, không phải lỗi runtime im lặng. Mỗi
+// nhánh chỉ trả nguyên state, không sinh event nào — GIỐNG mọi reducer không phát
+// event khác trong file này (`applyProcessDone`, `applyCommit`,
+// `applyBrokerDown`/`Up`, `applyProduceErrorArm`, `applySeekEvent`,
+// `applyPauseEvent`/`applyResumeEvent`): KHÔNG gọi `nextSeq`. `seq` chỉ tồn tại để
+// đánh dấu thứ tự cho EVENT MỚI được sinh ra (dùng làm tie-break trong scheduler)
+// — một reducer không sinh event nào thì không có gì cần đánh dấu, gọi `nextSeq`
+// ở đó chỉ tăng một con số không ai đọc. (Một bản trước của comment này nói ngược
+// lại — "mọi event đi qua kernel đều tiêu một seq" — sai, đã sửa ở Task 11.)
 //   - `append`: phần ghi log của broker hiện GỘP thẳng vào `flushBatch` (Task 4),
 //     gọi từ `batch-flush` ở trên. Event `append` tách riêng để dành cho một plan
 //     sau muốn chèn độ trễ giữa "request tới broker" và "broker ghi xong đĩa".
 //   - `deliver`: tương tự cho hướng consumer — `fetchRecords` (Task 5) trả record
 //     ngay trong `fetch-request`, không qua một chặng mạng tách riêng.
-//   - `produce-retry`: Task 11 (idempotent producer) sở hữu — xem brief của nó.
 //   - `segment-roll`/`retention-delete`: `rollSegments`/`applyRetention` (Task 3)
 //     là hàm thuần đã có và đã test, nhưng chưa được nối vào bất kỳ reducer nào ở
 //     plan này — không lesson nào trong phạm vi P1-P3 (basics/producer) cần
 //     retention chạy qua một simulation thật.
 function placeholderReducer(state: KafkaState, _event: SimEvent<KafkaEventType>): ReduceResult {
-  const [, afterSeq] = nextSeq(state)
-  return { state: afterSeq, newEvents: [] }
+  return { state, newEvents: [] }
 }
 
 // --- Wiring ------------------------------------------------------------------
@@ -654,7 +755,8 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     'batch-flush': withPrune((state, event) => applyBatchFlush(topology, state, event)),
     append: withPrune(placeholderReducer),
     'produce-response': withPrune(applyProduceResponse),
-    'produce-retry': withPrune(placeholderReducer),
+    'produce-retry': withPrune((state, event) => applyProduceRetry(topology, state, event)),
+    'produce-error': withPrune(applyProduceErrorArm),
     'fetch-request': withPrune((state, event) => applyFetchRequest(topology, state, event)),
     deliver: withPrune(placeholderReducer),
     'process-done': withPrune(applyProcessDone),
