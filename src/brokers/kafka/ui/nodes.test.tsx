@@ -120,9 +120,11 @@ describe('PartitionNode', () => {
     })
     expect(shell.textContent).toContain('42')
     expect(shell.textContent).toContain('40')
-    expect(shell.textContent).toContain('ISR')
-    expect(shell.textContent).toContain('2')
-    expect(shell.textContent).toContain('3')
+    // Scoped to the badge span rather than digit-substring matching on the whole node's
+    // textContent: `leo: 42` already contains a '2', so a bare `toContain('2')` on the
+    // full node would pass even if the ISR badge itself were broken or missing.
+    const badge = shell.querySelector('.rounded')
+    expect(badge?.textContent).toBe('ISR 2/3')
   })
 })
 

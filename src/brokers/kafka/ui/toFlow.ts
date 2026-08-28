@@ -7,6 +7,10 @@ import {
   type KafkaState,
   type KafkaTopology,
 } from '../engine'
+// Không nằm trong barrel `../engine` (index.ts chỉ import `applyPause`/`applyResume`/
+// `applySeek`/`fetchRecords` từ `./consume`, không re-export `resolvePosition`) — import
+// thẳng từ module con, đúng như engine's own test files làm.
+import { resolvePosition } from '../engine/consume'
 
 // Xếp dọc các partition bên dưới header của broker leader — con số thuần bố cục, không
 // mang ý nghĩa domain nào. `PARTITION_HEADER_Y` chừa chỗ cho nhãn + trạng thái online/
@@ -132,10 +136,19 @@ export function toFlowNodes(topology: KafkaTopology, state: KafkaState, highligh
 
 /**
  * Tổng lag trên mọi partition của mọi topic trong `subscriptions` — `highWatermark -
- * position`, đúng định nghĩa lag của Kafka thật. `position[key] ?? partition.
- * logStartOffset` lặp lại chính xác cách `consume.ts` (`resolvePosition`/`fetchRecords`)
- * đọc vị trí khi consumer chưa từng fetch một partition cụ thể, để con số hiện trên canvas
- * khớp với con số engine thực sự dùng, không phải một quy ước UI riêng.
+ * position`, đúng định nghĩa lag của Kafka thật. Vị trí "chưa từng resolve" của một
+ * partition phải đi qua `resolvePosition` (`consume.ts`), không phải đọc thẳng
+ * `runtime.position[key]` với một fallback tự bịa: khi `autoOffsetReset` là `'latest'`
+ * (mặc định — `DEFAULT_AUTO_OFFSET_RESET` trong `consume.ts`), vị trí chưa resolve nghĩa
+ * là "bắt đầu từ high watermark", tức lag bằng 0 — không phải `logStartOffset`, con số đó
+ * sẽ bịa ra một backlog gồm mọi record đã tồn tại từ trước khi consumer này vào group.
+ *
+ * BẪY đã từng rơi vào đây: `fetchRecords` trong `consume.ts` có một dòng trông giống hệt
+ * `runtime.position[key] ?? partition.logStartOffset`, nhưng comment ngay tại đó nói rõ
+ * đó CHỈ là rào chắn kiểu cho `noUncheckedIndexedAccess` sau khi vòng lặp phía trên đã
+ * resolve position cho MỌI key không bị pause — không phải là quy tắc resolve thật. Copy
+ * cái rào chắn đó vào đây (thay vì gọi `resolvePosition`) làm consumer bị pause TRƯỚC lần
+ * poll đầu tiên (position chưa từng được resolve) đọc lag bằng cỡ toàn bộ log thay vì 0.
  */
 function consumerLag(
   topology: KafkaTopology,
@@ -143,6 +156,7 @@ function consumerLag(
   consumer: KafkaConsumerSpec,
   runtime: ConsumerRuntime,
 ): number {
+  const autoOffsetReset = consumer.autoOffsetReset ?? 'latest'
   let lag = 0
   for (const topicName of consumer.subscriptions) {
     const topic = topology.topics.find((t) => t.name === topicName)
@@ -151,7 +165,12 @@ function consumerLag(
       const key = partitionKey(topicName, index)
       const partition = state.partitions[key]
       if (!partition) continue
-      const position = runtime.position[key] ?? partition.logStartOffset
+      const position = resolvePosition({
+        position: runtime.position[key],
+        logStartOffset: partition.logStartOffset,
+        highWatermark: partition.highWatermark,
+        autoOffsetReset,
+      })
       lag += partition.highWatermark - position
     }
   }

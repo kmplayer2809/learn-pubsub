@@ -167,3 +167,34 @@ describe('toFlowEdges', () => {
     expect(toFlowEdges(topo)).toEqual([])
   })
 })
+
+describe('toFlowNodes consumer lag — resolvePosition vs the noUncheckedIndexedAccess guard', () => {
+  // Reviewer repro: a consumer whose join is immediately paused before its first poll
+  // resolves a position must read as zero lag under `latest` (the engine default), not as
+  // a fabricated backlog. `consume.ts`'s position-resolution loop skips paused keys, so
+  // `state.consumers.c1.position['orders-0']` never gets set — `resolvePosition` is the
+  // only place that knows what an unresolved position under 'latest' means.
+  it('lag đọc 0 khi consumer chưa từng resolve position và autoOffsetReset là latest (mặc định)', () => {
+    const topo = topology({ topics: [{ name: 'orders', partitions: 1, replicationFactor: 1 }] })
+    const sim = createKafkaSimulation({
+      topology: topo,
+      script: [
+        { at: 0, kind: 'produce', producerId: 'p1', topic: 'orders', key: null, value: 'v1', partition: 0 },
+        { at: 0, kind: 'produce', producerId: 'p1', topic: 'orders', key: null, value: 'v2', partition: 0 },
+        { at: 100, kind: 'consumer-join', consumerId: 'c1' },
+        { at: 100, kind: 'pause', consumerId: 'c1', topic: 'orders', partition: 0 },
+      ],
+      seed: 1,
+    })
+    sim.advanceTo(100)
+    const state = sim.snapshot()
+
+    // Sanity-check the repro premise before asserting on the UI: pause must have blocked
+    // the join's first poll, so the consumer never resolved a position for this partition.
+    expect(state.consumers['c1']?.position['orders-0']).toBeUndefined()
+    expect(state.partitions['orders-0']!.highWatermark).toBe(2)
+
+    const c1 = toFlowNodes(topo, state).find((n) => n.id === 'c1')!
+    expect(c1.data.lag).toBe(0)
+  })
+})
