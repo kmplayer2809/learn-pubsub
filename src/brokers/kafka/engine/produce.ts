@@ -500,6 +500,13 @@ export function flushBatch(
       bytes: record.bytes,
       headers: record.headers,
       producerId: record.producerId,
+      // `runtime` ở đây CỐ Ý là snapshot chụp ở đầu hàm, không phải trạng thái
+      // hiện tại — vô hại hôm nay vì epoch luôn `0` suốt đời chạy (chưa có
+      // transaction/epoch-bump ở plan này), nhưng một khi plan sau thêm khả năng
+      // epoch đổi GIỮA một lần gọi `flushBatch` (ví dụ fencing một producer zombie
+      // giữa lúc nó đang gửi), đọc `runtime.epoch` ở đây sẽ stamp epoch CŨ lên một
+      // record — phải đọc lại `getProducerRuntime(state, producer.id).epoch` tại
+      // đúng thời điểm append, không phải biến `runtime` đóng gói từ đầu hàm.
       producerEpoch: record.producerId !== undefined ? (runtime.epoch ?? 0) : undefined,
       sequence: record.sequence,
     })
@@ -508,6 +515,8 @@ export function flushBatch(
     bytesWritten += record.bytes
     appendedCount++
     if (record.producerId !== undefined && record.sequence !== undefined) {
+      // Cùng snapshot `runtime` (đầu hàm), cùng cái bẫy đã ghi ở `producerEpoch`
+      // phía trên.
       workingPartition = {
         ...workingPartition,
         producerState: { ...workingPartition.producerState, [record.producerId]: { epoch: runtime.epoch ?? 0, lastSequence: record.sequence } },
@@ -559,8 +568,36 @@ export function flushBatch(
 
   if (acks === 0) {
     // Ghi journal, cộng metrics — nhưng không sinh `produce-response`: acks=0
-    // không có khái niệm chờ phản hồi.
+    // không có khái niệm chờ phản hồi. Cũng là lý do fault `ack-lost` không thể
+    // áp dụng ở đây — không có response nào để "mất" khi vốn dĩ chẳng có response.
     return { state: next, newEvents: [] }
+  }
+
+  // Fault `ack-lost` (Task 11 fix round) — append ĐÃ thành công (record đã nằm
+  // trong log, `next` phản ánh đúng điều đó), nhưng response quay về producer bị
+  // buộc "mất". Producer coi như timeout, resend CHÍNH batch vừa gửi — dùng lại
+  // `batch.records` đã có sẵn (producerId/sequence gốc của nó, nếu có) thay vì
+  // dựng lại. Khi retry đó tới `flushBatch` lần nữa, `checkSequence` sẽ thấy đúng
+  // sequence đã được CHẤP NHẬN rồi ⇒ `'duplicate'`, không ghi lần hai — đây là
+  // đường DUY NHẤT `duplicatesPrevented` có thể tăng qua một lượt chạy kernel đầy
+  // đủ, không cần test tự tiêm state. Producer KHÔNG idempotent thì record trong
+  // `batch.records` không có `producerId`/`sequence`, nên lần retry này append lại
+  // vô điều kiện — một duplicate THẬT, đúng cặp đối chứng bài 09 cần.
+  const pendingAckLosses = runtime.pendingAckLosses ?? 0
+  if (pendingAckLosses > 0) {
+    const freshRuntime = getProducerRuntime(next, producer.id) // KHÔNG spread `runtime` gốc — nó còn giữ batch CHƯA bị `clearBatch` dọn
+    const lost = putRuntime(next, producer.id, { ...freshRuntime, pendingAckLosses: pendingAckLosses - 1 })
+    const [seq, afterSeq] = nextSeq(lost)
+    const retryEvent: SimEvent<KafkaEventType> = {
+      at: at + PRODUCE_RETRY_BACKOFF_MS,
+      seq,
+      type: 'produce-retry',
+      payload: { producerId: producer.id, topic: topic.name, partition, attempt: attempt + 1, records: batch.records },
+    }
+    return {
+      state: { ...afterSeq, metrics: { ...afterSeq.metrics, retries: afterSeq.metrics.retries + 1 } },
+      newEvents: [retryEvent],
+    }
   }
 
   // ISR đã được gate ở trên cho `acks=all`, và `acks=1` không cần ISR — tới

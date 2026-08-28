@@ -194,6 +194,15 @@ export interface ProducerRuntime {
   // `flushBatch` (`produce.ts`) trừ đi mỗi lần một lượt gửi bị buộc thất bại. `0`
   // và "chưa từng có fault nào" (`undefined`) coi như nhau — đọc qua `?? 0`.
   pendingErrors?: number
+  // Ngân sách "ack bị mất" còn lại (Task 11 fix round) — cùng khuôn với
+  // `pendingErrors`, cùng cặp arm/consume (`applyAckLossArm` cộng vào,
+  // `flushBatch` trừ đi), nhưng khác chỗ NÀO nó tác động: `pendingErrors` chặn
+  // TRƯỚC khi append (request thất bại thật); `pendingAckLosses` chỉ tiêu SAU
+  // khi append đã thành công — bản ghi đã nằm trong log, chỉ có phản hồi bay về
+  // producer là "mất". Đây là fault duy nhất khiến `checkSequence` có thể thật
+  // sự trả `'duplicate'` qua một lần chạy kernel đầy đủ (không phải test
+  // tự tiêm state) — xem why-comment ở `flushBatch`.
+  pendingAckLosses?: number
   txnState?: 'Empty' | 'Ongoing' | 'PrepareCommit' | 'PrepareAbort'
   // Ba trường dưới đây phục vụ `pickPartition` (Task 4, `partitioner.ts`) — không
   // khai báo ở Task 1 vì spec §B3 cũng không liệt kê chúng, nhưng `enqueueRecord`
@@ -268,6 +277,11 @@ export type KafkaFault =
   | { at: number; kind: 'replica-lag'; brokerId: NodeId; ms: number }
   | { at: number; kind: 'processing-error'; consumerId: NodeId; times: number }
   | { at: number; kind: 'produce-error'; producerId: NodeId; times: number }
+  // Ack bị mất SAU khi broker đã append thành công — khác `produce-error` (request
+  // thất bại thật): dữ liệu đã vào log, chỉ có phản hồi không bao giờ tới được
+  // producer. Producer coi như timeout, resend — và đó chính là kịch bản
+  // idempotence thật sự bảo vệ (xem `flushBatch`, nhánh `pendingAckLosses`).
+  | { at: number; kind: 'ack-lost'; producerId: NodeId; times: number }
 
 /** Khoá của một partition trong `KafkaState.partitions`. Dạng chuỗi có tiền tố
  *  topic chứ không phải số: khoá số thuần trong một object JavaScript được lặp
@@ -303,6 +317,9 @@ export type KafkaEventType =
   // kích hoạt tại đúng `at` của nó (`applyProduceErrorArm`, `engine/index.ts`),
   // chứ không phải một fault "ngoài luồng" bị `flushBatch` tự dò state.
   | 'produce-error'
+  // Cùng quy ước như `produce-error` ngay trên — `applyAckLossArm` kích hoạt tại
+  // đúng `at` của fault.
+  | 'ack-lost'
   | 'fetch-request'
   | 'deliver'
   | 'process-done'

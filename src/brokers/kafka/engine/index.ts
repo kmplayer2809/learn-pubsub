@@ -327,12 +327,20 @@ function seedEvents(options: KafkaSimulationOptions): SimEvent<KafkaEventType>[]
         // (`produce.ts`) trừ dần mỗi lần một lượt gửi bị buộc thất bại.
         events.push({ at: fault.at, seq: seq++, type: 'produce-error', payload: { producerId: fault.producerId, times: fault.times } })
         break
+      case 'ack-lost':
+        // Task 11 (fix round): kích hoạt ngân sách "ack bị mất" cho producer NÀY
+        // tại đúng thời điểm `at` — chỉ tác động những lần append THÀNH CÔNG SAU
+        // `at`. `applyAckLossArm` cộng `times` vào `ProducerRuntime.pendingAckLosses`;
+        // `flushBatch` (`produce.ts`) trừ dần mỗi lần một response bị "mất" sau khi
+        // record đã thật sự vào log.
+        events.push({ at: fault.at, seq: seq++, type: 'ack-lost', payload: { producerId: fault.producerId, times: fault.times } })
+        break
       case 'consumer-stall':
       case 'replica-lag':
       case 'processing-error':
         // Ba fault này thuộc replication/consumer-processing (một plan sau) —
-        // `produce-error` (Task 11) đã tách riêng ở nhánh trên. Bỏ qua có chủ đích,
-        // không phải một lỗ hổng bị quên.
+        // `produce-error`/`ack-lost` (Task 11) đã tách riêng ở các nhánh trên. Bỏ
+        // qua có chủ đích, không phải một lỗ hổng bị quên.
         break
     }
   }
@@ -451,10 +459,38 @@ function applyProduceErrorArm(state: KafkaState, event: SimEvent<KafkaEventType>
 }
 
 /**
- * Xử lý một lần thử lại (`produce-error` fault, hoặc `checkSequence` trả
- * `out-of-order` — cả hai đều đi qua `flushBatch`'s `retryOrTerminal`). Về hình
- * ảnh, một retry không khác gì một lần gửi batch bình thường (`applyBatchFlush`) —
- * chỉ khác ở chỗ nó có thể lại thất bại và tự hẹn thêm một `produce-retry` khác.
+ * Kích hoạt fault `ack-lost` (Task 11 fix round) tại đúng `at` của nó — cộng
+ * `times` vào ngân sách `pendingAckLosses` của producer, gần như sao y
+ * `applyProduceErrorArm` ở trên, chỉ khác tên trường. `flushBatch` (`produce.ts`)
+ * tiêu ngân sách này SAU khi một append đã thành công (khác `pendingErrors`, tiêu
+ * TRƯỚC khi append). Không sinh event mới — không gọi `nextSeq`.
+ */
+function applyAckLossArm(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const producerId = asString(event.payload.producerId, 'producerId')
+  const times = asNumber(event.payload.times, 'times')
+  const runtime = state.producers[producerId]
+  if (!runtime) return { state, newEvents: [] } // producer không tồn tại — validate.ts đáng lẽ đã chặn, an toàn no-op
+
+  const nextRuntime: ProducerRuntime = { ...runtime, pendingAckLosses: (runtime.pendingAckLosses ?? 0) + times }
+  return {
+    state: {
+      ...state,
+      producers: { ...state.producers, [producerId]: nextRuntime },
+      journal: [
+        ...state.journal,
+        { at: event.at, type: 'ack-lost', text: `${producerId}: kích hoạt mất ack cho ${times} lần append kế tiếp`, nodeId: producerId },
+      ],
+    },
+    newEvents: [],
+  }
+}
+
+/**
+ * Xử lý một lần thử lại (`produce-error` fault, `ack-lost` fault, hoặc
+ * `checkSequence` trả `out-of-order` — cả ba đều đi qua `flushBatch`'s
+ * `retryOrTerminal`/nhánh `pendingAckLosses`). Về hình ảnh, một retry không khác
+ * gì một lần gửi batch bình thường (`applyBatchFlush`) — chỉ khác ở chỗ nó có thể
+ * lại thất bại/mất ack và tự hẹn thêm một `produce-retry` khác.
  */
 function applyProduceRetry(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const producerId = asString(event.payload.producerId, 'producerId')
@@ -757,6 +793,7 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     'produce-response': withPrune(applyProduceResponse),
     'produce-retry': withPrune((state, event) => applyProduceRetry(topology, state, event)),
     'produce-error': withPrune(applyProduceErrorArm),
+    'ack-lost': withPrune(applyAckLossArm),
     'fetch-request': withPrune((state, event) => applyFetchRequest(topology, state, event)),
     deliver: withPrune(placeholderReducer),
     'process-done': withPrune(applyProcessDone),

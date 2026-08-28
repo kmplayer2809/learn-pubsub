@@ -383,6 +383,33 @@ describe('retry và thứ tự', () => {
     expect(retried.state.partitions[key0]?.log.map((e) => e.value)).toEqual(['first', 'second'])
   })
 
+  it('maxInFlight = 1 VÀ idempotent: thứ tự giữ được bằng accumulator, không cần checkSequence can thiệp', () => {
+    // Ô còn thiếu trong ma trận maxInFlight × idempotent: khác test "maxInFlight
+    // > 1 CÓ idempotent" (nơi thứ tự được giữ nhờ `checkSequence` từ chối và ép
+    // retry), ở đây `maxInFlight <= 1` giữ thứ tự một cách CẤU TRÚC — batch không
+    // bao giờ bị dọn khỏi accumulator khi đang chờ retry, nên không có hai batch
+    // nào cùng partition từng tồn tại độc lập để `checkSequence` phải can thiệp.
+    let state = testState()
+    const p = producer({ idempotent: true, maxInFlight: 1, retries: 5, acks: 1, batchSize: 100_000, lingerMs: 0 })
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'first', at: 0 }).state
+    state = withPendingErrors(state, 'p1', 1)
+
+    const firstAttempt = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 0 })
+    expect(firstAttempt.state.partitions[key0]?.log).toHaveLength(0)
+    state = firstAttempt.state
+
+    state = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'second', at: 50 }).state
+    expect(state.producers['p1']?.batches[key0]?.records).toHaveLength(2) // nối vào cùng batch, đúng như nhánh không-idempotent
+
+    const retried = flushBatch(state, { producer: p, topic: orders, partition: 0, at: 200, attempt: 1 })
+    expect(retried.state.partitions[key0]?.log.map((e) => e.value)).toEqual(['first', 'second'])
+    // Cả hai record vào log ngay lần retry NÀY — không có `produce-retry` thứ hai
+    // nào bị `checkSequence` ép sinh ra, khác hẳn cascade của test "maxInFlight >
+    // 1 CÓ idempotent".
+    expect(retried.newEvents.filter((e) => e.type === 'produce-retry')).toHaveLength(0)
+    expect(retried.newEvents.find((e) => e.type === 'produce-response')).toBeDefined()
+  })
+
   it('maxInFlight > 1 không idempotent: retry đẩy record ra sau record gửi sau nó', () => {
     // Khẳng định log ra thứ tự KHÁC thứ tự produce — đây là bug thật, không phải
     // lỗi cài đặt. Test chốt nó để lesson 10 dạy được.
@@ -487,6 +514,57 @@ describe('produce-error fault qua toàn bộ simulation (wiring engine/index.ts)
     // chứng minh được gì. Assertion `retries === 1` chính là cái phân biệt hai
     // trường hợp đó.
     expect(snap.partitions[partitionKey('orders', 0)]?.log).toHaveLength(1)
+    expect(snap.metrics.retries).toBe(1)
+  })
+})
+
+describe('ack-lost fault qua toàn bộ simulation (wiring engine/index.ts) — bài 09 dạy từ đây', () => {
+  function ackLostTopology(producerOverrides?: Partial<KafkaProducerSpec>): KafkaTopology {
+    return {
+      brokers: [{ id: 'b1', label: 'b1', position: { x: 0, y: 0 } }],
+      topics: [{ name: 'orders', partitions: 1, replicationFactor: 1 }],
+      producers: [{ id: 'p1', label: 'Producer', position: { x: 0, y: 0 }, acks: 1, batchSize: 100_000, lingerMs: 0, retries: 5, ...producerOverrides }],
+      consumers: [],
+      controllerBrokerId: 'b1',
+    }
+  }
+
+  it('producer idempotent: ack-lost khiến producer resend, broker phát hiện duplicate và bỏ qua', () => {
+    const sim = createKafkaSimulation({
+      topology: ackLostTopology({ idempotent: true }),
+      script: [{ at: 0, kind: 'produce', producerId: 'p1', topic: 'orders', key: null, value: 'a' }],
+      failures: [{ at: 0, kind: 'ack-lost', producerId: 'p1', times: 1 }],
+      seed: 1,
+    })
+
+    sim.advanceTo(1000)
+    const snap = sim.snapshot()
+
+    // Record ĐÃ vào log ngay từ lần append đầu — resend do ack-lost gây ra phải
+    // bị `checkSequence` chặn ở nhánh `'duplicate'`, không tạo bản ghi thứ hai.
+    expect(snap.partitions[partitionKey('orders', 0)]?.log).toHaveLength(1)
+    expect(snap.metrics.recordsProduced).toBe(1)
+    expect(snap.metrics.duplicatesPrevented).toBe(1)
+    expect(snap.metrics.retries).toBe(1)
+  })
+
+  it('producer KHÔNG idempotent: ack-lost + resend cùng fault đó tạo duplicate thật — đây là cặp đối chứng của test trên', () => {
+    const sim = createKafkaSimulation({
+      topology: ackLostTopology({ idempotent: false }),
+      script: [{ at: 0, kind: 'produce', producerId: 'p1', topic: 'orders', key: null, value: 'a' }],
+      failures: [{ at: 0, kind: 'ack-lost', producerId: 'p1', times: 1 }],
+      seed: 1,
+    })
+
+    sim.advanceTo(1000)
+    const snap = sim.snapshot()
+
+    // KHÔNG có producerId/sequence nào để broker so khớp — resend append lại vô
+    // điều kiện, một duplicate THẬT. Đây chính xác là điều bài 09 phải dạy: cùng
+    // một fault, cùng script, chỉ khác `idempotent`, hai kết quả khác hẳn nhau.
+    expect(snap.partitions[partitionKey('orders', 0)]?.log).toHaveLength(2)
+    expect(snap.metrics.recordsProduced).toBe(2)
+    expect(snap.metrics.duplicatesPrevented).toBe(0)
     expect(snap.metrics.retries).toBe(1)
   })
 })
