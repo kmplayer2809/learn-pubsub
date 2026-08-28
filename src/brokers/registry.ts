@@ -1,9 +1,10 @@
+import { kafka } from './kafka'
 import { rabbitmq } from './rabbitmq'
 import { redis } from './redis'
 import type { AnyBrokerModule } from './types'
 import { DEFAULT_BROKER_ID } from './catalog'
 
-export const BROKERS: AnyBrokerModule[] = [rabbitmq, redis]
+export const BROKERS: AnyBrokerModule[] = [rabbitmq, redis, kafka]
 
 export { DEFAULT_BROKER_ID }
 

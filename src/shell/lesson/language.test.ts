@@ -60,8 +60,9 @@ describe.each(BROKERS.map((b) => [b.id, b] as const))('%s: reader-facing copy is
 
   it('labels the lesson groups in Vietnamese', () => {
     // A few group labels are terms, not prose ('Dead-letter & retry', 'Cache',
-    // 'Messaging'), so they are exempt from the diacritic rule; the rest must carry one.
-    const TERM_LABELS = new Set(['Dead-letter & retry', 'Cache', 'Messaging'])
+    // 'Messaging', 'Producer', 'Consumer & Group'), so they are exempt from the
+    // diacritic rule; the rest must carry one.
+    const TERM_LABELS = new Set(['Dead-letter & retry', 'Cache', 'Messaging', 'Producer', 'Consumer & Group'])
     for (const group of broker.lessonGroups) {
       if (TERM_LABELS.has(group.label)) continue
       expect(group.label, `${broker.id} group ${group.id}`).toMatch(VIETNAMESE)

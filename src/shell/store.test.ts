@@ -75,7 +75,7 @@ describe('broker selection', () => {
   })
 
   it('ignores an unknown broker id rather than stranding the app on a missing module', () => {
-    useAppStore.getState().setBroker('kafka')
+    useAppStore.getState().setBroker('not-a-real-broker')
     expect(useAppStore.getState().brokerId).toBe('rabbitmq')
   })
 })
