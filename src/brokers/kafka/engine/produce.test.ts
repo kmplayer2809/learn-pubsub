@@ -567,4 +567,30 @@ describe('ack-lost fault qua toàn bộ simulation (wiring engine/index.ts) — 
     expect(snap.metrics.duplicatesPrevented).toBe(0)
     expect(snap.metrics.retries).toBe(1)
   })
+
+  it('retries = 0: ack-lost KHÔNG resend — producer báo lỗi, nhưng record đã thật sự nằm trong log', () => {
+    // Ngân sách retry thuộc về PRODUCER (nó không biết append đã thành công),
+    // không phải broker — `retries: 0` phải tắt resend cho `ack-lost` giống hệt
+    // mọi fault khác, đúng quy tắc test "retries = 0 thì lỗi là lỗi luôn" đã
+    // khẳng định cho `produce-error`. Nếu `ack-lost` là một ngoại lệ âm thầm,
+    // learner đặt `retries: 0` sẽ thấy resend xảy ra mà không có gì giải thích.
+    const sim = createKafkaSimulation({
+      topology: ackLostTopology({ idempotent: true, retries: 0 }),
+      script: [{ at: 0, kind: 'produce', producerId: 'p1', topic: 'orders', key: null, value: 'a' }],
+      failures: [{ at: 0, kind: 'ack-lost', producerId: 'p1', times: 1 }],
+      seed: 1,
+    })
+
+    sim.advanceTo(1000)
+    const snap = sim.snapshot()
+
+    // Record VẪN nằm trong log — append đã xảy ra thật, chỉ có phản hồi bị buộc
+    // mất. Producer coi lần gửi này là thất bại (không còn ngân sách retry để tự
+    // xác nhận lại) dù dữ liệu đã tới nơi — phân kỳ log-vs-niềm tin-của-producer
+    // đúng như comment ở `flushBatch` mô tả, không phải một bug ở test này.
+    expect(snap.partitions[partitionKey('orders', 0)]?.log).toHaveLength(1)
+    expect(snap.metrics.recordsProduced).toBe(1)
+    expect(snap.metrics.duplicatesPrevented).toBe(0)
+    expect(snap.metrics.retries).toBe(0) // không có resend nào thực sự xảy ra
+  })
 })

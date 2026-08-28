@@ -395,12 +395,19 @@ export function flushBatch(
     s: KafkaState,
     remaining: ProducerRuntime['batches'][string]['records'],
     errorCode: string,
+    // `ack-lost` (bên dưới) truyền `true`: batch KHÔNG còn gì để accumulator "giữ
+    // hộ" — append đã thật sự xảy ra và batch đã bị `clearBatch` dọn ở nhánh
+    // thành công RỒI, trước khi hàm này từng được gọi. `maxInFlight <= 1` không
+    // có ý nghĩa gì ở tình huống đó (nó chỉ nói "đừng dọn khỏi accumulator", vốn
+    // chỉ áp dụng cho một request CHƯA từng rời client) — snapshot luôn phải đi
+    // kèm, bất kể `maxInFlight`.
+    forceSnapshotRecords = false,
   ): { state: KafkaState; newEvents: SimEvent<KafkaEventType>[] } => {
     if (attempt < retries) {
       const [seq, afterSeq] = nextSeq(s)
       let nextState = afterSeq
       let payloadRecords: ProducerRuntime['batches'][string]['records'] | undefined
-      if (maxInFlight <= 1) {
+      if (!forceSnapshotRecords && maxInFlight <= 1) {
         payloadRecords = undefined
       } else {
         nextState = clearBatch(nextState)
@@ -575,29 +582,40 @@ export function flushBatch(
 
   // Fault `ack-lost` (Task 11 fix round) — append ĐÃ thành công (record đã nằm
   // trong log, `next` phản ánh đúng điều đó), nhưng response quay về producer bị
-  // buộc "mất". Producer coi như timeout, resend CHÍNH batch vừa gửi — dùng lại
-  // `batch.records` đã có sẵn (producerId/sequence gốc của nó, nếu có) thay vì
-  // dựng lại. Khi retry đó tới `flushBatch` lần nữa, `checkSequence` sẽ thấy đúng
-  // sequence đã được CHẤP NHẬN rồi ⇒ `'duplicate'`, không ghi lần hai — đây là
-  // đường DUY NHẤT `duplicatesPrevented` có thể tăng qua một lượt chạy kernel đầy
-  // đủ, không cần test tự tiêm state. Producer KHÔNG idempotent thì record trong
-  // `batch.records` không có `producerId`/`sequence`, nên lần retry này append lại
-  // vô điều kiện — một duplicate THẬT, đúng cặp đối chứng bài 09 cần.
+  // buộc "mất". QUAN TRỌNG, và đây là lý do khối này tồn tại: producer KHÔNG BIẾT
+  // append đã thành công. Với nó, một response không bao giờ tới là KHÔNG THỂ
+  // PHÂN BIỆT với một request thất bại thật — đó chính xác là lý do idempotence
+  // phải tồn tại (nếu producer biết chắc request đã thành công, nó sẽ không bao
+  // giờ gửi lại, và `checkSequence` sẽ chẳng có gì để dedupe). Vì vậy producer xử
+  // sự y hệt MỌI thất bại khác: tôn trọng `producer.retries`. Ngân sách retry
+  // KHÔNG thuộc về broker (nó biết record đã vào log) mà thuộc về PRODUCER (nó
+  // không biết) — nên đi qua đúng `retryOrTerminal` như `produce-error`/
+  // out-of-order, không phải một nhánh unconditional riêng.
+  //
+  // Nhánh còn retry: resend CHÍNH batch vừa append — dùng lại `batch.records` có
+  // sẵn (producerId/sequence gốc, nếu có) thay vì dựng lại; `forceSnapshotRecords:
+  // true` vì batch đã bị `clearBatch` dọn khỏi accumulator NGAY (append thật sự
+  // đã rời client) — không có khái niệm "giữ hộ trong accumulator" như lỗi
+  // TRƯỚC-append, nên `maxInFlight` không liên quan ở đây. Khi retry đó tới
+  // `flushBatch` lần nữa, `checkSequence` sẽ thấy đúng sequence đã được CHẤP NHẬN
+  // rồi ⇒ `'duplicate'`, không ghi lần hai — đây là đường DUY NHẤT
+  // `duplicatesPrevented` có thể tăng qua một lượt chạy kernel đầy đủ, không cần
+  // test tự tiêm state. Producer KHÔNG idempotent thì record trong `batch.records`
+  // không có `producerId`/`sequence`, nên lần retry này append lại vô điều kiện —
+  // một duplicate THẬT, đúng cặp đối chứng bài 09 cần.
+  //
+  // Nhánh hết ngân sách (`retries: 0` rơi thẳng vào đây ngay từ lần đầu): producer
+  // báo lỗi cho application — DÙ record đã thật sự nằm trong log. Đây chính là
+  // hiện tượng nổi tiếng của Kafka thật: "producer báo thất bại cho một ghi thực
+  // ra đã thành công". Không phải bug — hệ quả trực tiếp của việc producer không
+  // biết append đã xảy ra. Một plan sau (durability) có thể dựng hẳn một lesson
+  // quanh phân kỳ log-vs-niềm tin-của-producer này; task này chỉ cần trung thực
+  // về nó, không giấu bằng cách âm thầm coi ngân sách retry là vô hạn.
   const pendingAckLosses = runtime.pendingAckLosses ?? 0
   if (pendingAckLosses > 0) {
     const freshRuntime = getProducerRuntime(next, producer.id) // KHÔNG spread `runtime` gốc — nó còn giữ batch CHƯA bị `clearBatch` dọn
     const lost = putRuntime(next, producer.id, { ...freshRuntime, pendingAckLosses: pendingAckLosses - 1 })
-    const [seq, afterSeq] = nextSeq(lost)
-    const retryEvent: SimEvent<KafkaEventType> = {
-      at: at + PRODUCE_RETRY_BACKOFF_MS,
-      seq,
-      type: 'produce-retry',
-      payload: { producerId: producer.id, topic: topic.name, partition, attempt: attempt + 1, records: batch.records },
-    }
-    return {
-      state: { ...afterSeq, metrics: { ...afterSeq.metrics, retries: afterSeq.metrics.retries + 1 } },
-      newEvents: [retryEvent],
-    }
+    return retryOrTerminal(lost, batch.records, 'ACK_LOST_RETRIES_EXHAUSTED', true)
   }
 
   // ISR đã được gate ở trên cho `acks=all`, và `acks=1` không cần ISR — tới
