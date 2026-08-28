@@ -126,6 +126,10 @@ describe('LogPanel', () => {
     const lagRow = screen.getByTestId('group-lag-row')
     expect(lagRow.textContent).toContain('orders-0')
     expect(lagRow.textContent).toContain('7')
+    // Qualified label, on purpose: this is committed-offset lag, a different metric from
+    // the fetch-position lag the canvas ConsumerNode and NodeConfig.tsx render under the
+    // bare word "lag" — pinned so the two can't quietly collapse back to the same label.
+    expect(lagRow.textContent).toContain('lag đã commit')
   })
 
   it('says so rather than a fabricated zero when a group has not committed any offset', () => {

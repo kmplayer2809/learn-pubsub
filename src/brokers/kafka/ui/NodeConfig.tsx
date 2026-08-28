@@ -1,16 +1,12 @@
-import {
-  partitionKey,
-  type ConsumerRuntime,
-  type KafkaConsumerSpec,
-  type KafkaScriptedCommand,
-  type KafkaState,
-  type KafkaTopology,
-} from '../engine'
-// Không nằm trong barrel `../engine` (như `toFlow.ts`'s own comment nói rõ: index.ts chỉ
-// import `applyPause`/`applyResume`/`applySeek`/`fetchRecords` từ `./consume`, không
-// re-export `resolvePosition`) — import thẳng từ module con, đúng như `toFlow.ts` và
-// engine's own test files làm.
-import { resolvePosition } from '../engine/consume'
+import type { KafkaScriptedCommand, KafkaState, KafkaTopology } from '../engine'
+// `consumerLag` lives in `toFlow.ts` (it feeds the canvas' `ConsumerNode` lag badge) and is
+// imported here instead of kept as a second copy: its correctness hinges entirely on
+// `resolvePosition`'s contract (see that function's own comment for the Task 7 trap — a
+// `noUncheckedIndexedAccess` guard in `consume.ts` that looks like a fallback rule but
+// isn't one), and two independent copies of that logic is exactly the divergence hazard
+// that already cost this plan a fix round once. One cross-file import inside Kafka's own
+// `ui/` directory is cheaper than a second copy nobody notices drifting.
+import { consumerLag } from './toFlow'
 // The base `Lesson<KafkaTopology, KafkaScriptedCommand>`, not a narrower Kafka lesson
 // type — there is none yet; lessons land in Task 9. Same reasoning as RabbitMQ's and
 // Redis' `NodeConfig.tsx`: the `BrokerModule` contract's `NodeConfig` slot
@@ -19,45 +15,6 @@ import { resolvePosition } from '../engine/consume'
 import type { Lesson } from '../../../shell/lesson/types'
 
 const GRID = 'grid grid-cols-1 gap-x-2 gap-y-1 text-[11px] text-slate-400 sm:grid-cols-2'
-
-/**
- * Lag của một consumer đơn lẻ, tính hệt `toFlow.ts`'s `consumerLag` (không import thẳng
- * hàm đó — nó không export, và file này không nên phụ thuộc ngược vào `toFlow.ts` chỉ để
- * dùng chung một hàm mười mấy dòng). Nhắc lại nguyên xi cái bẫy đã ăn một vòng sửa ở Task 7
- * (xem commit "fix(kafka): consumer lag uses resolvePosition, not the noUncheckedIndexedAccess
- * guard"): vị trí "chưa từng resolve" của một partition PHẢI đi qua `resolvePosition`, không
- * phải đọc thẳng `runtime.position[key]` với một fallback tự bịa — dòng trông giống hệt
- * trong `consume.ts`'s `fetchRecords` chỉ là rào chắn kiểu cho `noUncheckedIndexedAccess`
- * sau khi vòng lặp phía trên đã resolve position cho MỌI key không bị pause, không phải là
- * quy tắc resolve thật. Copy cái rào chắn đó vào đây làm một consumer bị pause TRƯỚC lần
- * poll đầu tiên đọc lag bằng cỡ toàn bộ log thay vì 0.
- */
-function consumerLag(
-  topology: KafkaTopology,
-  state: KafkaState,
-  consumer: KafkaConsumerSpec,
-  runtime: ConsumerRuntime,
-): number {
-  const autoOffsetReset = consumer.autoOffsetReset ?? 'latest'
-  let lag = 0
-  for (const topicName of consumer.subscriptions) {
-    const topic = topology.topics.find((t) => t.name === topicName)
-    if (!topic) continue
-    for (let index = 0; index < topic.partitions; index++) {
-      const key = partitionKey(topicName, index)
-      const partition = state.partitions[key]
-      if (!partition) continue
-      const position = resolvePosition({
-        position: runtime.position[key],
-        logStartOffset: partition.logStartOffset,
-        highWatermark: partition.highWatermark,
-        autoOffsetReset,
-      })
-      lag += partition.highWatermark - position
-    }
-  }
-  return lag
-}
 
 export function NodeConfig({
   lesson,

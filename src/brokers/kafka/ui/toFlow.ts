@@ -149,8 +149,13 @@ export function toFlowNodes(topology: KafkaTopology, state: KafkaState, highligh
  * resolve position cho MỌI key không bị pause — không phải là quy tắc resolve thật. Copy
  * cái rào chắn đó vào đây (thay vì gọi `resolvePosition`) làm consumer bị pause TRƯỚC lần
  * poll đầu tiên (position chưa từng được resolve) đọc lag bằng cỡ toàn bộ log thay vì 0.
+ *
+ * Exported: `NodeConfig.tsx`'s consumer branch renders this same fetch-position lag next
+ * to the canvas badge this function feeds, and imports it from here rather than keeping a
+ * second copy — a duplicate whose correctness hinges on `resolvePosition`'s contract is
+ * exactly the divergence hazard Task 7's fix round already cost this plan once.
  */
-function consumerLag(
+export function consumerLag(
   topology: KafkaTopology,
   state: KafkaState,
   consumer: KafkaConsumerSpec,

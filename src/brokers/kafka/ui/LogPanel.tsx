@@ -167,7 +167,16 @@ function GroupTab({ state }: { state: KafkaState }) {
               <ul className="space-y-0.5 text-[10px] text-slate-400">
                 {lagRows.map((row) => (
                   <li key={row.key} data-testid="group-lag-row" data-partition={row.key}>
-                    <span className="font-mono">{row.key}</span>: lag{' '}
+                    {/* Qualified "lag đã commit", not bare "lag": this is
+                        highWatermark - committedOffset, a DIFFERENT number from the
+                        fetch-position lag ("lag" bare, unqualified — Kafka's own usage)
+                        shown on the canvas' ConsumerNode (toFlow.ts's consumerLag) and
+                        in NodeConfig.tsx's consumer branch. The two disagree whenever a
+                        consumer has fetched past its last commit, and both appearing
+                        unqualified on the same screen for the same consumer is exactly
+                        the misreading lesson 05 exists to correct — so this label stays
+                        qualified even though it reads slightly redundant on its own. */}
+                    <span className="font-mono">{row.key}</span>: lag đã commit{' '}
                     <span className="text-amber-300">{row.lag}</span>
                   </li>
                 ))}
