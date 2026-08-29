@@ -30,10 +30,18 @@ describe('lesson 06 — acks', () => {
     expect(journalForP1.some((e) => e.type === 'produce-response')).toBe(false)
   })
 
-  it('acks=all không mất record nào trong cùng kịch bản', () => {
+  it('acks=1 và acks=all đều không mất record nào khi leader còn sống — giống hệt nhau ở replicationFactor 1', () => {
+    // Không khẳng định một khác biệt acks=1 so với acks=all: ở topology
+    // replicationFactor 1 của lesson này, ISR luôn chỉ có đúng leader
+    // (`checkIsrSufficient`, `produce.ts`), nên hai mức không thể tách nhau ra
+    // — assert cả hai producer để phép so sánh này hiện rõ trong chính test,
+    // thay vì chỉ kiểm tra một mình acks=all rồi ngầm coi đó là bằng chứng
+    // riêng cho acks=all.
     const snap = run(acks)
-    const log = snap.partitions[partitionKey('orders', 2)]?.log.map((r) => r.value)
-    expect(log).toEqual(['đơn-3a', 'đơn-3b'])
+    const p2Log = snap.partitions[partitionKey('orders', 1)]?.log.map((r) => r.value) // acks=1
+    const p3Log = snap.partitions[partitionKey('orders', 2)]?.log.map((r) => r.value) // acks=all
+    expect(p2Log).toEqual(['đơn-2a', 'đơn-2b'])
+    expect(p3Log).toEqual(['đơn-3a', 'đơn-3b'])
   })
 })
 

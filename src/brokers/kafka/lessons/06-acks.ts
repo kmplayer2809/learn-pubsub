@@ -11,6 +11,17 @@ import type { KafkaFault, KafkaLesson } from './types'
 // không), và khi đó vế "acks=all không mất record nào" sẽ không còn đúng nữa.
 // Tách partition là cách duy nhất giữ phép so sánh trung thực với đúng cái
 // engine này thật sự làm được.
+//
+// `replicationFactor: 1` trên cả ba partition (không phải một lựa chọn tuỳ ý)
+// còn kéo theo một sự thật khác cần nói rõ trong narrative: ISR của một
+// partition ở đây LUÔN chỉ có đúng leader (`checkIsrSufficient`, `produce.ts`
+// — `isr.length` luôn là 1, `minInsyncReplicas` mặc định cũng là 1), và
+// `recomputeHighWatermark` bắt kịp mọi replica ngay trong cùng `flushBatch`
+// (chưa có follower fetch thật ở plan này). Kết quả: `acks=1` và `acks=all`
+// hành xử GIỐNG HỆT nhau trong toàn bộ kịch bản này — cả về thời điểm phản hồi
+// lẫn record nào sống/chết. Khác biệt thật giữa hai mức (chờ đúng leader hay
+// chờ cả ISR nhiều replica) chỉ xuất hiện khi có nhiều hơn một replica, một
+// chuyện thuộc nhóm bài về replication, chưa phải bài này.
 const PRODUCER_ACKS_0 = Object.freeze({ id: 'p1', label: 'Producer acks=0', position: { x: 40, y: 40 } })
 const PRODUCER_ACKS_1 = Object.freeze({ id: 'p2', label: 'Producer acks=1', position: { x: 40, y: 220 } })
 const PRODUCER_ACKS_ALL = Object.freeze({ id: 'p3', label: "Producer acks='all'", position: { x: 40, y: 400 } })
@@ -22,7 +33,7 @@ export const acks: KafkaLesson = {
   group: 'producer',
   title: 'acks',
   summary:
-    '`acks` định nghĩa producer coi một record là "xong" tại thời điểm nào: gửi rồi quên, chờ leader, hay chờ cả ISR — mỗi lựa chọn đổi một mức độ bền lấy một mức độ trễ khác nhau.',
+    '`acks` định nghĩa producer coi một record là "xong" tại thời điểm nào: `acks=0` gửi rồi quên, không chờ gì cả; `acks=1` và `acks=all` đều chờ một xác nhận trước khi coi là xong. Khác biệt thật giữa `acks=1` và `acks=all` — chờ đúng leader hay chờ cả ISR — chỉ lộ ra khi có nhiều hơn một replica; ở topology `replicationFactor: 1` của bài này, ISR luôn chỉ gồm đúng leader, nên hai mức đó hành xử giống hệt nhau.',
   seed: 6,
   durationMs: 24_000,
   topology: {
@@ -54,7 +65,7 @@ export const acks: KafkaLesson = {
       at: 2000,
       title: 'acks: producer coi một record là "xong" khi nào',
       body:
-        '`acks=0` là gửi rồi quên — producer không chờ bất kỳ phản hồi nào, nhanh nhất và cũng dễ mất im lặng nhất. `acks=1` chờ đúng leader ghi xong. `acks=all` chờ cả ISR xác nhận, chậm nhất nhưng bền nhất. Ba producer `p1`, `p2`, `p3` dưới đây dùng đúng ba mức này, mỗi producer ghi vào một partition riêng.',
+        '`acks=0` là gửi rồi quên — producer không chờ bất kỳ phản hồi nào, nhanh nhất và cũng dễ mất im lặng nhất. `acks=1` chờ đúng leader ghi xong; `acks=all` chờ cả ISR xác nhận. Trong Kafka thật, hai mức này khác nhau khi ISR có nhiều replica — nhưng topology của bài này chỉ có `replicationFactor: 1`, nên ISR luôn chỉ gồm đúng leader, và suốt kịch bản dưới đây `acks=1` với `acks=all` hành xử giống hệt nhau. Ba producer `p1`, `p2`, `p3` dưới đây dùng đúng ba mức này, mỗi producer ghi vào một partition riêng.',
       highlight: ['p1', 'p2', 'p3'],
     },
     {
@@ -75,7 +86,7 @@ export const acks: KafkaLesson = {
       at: 9000,
       title: '`acks=1` và `acks=all`: leader còn sống thì không mất gì',
       body:
-        '`p2` (`acks=1`) và `p3` (`acks=all`) ghi vào `orders-1`/`orders-2` — hai partition có leader vẫn còn sống suốt kịch bản này, nên cả hai record trước và sau khi `b1` xuống đều nằm trọn trong log, không thiếu record nào. Đây đúng là điều `acks=1`/`acks=all` hứa hẹn: miễn leader (và với `acks=all`, cả ISR) còn phản hồi được, producer luôn biết chắc record đã vào log hay chưa — khác hẳn `acks=0` chỉ biết mỗi việc "đã gửi".',
+        '`p2` (`acks=1`) và `p3` (`acks=all`) ghi vào `orders-1`/`orders-2` — hai partition có leader vẫn còn sống suốt kịch bản này, nên cả hai record trước và sau khi `b1` xuống đều nằm trọn trong log, không thiếu record nào. Miễn leader còn phản hồi được, cả `acks=1` lẫn `acks=all` đều cho producer biết chắc record đã vào log hay chưa — khác hẳn `acks=0` chỉ biết mỗi việc "đã gửi". Với `replicationFactor: 1`, ISR ở đây chỉ có đúng leader nên `acks=all` không đòi thêm gì so với `acks=1`; hai mức chỉ tách nhau ra khi ISR có nhiều hơn một replica.',
       highlight: ['p2', 'p3', 'orders-1', 'orders-2'],
     },
   ],
