@@ -155,10 +155,15 @@ export interface GroupState {
   coordinatorBrokerId: NodeId
 }
 
+export interface TopicPartition {
+  topic: string
+  partition: number
+}
+
 export interface GroupMember {
   memberId: NodeId
   subscriptions: string[]
-  assignment: { topic: string; partition: number }[]
+  assignment: TopicPartition[]
   lastHeartbeatAt: number
   lastPollAt: number
 }
