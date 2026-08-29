@@ -39,6 +39,23 @@ describe('pickPartition', () => {
     expect(second.partition).toBe(first.partition)
   })
 
+  // Spec §B5.1: key null đi theo sticky partitioner (KIP-480) — kể cả với
+  // partitioner MẶC ĐỊNH ('default'), không chỉ khi người dùng chọn tường minh
+  // 'sticky'. Kafka thật (từ 2.4) dùng đúng một cơ chế sticky cho cả hai tên.
+  // Trước fix, 'default' rơi thẳng xuống nhánh RNG-mới ở MỌI lần gọi vì chỉ
+  // nhánh `partitioner === 'sticky'` kiểm tra `stickyPartition !== undefined`.
+  it('default: key null bám nguyên một partition cho tới khi được đổi (KIP-480)', () => {
+    const first = pickPartition({ key: null, partitionCount: 4, partitioner: 'default', roundRobinCounter: 0, rng })
+    const second = pickPartition({
+      key: null, partitionCount: 4, partitioner: 'default', roundRobinCounter: 0,
+      stickyPartition: first.partition, rng: first.rng,
+    })
+    expect(second.partition).toBe(first.partition)
+    // rng không được tiến thêm ở lần gọi thứ hai — batch chưa đóng nên phải tái
+    // dùng partition đã chọn, không rút RNG mới.
+    expect(second.rng).toEqual(first.rng)
+  })
+
   it('key có giá trị thì partitioner nào cũng hash, không rải đều', () => {
     const a = pickPartition({ key: 'k', partitionCount: 5, partitioner: 'round-robin', roundRobinCounter: 0, rng })
     const b = pickPartition({ key: 'k', partitionCount: 5, partitioner: 'sticky', roundRobinCounter: 3, rng })

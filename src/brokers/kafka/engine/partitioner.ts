@@ -50,7 +50,14 @@ export function pickPartition(args: PickPartitionArgs): PickPartitionResult {
     }
   }
 
-  if (partitioner === 'sticky' && stickyPartition !== undefined) {
+  // 'default' và 'sticky' dùng chung nhánh này: Kafka thật, từ 2.4 (KIP-480),
+  // đã thay UniformStickyPartitioner cho hành vi round-robin cũ của
+  // DefaultPartitioner khi key null — tức "mặc định" NGÀY NAY vốn dĩ chính là
+  // sticky, không phải một chế độ thứ ba khác biệt. Tách hai tên này ra hai
+  // nhánh sẽ khiến 'default' rút một partition RNG mới ở MỌI record null-key
+  // thay vì bám nguyên một partition cho tới khi batch đóng — sai lệch spec
+  // §B5.1 mà không có lesson nào bắt được vì lesson 01 dùng `lingerMs: 0`.
+  if ((partitioner === 'default' || partitioner === 'sticky') && stickyPartition !== undefined) {
     return { partition: stickyPartition, nextRoundRobinCounter: roundRobinCounter, nextSticky: stickyPartition, rng }
   }
 
