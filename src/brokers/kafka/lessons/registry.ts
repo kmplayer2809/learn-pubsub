@@ -5,6 +5,11 @@ import { brokerCluster } from './02-broker-cluster'
 import { keyPartitioning } from './03-key-partitioning'
 import { produceConsume } from './04-produce-consume'
 import { offsets } from './05-offsets'
+import { acks } from './06-acks'
+import { batchingLinger } from './07-batching-linger'
+import { partitioner } from './08-partitioner'
+import { idempotentProducer } from './09-idempotent-producer'
+import { orderingRetries } from './10-ordering-retries'
 
 export const KAFKA_LESSON_GROUPS: LessonGroupSpec[] = [
   { id: 'basics', label: 'Cơ bản' },
@@ -15,4 +20,15 @@ export const KAFKA_LESSON_GROUPS: LessonGroupSpec[] = [
 ]
 
 /** Thứ tự sidebar cũng là thứ tự dạy: mỗi bài giả định các bài phía trên nó. */
-export const LESSONS: KafkaLesson[] = [topicPartition, brokerCluster, keyPartitioning, produceConsume, offsets]
+export const LESSONS: KafkaLesson[] = [
+  topicPartition,
+  brokerCluster,
+  keyPartitioning,
+  produceConsume,
+  offsets,
+  acks,
+  batchingLinger,
+  partitioner,
+  idempotentProducer,
+  orderingRetries,
+]
