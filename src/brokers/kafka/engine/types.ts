@@ -166,6 +166,15 @@ export interface GroupMember {
   assignment: TopicPartition[]
   lastHeartbeatAt: number
   lastPollAt: number
+  // Task 2 (coordinator): cấu hình timeout riêng của MEMBER này, chụp lại từ
+  // `KafkaConsumerSpec` tại lúc join — `checkTimeouts` cần chúng để xét eviction
+  // nhưng `coordinator.ts` cố tình không phụ thuộc `KafkaTopology` (giống
+  // `assignors.ts` chỉ import từ `../types`), nên giá trị phải sống ở đây thay vì
+  // được tra cứu lại từ topology mỗi lần. Optional vì `applyConsumerJoin` (naive,
+  // Task 1) chưa gán chúng — đọc qua `?? DEFAULT_*` ở `coordinator.ts`, không bao
+  // giờ giả định có mặt.
+  sessionTimeoutMs?: number
+  maxPollIntervalMs?: number
 }
 
 export interface ProducerRuntime {
@@ -338,3 +347,16 @@ export type KafkaEventType =
   | 'resume'
   | 'broker-down'
   | 'broker-up'
+  // Task 2 (coordinator, `group/coordinator.ts`): năm event của máy trạng thái
+  // rebalance. Chưa có `seedEvents`/reducer hiện có nào SINH ra chúng — nối
+  // `consumer-join`/`consumer-leave`/`fetch-request` để thật sự phát các event
+  // này (và khởi động vòng lặp `member-timeout` định kỳ) là việc của Task 4
+  // ("nối `group/` và fault consumer vào engine"). Reducer ở `engine/index.ts`
+  // cho cả năm nhánh này vẫn là logic THẬT (gọi thẳng hàm cùng tên ở
+  // `coordinator.ts`), không phải placeholder — chỉ riêng phần PHÁT SINH sự kiện
+  // từ hoạt động consumer thật là chưa nối.
+  | 'join-group'
+  | 'sync-group'
+  | 'heartbeat'
+  | 'rebalance-complete'
+  | 'member-timeout'

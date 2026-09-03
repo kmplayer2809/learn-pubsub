@@ -1,4 +1,6 @@
 import { applyPause, applyResume, applySeek, fetchRecords } from './consume'
+import { checkTimeouts, completeRebalance, heartbeat, joinGroup, syncGroup } from './group/coordinator'
+import type { AssignorName } from './group/assignors'
 import { createPartition } from './log'
 import { enqueueRecord, flushBatch, PRODUCE_RESPONSE_TRAVEL_MS } from './produce'
 import { partitionKey, sortedPartitionKeys } from './types'
@@ -97,6 +99,22 @@ function asOptionalHeaders(value: unknown, field: string): Record<string, string
   if (value === undefined) return undefined
   if (!isStringRecord(value)) throw new Error(`kafka engine: payload.${field} is not a Record<string, string>`)
   return value
+}
+
+function asStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || !value.every((v) => typeof v === 'string')) {
+    throw new Error(`kafka engine: payload.${field} is not a string[]`)
+  }
+  return value
+}
+
+const ASSIGNOR_NAMES: readonly AssignorName[] = ['range', 'round-robin', 'sticky', 'cooperative-sticky']
+
+function asAssignorName(value: unknown, field: string): AssignorName {
+  if (typeof value !== 'string' || !(ASSIGNOR_NAMES as readonly string[]).includes(value)) {
+    throw new Error(`kafka engine: payload.${field} is not a valid AssignorName`)
+  }
+  return value as AssignorName
 }
 
 /**
@@ -728,6 +746,60 @@ function applyResumeEvent(state: KafkaState, event: SimEvent<KafkaEventType>): R
   return { state: applyResume(state, { consumerId, topic, partition }), newEvents: [] }
 }
 
+// --- Reducers: group coordinator (Task 2) ------------------------------------
+//
+// Năm nhánh dưới đây gọi THẲNG hàm cùng tên ở `group/coordinator.ts` — logic
+// rebalance thật, không phải placeholder. Điều CHƯA có ở Task này là ai thật
+// sự SINH ra các event `join-group`/`sync-group`/`heartbeat`/`rebalance-complete`/
+// `member-timeout` từ hoạt động consumer thật (`consumer-join`/`consumer-leave`/
+// một vòng lặp `member-timeout` tự hẹn lại): đó là việc của Task 4. Cho tới lúc
+// đó, `applyConsumerJoin`/`applyConsumerLeave` ở trên vẫn dùng lối ghi nhận
+// member "naive" (Task 1) — KHÔNG đổi ở đây, đổi nó thuộc phạm vi Task 4.
+
+function applyJoinGroup(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const groupId = asString(event.payload.groupId, 'groupId')
+  const memberId = asString(event.payload.memberId, 'memberId')
+  const subscriptions = asStringArray(event.payload.subscriptions, 'subscriptions')
+  const assignor = asAssignorName(event.payload.assignor, 'assignor')
+  const sessionTimeoutMs = asOptionalNumber(event.payload.sessionTimeoutMs, 'sessionTimeoutMs')
+  const maxPollIntervalMs = asOptionalNumber(event.payload.maxPollIntervalMs, 'maxPollIntervalMs')
+  const rebalanceTimeoutMs = asOptionalNumber(event.payload.rebalanceTimeoutMs, 'rebalanceTimeoutMs')
+  return joinGroup(state, { groupId, memberId, subscriptions, assignor, at: event.at, sessionTimeoutMs, maxPollIntervalMs, rebalanceTimeoutMs })
+}
+
+function applySyncGroup(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const groupId = asString(event.payload.groupId, 'groupId')
+  const generationId = asNumber(event.payload.generationId, 'generationId')
+  return syncGroup(state, { groupId, generationId, at: event.at })
+}
+
+function applyHeartbeat(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const groupId = asString(event.payload.groupId, 'groupId')
+  const memberId = asString(event.payload.memberId, 'memberId')
+  const generationId = asNumber(event.payload.generationId, 'generationId')
+  // `heartbeat()` trả thêm `error?: 'ILLEGAL_GENERATION'` (`HeartbeatResult`) —
+  // một superset cấu trúc của `ReduceResult`, nên trả thẳng ra đây không mất gì
+  // caller (kernel) cần: `state`/`newEvents` vẫn đúng, `error` chỉ có ý nghĩa
+  // với ai gọi trực tiếp `heartbeat()` (test, hoặc một reducer khác đọc lại).
+  return heartbeat(state, { groupId, memberId, generationId, at: event.at })
+}
+
+function applyRebalanceComplete(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const groupId = asString(event.payload.groupId, 'groupId')
+  const generationId = asNumber(event.payload.generationId, 'generationId')
+  return completeRebalance(state, { groupId, generationId, at: event.at })
+}
+
+/**
+ * `member-timeout` là một tick định kỳ quét MỌI group (`checkTimeouts` tự lặp
+ * qua `sortedGroupIds`), không mang theo `groupId` riêng trong payload — khác
+ * bốn event kia. Task 4 nối vòng tự hẹn lại (giống `fetch-request` tự hẹn lại ở
+ * `applyFetchRequest`); ở đây chỉ chạy đúng một lần quét tại `event.at`.
+ */
+function applyMemberTimeout(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  return checkTimeouts(state, event.at)
+}
+
 // --- Reducers: broker faults --------------------------------------------------
 
 function applyBrokerDown(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
@@ -807,6 +879,11 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     resume: withPrune(applyResumeEvent),
     'broker-down': withPrune(applyBrokerDown),
     'broker-up': withPrune(applyBrokerUp),
+    'join-group': withPrune(applyJoinGroup),
+    'sync-group': withPrune(applySyncGroup),
+    heartbeat: withPrune(applyHeartbeat),
+    'rebalance-complete': withPrune(applyRebalanceComplete),
+    'member-timeout': withPrune(applyMemberTimeout),
   }
 }
 
