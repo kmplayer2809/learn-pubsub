@@ -10,6 +10,12 @@ import { batchingLinger } from './07-batching-linger'
 import { partitioner } from './08-partitioner'
 import { idempotentProducer } from './09-idempotent-producer'
 import { orderingRetries } from './10-ordering-retries'
+import { consumerGroup } from './11-consumer-group'
+import { rebalance } from './12-rebalance'
+import { assignors } from './13-assignors'
+import { commitStrategies } from './14-commit-strategies'
+import { consumerLag } from './15-consumer-lag'
+import { maxPollInterval } from './16-max-poll-interval'
 
 export const KAFKA_LESSON_GROUPS: LessonGroupSpec[] = [
   { id: 'basics', label: 'Cơ bản' },
@@ -31,4 +37,10 @@ export const LESSONS: KafkaLesson[] = [
   partitioner,
   idempotentProducer,
   orderingRetries,
+  consumerGroup,
+  rebalance,
+  assignors,
+  commitStrategies,
+  consumerLag,
+  maxPollInterval,
 ]
