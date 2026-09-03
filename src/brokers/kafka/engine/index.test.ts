@@ -72,6 +72,13 @@ describe('createKafkaSimulation', () => {
     // `maxPollRecords: 1` để một lần poll chỉ đủ ngân sách đọc đúng MỘT partition,
     // rồi khẳng định đó là partition đứng đầu theo thứ tự SORT (`orders-0`), không
     // phải partition đứng đầu theo thứ tự CHÈN (`zzz-topic-0`).
+    //
+    // `maxPollIntervalMs: 10` (Task 4): group thật phải qua `PreparingRebalance`
+    // trước khi có assignment (xem `joinGroup`, `group/coordinator.ts`) — không
+    // set gì thì rơi về default 300_000ms, xa hơn hẳn cửa sổ test này. Đặt nhỏ để
+    // rebalance chốt gần như ngay sau lúc join (t=50+10=60), rồi advance qua LƯỢT
+    // POLL THẬT ĐẦU TIÊN có assignment (t=50+100=150, vì lượt poll ngay lúc join
+    // vẫn còn `PreparingRebalance`, không đọc gì).
     const topology: KafkaTopology = {
       brokers: [{ id: 'b1', label: 'Broker 1', position: { x: 0, y: 0 } }],
       topics: [
@@ -88,6 +95,7 @@ describe('createKafkaSimulation', () => {
           subscriptions: ['zzz-topic', 'orders'],
           autoOffsetReset: 'earliest',
           maxPollRecords: 1,
+          maxPollIntervalMs: 10,
         },
       ],
       controllerBrokerId: 'b1',
@@ -100,28 +108,33 @@ describe('createKafkaSimulation', () => {
       { at: 50, kind: 'consumer-join', consumerId: 'c1' },
     ]
     const sim = createKafkaSimulation({ topology, script: orderedScript, seed: 1 })
-    sim.advanceTo(60)
+    sim.advanceTo(160)
     const runtime = sim.snapshot().consumers['c1']
     expect(runtime).toBeDefined()
-    // Đúng một partition được ĐỌC (position nhích lên 1) ở lần poll đầu tiên —
-    // và đó phải là `orders-0`, đứng đầu theo sort, không phải `zzz-topic-0`.
+    // Đúng một partition được ĐỌC (position nhích lên 1) ở lần poll đầu tiên có
+    // assignment — và đó phải là `orders-0`, đứng đầu theo sort, không phải
+    // `zzz-topic-0`.
     expect(runtime!.position['orders-0']).toBe(1)
     expect(runtime!.position['orders-1']).toBe(0)
     expect(runtime!.position['orders-2']).toBe(0)
     expect(runtime!.position['zzz-topic-0']).toBe(0)
   })
 
-  it('nextEventTime trả về mốc event kế tiếp, undefined khi hết', () => {
+  it('nextEventTime trả về mốc event kế tiếp — vòng quét member-timeout (Task 4) khiến lịch trình không bao giờ cạn hẳn', () => {
+    // Trước Task 4: không consumer-join thì không vòng lặp nào tự hẹn lại, lịch
+    // trình cạn hẳn sau khi flush xong. Task 4 thêm `member-timeout` — một vòng
+    // quét TOÀN CLUSTER seed đúng một lần lúc khởi tạo (`seedEvents`), tự hẹn lại
+    // VÔ ĐIỀU KIỆN, không gate theo có consumer/group nào tồn tại hay không (xem
+    // why-comment ở `applyMemberTimeout`) — nên giờ MỌI simulation Kafka còn ít
+    // nhất một event treo lơ lửng mãi mãi, kể cả kịch bản không có consumer nào.
     const sim = createKafkaSimulation({ topology: makeTopology(), script: [], seed: 1 })
-    expect(sim.nextEventTime()).toBeUndefined()
+    expect(sim.nextEventTime()).toBe(1000) // mốc quét member-timeout đầu tiên
 
-    // Chỉ produce, không consumer-join: không có vòng poll tự hẹn lại nào chạy
-    // mãi mãi (đó là hành vi CÓ CHỦ ĐÍCH của quyết định #2 — một consumer sẽ
-    // không bao giờ hết event), nên lịch trình phải cạn sau khi flush xong.
     const sim2 = createKafkaSimulation({ ...options, script: [script[0]!, script[1]!] })
     expect(sim2.nextEventTime()).toBe(0)
     sim2.advanceTo(100_000)
-    expect(sim2.nextEventTime()).toBeUndefined()
+    // Không còn undefined nữa — vòng quét vẫn tiếp tục tự hẹn lại mỗi 1000ms.
+    expect(sim2.nextEventTime()).toBe(101_000)
   })
 })
 
@@ -158,6 +171,12 @@ describe('consumer polling stays alive after catching up (decision #2)', () => {
     // lại bị buộc vào `process-done` (chỉ sinh ra khi có record), consumer này sẽ
     // "điếc" vĩnh viễn ngay sau khi bắt kịp ở t=0 — vì tại đó không có record nào
     // để đọc — và không bao giờ thấy record produce ở t=5000.
+    //
+    // `maxPollIntervalMs: 500` (Task 4): không set gì thì group thật rơi về
+    // default 300_000ms trước khi có assignment (`joinGroup`) — quá xa so với cửa
+    // sổ 6000ms của test này. 500ms đủ để rebalance chốt rất sớm, còn cách rất xa
+    // mốc produce ở t=5000, không đổi ý nghĩa gốc của test (poll tiếp diễn sau khi
+    // bắt kịp).
     const topology: KafkaTopology = {
       ...makeTopology(),
       consumers: [
@@ -168,6 +187,7 @@ describe('consumer polling stays alive after catching up (decision #2)', () => {
           groupId: 'g1',
           subscriptions: ['orders'],
           autoOffsetReset: 'earliest',
+          maxPollIntervalMs: 500,
         },
       ],
     }
@@ -196,12 +216,58 @@ describe('consumer polling stays alive after catching up (decision #2)', () => {
     })
     sim.advanceTo(1000)
     expect(sim.snapshot().consumers['c1']).toBeUndefined()
-    // So sánh mọi thứ TRỪ `now`: `advanceTo` luôn kéo `now` tới đúng mốc gọi dù
-    // không còn event nào xảy ra (xem `run.ts`), nên bản thân `now` đổi không nói
-    // lên gì — cái cần khẳng định là không CÒN EVENT nào chạy tiếp sau khi rời.
-    const { now: _now, ...before } = sim.snapshot()
-    sim.advanceTo(20_000) // nếu fetch-request còn tự hẹn lại, journal/seq/state sẽ đổi
-    const { now: _now2, ...after } = sim.snapshot()
+    // So sánh mọi thứ TRỪ `now`/`seq`: `advanceTo` luôn kéo `now` tới đúng mốc gọi
+    // dù không còn event nào xảy ra cho CONSUMER này (xem `run.ts`), nên bản thân
+    // `now` đổi không nói lên gì. `seq` cũng loại ra kể từ Task 4: vòng quét
+    // `member-timeout` (toàn cluster, không gắn với consumer nào) vẫn tự hẹn lại
+    // đều đặn mỗi 1000ms bất kể consumer này còn hay đã rời — nó tăng `seq` một
+    // cách VÔ HẠI, không liên quan gì tới việc `fetch-request`/`heartbeat` của
+    // riêng `c1` đã dừng hẳn hay chưa, đúng thứ test này thật sự muốn khẳng định.
+    const { now: _now, seq: _seq, ...before } = sim.snapshot()
+    sim.advanceTo(20_000) // nếu fetch-request/heartbeat của c1 còn tự hẹn lại, journal/groups/... sẽ đổi
+    const { now: _now2, seq: _seq2, ...after } = sim.snapshot()
     expect(JSON.stringify(after)).toBe(JSON.stringify(before))
+  })
+})
+
+describe('commit (Task 4, Ruling C — consolidate lên commitOffsets)', () => {
+  it('commit từ một consumer đã bị checkTimeouts đá khỏi group (nhưng runtime vẫn còn) bị bỏ qua hoàn toàn — UNKNOWN_MEMBER_ID', () => {
+    // Điểm mấu chốt Ruling C siết chặt: `commitOffsets` (group/offsets.ts) kiểm
+    // `memberId` THẬT SỰ nằm trong `group.members`, không chỉ kiểm
+    // `state.consumers[id]` có tồn tại (cái `applyCommit` bản cũ Task 1-3 chỉ
+    // kiểm mỗi vậy). Hai điều kiện này KHÁC NHAU: một consumer có thể bị
+    // `checkTimeouts` đá khỏi `group.members` (do vượt `maxPollIntervalMs`) mà
+    // KHÔNG hề rời `state.consumers` — client thật không tự biết ngay mình đã
+    // mất chỗ trong group. `applyCommit` (engine/index.ts) giờ gọi thẳng
+    // `commitOffsets`, thừa hưởng đúng độ chặt đó — một siết chặt CÓ CHỦ Ý
+    // (khớp `UNKNOWN_MEMBER_ID` Kafka thật), pin lại bằng test này để không ai
+    // vô tình nới lỏng lại.
+    const topology: KafkaTopology = {
+      ...makeTopology(),
+      consumers: [{ id: 'c1', label: 'Consumer', position: { x: 0, y: 0 }, groupId: 'g1', subscriptions: ['orders'], maxPollIntervalMs: 300 }],
+    }
+    const sim = createKafkaSimulation({
+      topology,
+      script: [
+        { at: 0, kind: 'produce', producerId: 'p1', topic: 'orders', key: null, value: 'v1', partition: 0 },
+        { at: 0, kind: 'consumer-join', consumerId: 'c1' },
+        // Sau t=1000 (mốc quét member-timeout đầu tiên), c1 đã bị đá khỏi group vì
+        // `consumer-stall` (armed ở t=500, kéo dài 2000ms) làm `GroupMember.lastPollAt`
+        // đứng yên quá `maxPollIntervalMs`. c1 KHÔNG hề gọi `consumer-leave`.
+        { at: 1200, kind: 'commit', consumerId: 'c1' },
+      ],
+      failures: [{ at: 500, kind: 'consumer-stall', consumerId: 'c1', durationMs: 2000 }],
+      seed: 1,
+    })
+    sim.advanceTo(1200)
+    const state = sim.snapshot()
+    // Sanity-check tiền đề: c1 vẫn còn trong `state.consumers` (chưa hề rời),
+    // nhưng group đã rỗng (bị đá) — đúng kịch bản Ruling C mô tả.
+    expect(state.consumers['c1']).toBeDefined()
+    expect(state.groups['g1']?.members).toEqual([])
+    // Commit ở t=1200 phải bị bỏ qua hoàn toàn: không ghi committedOffsets,
+    // không tăng metrics.commits.
+    expect(state.groups['g1']?.committedOffsets).toEqual({})
+    expect(state.metrics.commits).toBe(0)
   })
 })

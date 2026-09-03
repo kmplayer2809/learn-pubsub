@@ -6,9 +6,11 @@ import type { SimEvent } from '../../../shell/kernel/types'
 // ---------------------------------------------------------------------------
 // Consumer path — fetch (`fetchRecords`), vị trí đọc (`resolvePosition`), và
 // ba thao tác điều khiển đến từ script (`applyPause`/`applyResume`/`applySeek`).
-// Reducer thật (Task 6) gọi các hàm này từ bảng dispatch theo `KafkaEventType`,
-// chưa nối ở đây. Group coordinator, rebalance, commit thật (`__consumer_offsets`)
-// là `group/` — một plan sau (P4), không phải file này.
+// Reducer thật gọi các hàm này từ bảng dispatch theo `KafkaEventType`
+// (`engine/index.ts`). `fetchRecords` đọc `GroupMember.assignment` THẬT từ
+// `group/coordinator.ts` (Task 4, `assignedPartitionKeys` dưới đây) để biết
+// đọc partition nào — commit thật (`__consumer_offsets`) vẫn sống ở `group/`
+// (`offsets.ts`), không phải file này.
 // ---------------------------------------------------------------------------
 
 /** `max.poll.records` mặc định của consumer Kafka thật. */
@@ -74,6 +76,34 @@ function putRuntime(state: KafkaState, id: NodeId, runtime: ConsumerRuntime): Ka
   return { ...state, consumers: { ...state.consumers, [id]: runtime } }
 }
 
+/**
+ * Partition consumer NÀY thật sự được PHÉP đọc lần poll này — Task 4 (Ruling D)
+ * đổi hẳn nguồn sự thật từ `consumer.subscriptions` (chỉ ở mức TOPIC, không
+ * phân biệt member nào trong group đọc partition nào) sang
+ * `GroupMember.assignment` THẬT của group coordinator (`group/coordinator.ts`).
+ * Group/member không tồn tại (chưa từng `joinGroup`, hoặc test đơn vị gọi
+ * `fetchRecords` trực tiếp mà không dựng group) → coi như CHƯA được assign gì
+ * — trả rỗng, không fetch bất kỳ partition nào, đúng thực tế một client chưa
+ * là thành viên hợp lệ của group thì không được phép fetch. Assignment rỗng
+ * GIỮA một vòng rebalance (eager assignor xoá sạch lúc `PreparingRebalance`)
+ * cũng rơi vào đúng nhánh này một cách tự nhiên — "không đọc gì trong lúc
+ * rebalance" chính là ngữ nghĩa stop-the-world cần có, không phải một trường
+ * hợp đặc biệt phải xử lý riêng.
+ *
+ * Duyệt qua `sortedPartitionKeys(state)` rồi lọc theo assignment — KHÔNG duyệt
+ * thẳng thứ tự của `member.assignment` (nó sort theo `(topic, partition)` ở
+ * `assignors.ts`, khác tiêu chí sort chuỗi `sortedPartitionKeys` dùng, xem
+ * why-comment ở đó) — để giữ ĐÚNG MỘT thứ tự lặp partition xuyên suốt cả file
+ * này (§B6), không lệ thuộc thứ tự assignor trả về.
+ */
+function assignedPartitionKeys(state: KafkaState, consumer: KafkaConsumerSpec): string[] {
+  const group = state.groups[consumer.groupId]
+  const member = group?.members.find((m) => m.memberId === consumer.id)
+  if (!member) return []
+  const assigned = new Set(member.assignment.map((p) => partitionKey(p.topic, p.partition)))
+  return sortedPartitionKeys(state).filter((key) => assigned.has(key))
+}
+
 // --- API ---------------------------------------------------------------
 
 /**
@@ -100,16 +130,12 @@ export function fetchRecords(
   const runtime = getConsumerRuntime(state, consumer.id)
   const maxPollRecords = consumer.maxPollRecords ?? DEFAULT_MAX_POLL_RECORDS
   const autoOffsetReset = consumer.autoOffsetReset ?? DEFAULT_AUTO_OFFSET_RESET
-  const subscribed = new Set(consumer.subscriptions)
 
-  // Partition "assigned" cho lần poll này: đã subscribe, có mặt trong
-  // `state.partitions`, theo đúng thứ tự `sortedPartitionKeys` — dùng chung
-  // cho cả hai vòng dưới đây để không tính lại và không lệch thứ tự giữa
+  // Partition "assigned" cho lần poll này — `GroupMember.assignment` THẬT
+  // (Task 4, Ruling D), không còn `consumer.subscriptions` ở mức topic. Dùng
+  // chung cho cả hai vòng dưới đây để không tính lại và không lệch thứ tự giữa
   // chúng.
-  const assignedKeys = sortedPartitionKeys(state).filter((key) => {
-    const partition = state.partitions[key]
-    return partition !== undefined && subscribed.has(partition.topic)
-  })
+  const assignedKeys = assignedPartitionKeys(state, consumer)
 
   let workingRuntime = runtime
 

@@ -81,6 +81,17 @@ export interface KafkaConsumerSpec {
   rebalanceTimeoutMs?: number
   processingMs?: number // thời gian ảo xử lý mỗi record
   isolationLevel?: 'read_uncommitted' | 'read_committed'
+  /**
+   * Chỉ có hiệu lực khi consumer này là NGƯỜI TẠO group (`joinGroup`,
+   * `group/coordinator.ts`) — join vào một group đã tồn tại luôn dùng lại
+   * assignor group đã chọn, một consumer group thật không cho từng member tự
+   * chọn assignor khác nhau. Không khai kiểu qua `AssignorName` (import từ
+   * `./group/assignors`) để tránh vòng import types.ts → group/assignors.ts →
+   * types.ts — lặp lại đúng union literal `GroupState.assignor` đã dùng ở
+   * dưới. Bỏ trống thì mặc định `'range'` — đúng hành vi "naive" Task 1 trước
+   * khi có coordinator thật, giữ nguyên cho lesson/test không set gì khác.
+   */
+  assignor?: 'range' | 'round-robin' | 'sticky' | 'cooperative-sticky'
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +247,20 @@ export interface ConsumerRuntime {
   lastPollAt: number
   processingUntil?: number
   pendingCommit?: Record<string, number>
+  // Fault `consumer-stall` (Task 4, `faults.ts`) ghi mốc "hết treo" vào đây —
+  // `applyFetchRequest` (engine/index.ts) đọc field này: còn trong khoảng treo
+  // thì bỏ qua hẳn lượt fetch (không đọc gì, không đụng `GroupMember.lastPollAt`),
+  // mô phỏng callback xử lý bị treo trong khi thread heartbeat (độc lập) vẫn
+  // chạy đều — đúng bẫy lesson 16 dạy, xem why-comment ở `checkTimeouts`
+  // (`group/coordinator.ts`).
+  stalledUntil?: number
+  // Ngân sách "xử lý lỗi" còn lại của fault `processing-error` (Task 4,
+  // `faults.ts` arm nó) — `applyProcessDone` (engine/index.ts) tiêu dần: còn
+  // ngân sách thì không hoàn tất, tự hẹn lại một `process-done` khác sau đúng
+  // `processingMs`, giống record đang được xử lý LẠI. `0` và "chưa từng có fault
+  // nào" (`undefined`) coi như nhau — đọc qua `?? 0`, cùng khuôn
+  // `ProducerRuntime.pendingErrors`.
+  pendingProcessingErrors?: number
 }
 
 export interface KafkaMetrics {
@@ -360,3 +385,12 @@ export type KafkaEventType =
   | 'heartbeat'
   | 'rebalance-complete'
   | 'member-timeout'
+  // Task 4 (`faults.ts`): ba fault còn lại của `KafkaFault['kind']` chưa có
+  // event/reducer riêng — cùng quy ước `produce-error`/`ack-lost` ở trên, trùng
+  // tên với `KafkaFault['kind']`, kích hoạt tại đúng `at` của fault.
+  // `replica-lag` chỉ TRANG BỊ tiền đề (`PartitionState.replicaState[...].lastFetchAt`
+  // lùi lại) — chưa có reducer nào tự rút ISR, đó là việc của Task 6
+  // (`replication.ts`).
+  | 'consumer-stall'
+  | 'processing-error'
+  | 'replica-lag'

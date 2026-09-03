@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { appendRecord } from './log'
 import { applyPause, applyResume, applySeek, fetchRecords, resolvePosition } from './consume'
 import { testState } from './testState'
-import { partitionKey } from './types'
-import type { ConsumerRuntime, KafkaConsumerSpec, KafkaState } from './types'
+import { partitionKey, sortedPartitionKeys } from './types'
+import type { ConsumerRuntime, GroupMember, GroupState, KafkaConsumerSpec, KafkaState } from './types'
 
 const orders = 'orders'
 const key0 = partitionKey(orders, 0)
@@ -13,8 +13,37 @@ function consumerSpec(overrides?: Partial<KafkaConsumerSpec>): KafkaConsumerSpec
   return { id: 'c1', label: 'Consumer', position: { x: 0, y: 0 }, groupId: 'g1', subscriptions: [orders], ...overrides }
 }
 
+/**
+ * `fetchRecords` (Task 4, Ruling D) đọc `GroupMember.assignment` THẬT thay vì
+ * `consumer.subscriptions` — file này test `fetchRecords` tách biệt khỏi
+ * `group/coordinator.ts` một cách có chủ đích (không đi qua `joinGroup` thật),
+ * nên phải tự dựng một `GroupState`/`GroupMember` "Stable" với assignment =
+ * MỌI partition topic `orders` hiện có trong `state.partitions` — đúng cái mọi
+ * test trong file này ngầm giả định từ trước Task 4 (một consumer đọc trọn
+ * topic đã subscribe). `groupId: 'g1'` khớp default của `consumerSpec()` ở
+ * trên.
+ */
 function withConsumer(state: KafkaState, id: string, overrides?: Partial<ConsumerRuntime>): KafkaState {
-  return { ...state, consumers: { ...state.consumers, [id]: { position: {}, paused: [], lastPollAt: 0, ...overrides } } }
+  const assignment = sortedPartitionKeys(state)
+    .map((key) => state.partitions[key]!)
+    .filter((p) => p.topic === orders)
+    .map((p) => ({ topic: p.topic, partition: p.index }))
+  const member: GroupMember = { memberId: id, subscriptions: [orders], assignment, lastHeartbeatAt: 0, lastPollAt: 0 }
+  const group: GroupState = {
+    groupId: 'g1',
+    state: 'Stable',
+    generationId: 1,
+    leaderMemberId: id,
+    assignor: 'range',
+    members: [member],
+    committedOffsets: {},
+    coordinatorBrokerId: 'b1',
+  }
+  return {
+    ...state,
+    consumers: { ...state.consumers, [id]: { position: {}, paused: [], lastPollAt: 0, ...overrides } },
+    groups: { ...state.groups, g1: group },
+  }
 }
 
 /** Nối thêm `values.length` record vào log của một partition, offset tăng dần từ `leo` hiện có. */

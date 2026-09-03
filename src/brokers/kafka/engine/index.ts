@@ -1,13 +1,13 @@
 import { applyPause, applyResume, applySeek, fetchRecords } from './consume'
-import { checkTimeouts, completeRebalance, heartbeat, joinGroup, syncGroup } from './group/coordinator'
+import { applyConsumerStall, applyProcessingErrorArm, applyReplicaLag } from './faults'
+import { checkTimeouts, completeRebalance, heartbeat, joinGroup, leaveGroup, syncGroup } from './group/coordinator'
 import type { AssignorName } from './group/assignors'
+import { commitOffsets, scheduleAutoCommit } from './group/offsets'
 import { createPartition } from './log'
 import { enqueueRecord, flushBatch, PRODUCE_RESPONSE_TRAVEL_MS } from './produce'
 import { partitionKey, sortedPartitionKeys } from './types'
 import type {
   ConsumerRuntime,
-  GroupMember,
-  GroupState,
   KafkaConsumerSpec,
   KafkaEventType,
   KafkaFault,
@@ -40,6 +40,28 @@ export const RECORD_TRAVEL_MS = 120
  * it goes permanently deaf to anything produced after that point.
  */
 const POLL_INTERVAL_MS = 100
+
+/**
+ * Nhịp tự hẹn lại của `heartbeat` (Task 4) — độc lập HOÀN TOÀN với
+ * `POLL_INTERVAL_MS`/`fetch-request`: đây chính là điểm coordinator.ts's
+ * `checkTimeouts` cần ("heartbeat vẫn đều... trong khi vòng xử lý đã treo",
+ * xem why-comment ở đó) — một `consumer-stall` (faults.ts) làm vòng
+ * fetch-request "treo" (không cập nhật `GroupMember.lastPollAt`) nhưng KHÔNG hề
+ * chạm vào vòng này. 3000ms khớp `heartbeat.interval.ms` mặc định của client
+ * Kafka thật.
+ */
+const HEARTBEAT_INTERVAL_MS = 3000
+
+/**
+ * Nhịp quét định kỳ của `member-timeout` (Task 4) — một vòng TOÀN CLUSTER
+ * (`checkTimeouts` tự lặp qua mọi group), không gắn với một consumer cụ thể
+ * nào nên seed MỘT LẦN lúc khởi tạo simulation (`seedEvents`), không phải mỗi
+ * lần một consumer join như `fetch-request`/`heartbeat`. Thô hơn
+ * `POLL_INTERVAL_MS` là được — `sessionTimeoutMs`/`maxPollIntervalMs` đều tính
+ * bằng giây trở lên, chậm hơn 1000ms một khoảng an toàn không làm trễ đáng kể
+ * việc phát hiện eviction trong khung thời gian một lesson.
+ */
+const MEMBER_TIMEOUT_SCAN_INTERVAL_MS = 1000
 
 export interface KafkaSimulationOptions {
   topology: KafkaTopology
@@ -354,14 +376,24 @@ function seedEvents(options: KafkaSimulationOptions): SimEvent<KafkaEventType>[]
         events.push({ at: fault.at, seq: seq++, type: 'ack-lost', payload: { producerId: fault.producerId, times: fault.times } })
         break
       case 'consumer-stall':
+        events.push({ at: fault.at, seq: seq++, type: 'consumer-stall', payload: { consumerId: fault.consumerId, durationMs: fault.durationMs } })
+        break
       case 'replica-lag':
+        events.push({ at: fault.at, seq: seq++, type: 'replica-lag', payload: { brokerId: fault.brokerId, ms: fault.ms } })
+        break
       case 'processing-error':
-        // Ba fault này thuộc replication/consumer-processing (một plan sau) —
-        // `produce-error`/`ack-lost` (Task 11) đã tách riêng ở các nhánh trên. Bỏ
-        // qua có chủ đích, không phải một lỗ hổng bị quên.
+        events.push({ at: fault.at, seq: seq++, type: 'processing-error', payload: { consumerId: fault.consumerId, times: fault.times } })
         break
     }
   }
+
+  // `member-timeout` (Task 4): vòng quét TOÀN CLUSTER, seed đúng MỘT lần ở đây
+  // — không gate theo có consumer/group nào tồn tại hay không (kể cả kịch bản
+  // không hề có consumer-join nào vẫn seed event này, `checkTimeouts` quét
+  // `state.groups` rỗng là một no-op vô hại). `seq` đặt SAU CÙNG, lớn hơn mọi
+  // event script/fault cùng `at` — cùng nguyên tắc thứ tự cố định Step 3 của
+  // brief yêu cầu.
+  events.push({ at: MEMBER_TIMEOUT_SCAN_INTERVAL_MS, seq: seq++, type: 'member-timeout', payload: {} })
 
   return events
 }
@@ -541,82 +573,94 @@ function applyProduceRetry(topology: KafkaTopology, state: KafkaState, event: Si
 
 // --- Reducers: consumer path -------------------------------------------------
 
+/**
+ * Task 4 (Ruling D): thay hẳn lối ghi nhận member "naive" (Task 1) bằng lời gọi
+ * THẬT tới `joinGroup` (`group/coordinator.ts`) — group thật sự đi qua
+ * `PreparingRebalance` → (chờ `rebalanceTimeoutMs`) → `CompletingRebalance` →
+ * `Stable`, `assignment` chỉ có sau khi `rebalance-complete`/`sync-group` chạy
+ * xong, không còn "Stable ngay, assignment rỗng nhưng đọc được cả topic" như
+ * trước. `newEvents` của `joinGroup` (một `rebalance-complete` đã hẹn) PHẢI
+ * được trả ra — bỏ rơi nó là bug: group sẽ kẹt vĩnh viễn ở `PreparingRebalance`.
+ *
+ * `consumer-join` giờ khởi động BA vòng lặp tự hẹn lại độc lập, mỗi vòng seed
+ * đúng một lần ở đây:
+ *   - `fetch-request` (poll) — như cũ.
+ *   - `heartbeat`, cách nhau `HEARTBEAT_INTERVAL_MS`, mang theo `generationId`
+ *     CHỤP LẠI tại lúc join — xem why-comment ở `applyHeartbeat` về lý do không
+ *     bao giờ đọc lại generationId "tươi" lúc bắn.
+ *   - auto-commit (`scheduleAutoCommit`, `group/offsets.ts`) — chỉ khi
+ *     `enableAutoCommit` (mặc định `true`) bật; tái dùng event `'commit'` sẵn
+ *     có, không phải một loại event mới (xem why-comment ở `scheduleAutoCommit`).
+ */
 function applyConsumerJoin(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const consumerId = asString(event.payload.consumerId, 'consumerId')
   const spec = consumerSpec(topology, consumerId)
 
   const runtime: ConsumerRuntime = { position: {}, paused: [], lastPollAt: event.at }
+  const withRuntime: KafkaState = { ...state, consumers: { ...state.consumers, [consumerId]: runtime } }
 
-  // Group coordinator thật (rebalance, assignor, heartbeat) thuộc một plan sau
-  // (§B5.4) — `GroupState`/`GroupMember` ở đây chỉ ghi nhận thành viên một cách
-  // trung thực (không bịa một assignment nào `fetchRecords` không hề dùng tới:
-  // nó đọc thẳng `consumer.subscriptions` từ topology, không đọc `assignment`).
-  const member: GroupMember = {
+  const joined = joinGroup(withRuntime, {
+    groupId: spec.groupId,
     memberId: consumerId,
     subscriptions: spec.subscriptions,
-    assignment: [],
-    lastHeartbeatAt: event.at,
-    lastPollAt: event.at,
-  }
-  const existingGroup = state.groups[spec.groupId]
-  const group: GroupState = existingGroup
-    ? { ...existingGroup, generationId: existingGroup.generationId + 1, members: [...existingGroup.members, member] }
-    : {
-        groupId: spec.groupId,
-        state: 'Stable',
-        generationId: 1,
-        leaderMemberId: consumerId,
-        assignor: 'range',
-        members: [member],
-        committedOffsets: {},
-        coordinatorBrokerId: topology.controllerBrokerId,
-      }
+    assignor: spec.assignor ?? 'range',
+    at: event.at,
+    sessionTimeoutMs: spec.sessionTimeoutMs,
+    maxPollIntervalMs: spec.maxPollIntervalMs,
+    rebalanceTimeoutMs: spec.rebalanceTimeoutMs,
+  })
+  const group = joined.state.groups[spec.groupId]! // `joinGroup` luôn tạo/cập nhật đúng group này
 
-  const [seq, afterSeq] = nextSeq(state)
-  const nextState: KafkaState = {
-    ...afterSeq,
-    consumers: { ...afterSeq.consumers, [consumerId]: runtime },
-    groups: { ...afterSeq.groups, [spec.groupId]: group },
-    journal: [...afterSeq.journal, { at: event.at, type: 'consumer-join', text: `${consumerId} vào group ${spec.groupId}`, nodeId: consumerId }],
+  const withJournal: KafkaState = {
+    ...joined.state,
+    journal: [...joined.state.journal, { at: event.at, type: 'consumer-join', text: `${consumerId} vào group ${spec.groupId}`, nodeId: consumerId }],
   }
 
-  // `consumer-join` là nơi DUY NHẤT khởi động vòng poll — mọi `fetch-request` sau
-  // đó tự hẹn lại chính nó (xem `applyFetchRequest`), không có chỗ nào khác cần
-  // seed thêm.
-  const firstPoll: SimEvent<KafkaEventType> = { at: event.at, seq, type: 'fetch-request', payload: { consumerId } }
-  return { state: nextState, newEvents: [firstPoll] }
+  const [pollSeq, afterPollSeq] = nextSeq(withJournal)
+  const firstPoll: SimEvent<KafkaEventType> = { at: event.at, seq: pollSeq, type: 'fetch-request', payload: { consumerId } }
+
+  const [hbSeq, afterHbSeq] = nextSeq(afterPollSeq)
+  const firstHeartbeat: SimEvent<KafkaEventType> = {
+    at: event.at + HEARTBEAT_INTERVAL_MS,
+    seq: hbSeq,
+    type: 'heartbeat',
+    payload: { groupId: spec.groupId, memberId: consumerId, generationId: group.generationId },
+  }
+
+  const autoCommitEvents = scheduleAutoCommit(afterHbSeq, spec, event.at)
+  const afterAutoCommitSeq = autoCommitEvents.length > 0 ? { ...afterHbSeq, seq: afterHbSeq.seq + 1 } : afterHbSeq
+
+  return { state: afterAutoCommitSeq, newEvents: [...joined.newEvents, firstPoll, firstHeartbeat, ...autoCommitEvents] }
 }
 
+/**
+ * Task 4 (Ruling D): thay lối ghi nhận "naive" bằng lời gọi THẬT tới
+ * `leaveGroup` — rời CHỦ ĐỘNG kích hoạt rebalance NGAY (khác `checkTimeouts`,
+ * chỉ phát hiện im lặng SAU khi hết timeout). `newEvents` (một
+ * `rebalance-complete` đã hẹn, khi còn member khác) PHẢI được trả ra — đây
+ * chính là thứ khiến "partition của consumer rời được giao lại trong cùng run"
+ * xảy ra thật, không phải chỉ xoá khỏi danh sách suông.
+ */
 function applyConsumerLeave(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const consumerId = asString(event.payload.consumerId, 'consumerId')
   if (state.consumers[consumerId] === undefined) return { state, newEvents: [] } // đã rời / chưa từng vào — no-op
 
   const nextConsumers = { ...state.consumers }
   delete nextConsumers[consumerId]
+  // Xoá khỏi `state.consumers` chính là điều khiến `fetch-request`/`heartbeat` tự
+  // hẹn lại VÔ ĐIỀU KIỆN cuối cùng phải dừng — xem gate ở đầu `applyFetchRequest`
+  // và ở `applyHeartbeat`.
+  const withoutConsumer: KafkaState = { ...state, consumers: nextConsumers }
 
-  // Xoá khỏi `state.consumers` chính là điều khiến `fetch-request` tự hẹn lại VÔ
-  // ĐIỀU KIỆN cuối cùng phải dừng — xem gate ở đầu `applyFetchRequest`.
   const spec = consumerSpec(topology, consumerId)
-  const group = state.groups[spec.groupId]
-  const nextGroups = group
-    ? {
-        ...state.groups,
-        [spec.groupId]: {
-          ...group,
-          generationId: group.generationId + 1,
-          members: group.members.filter((m) => m.memberId !== consumerId),
-        },
-      }
-    : state.groups
+  const left = leaveGroup(withoutConsumer, { groupId: spec.groupId, memberId: consumerId, at: event.at })
 
   return {
     state: {
-      ...state,
-      consumers: nextConsumers,
-      groups: nextGroups,
-      journal: [...state.journal, { at: event.at, type: 'consumer-leave', text: `${consumerId} rời group ${spec.groupId}`, nodeId: consumerId }],
+      ...left.state,
+      journal: [...left.state.journal, { at: event.at, type: 'consumer-leave', text: `${consumerId} rời group ${spec.groupId}`, nodeId: consumerId }],
     },
-    newEvents: [],
+    newEvents: left.newEvents,
   }
 }
 
@@ -630,15 +674,48 @@ function applyFetchRequest(topology: KafkaTopology, state: KafkaState, event: Si
   // `consume.ts`), nó sẽ điếc vĩnh viễn với mọi record produce SAU thời điểm bắt
   // kịp đó. `consumer-leave` xoá khỏi `state.consumers` là cách duy nhất dừng
   // vòng này lại.
-  if (state.consumers[consumerId] === undefined) return { state, newEvents: [] }
+  const runtime = state.consumers[consumerId]
+  if (runtime === undefined) return { state, newEvents: [] }
 
   const spec = consumerSpec(topology, consumerId)
+
+  // Fault `consumer-stall` (faults.ts): callback xử lý coi như treo — vòng poll
+  // vẫn tự hẹn lại (thread client thật vẫn "cố" gọi `poll()`) nhưng không đọc gì,
+  // và quan trọng nhất: KHÔNG cập nhật `GroupMember.lastPollAt` — đây chính là
+  // điều kiện `checkTimeouts` (coordinator.ts) cần để phát hiện
+  // `maxPollIntervalMs` bị vượt trong khi heartbeat (vòng độc lập) vẫn đều.
+  if (runtime.stalledUntil !== undefined && event.at < runtime.stalledUntil) {
+    const [seq, afterSeq] = nextSeq(state)
+    const nextPoll: SimEvent<KafkaEventType> = { at: event.at + POLL_INTERVAL_MS, seq, type: 'fetch-request', payload: { consumerId } }
+    return { state: afterSeq, newEvents: [nextPoll] }
+  }
+
   const fetched = fetchRecords(state, { consumer: spec, at: event.at })
 
   const [seq, afterFetchSeq] = nextSeq(fetched.state)
   const nextPoll: SimEvent<KafkaEventType> = { at: event.at + POLL_INTERVAL_MS, seq, type: 'fetch-request', payload: { consumerId } }
 
   let workingState = afterFetchSeq
+
+  // Đồng bộ hoạt động poll THẬT vào `GroupMember.lastPollAt` (Task 4, Ruling D) —
+  // khác `ConsumerRuntime.lastPollAt` (đã được `fetchRecords` cập nhật ngay bên
+  // trên): đây là bản `checkTimeouts` (coordinator.ts) đọc để xét eviction do
+  // `maxPollIntervalMs`. Không chạy tới đây khi đang `consumer-stall` (nhánh
+  // return sớm ở trên) — đúng ý "giữ lastPollAt đứng yên" của fault đó.
+  const group = workingState.groups[spec.groupId]
+  if (group) {
+    workingState = {
+      ...workingState,
+      groups: {
+        ...workingState.groups,
+        [spec.groupId]: {
+          ...group,
+          members: group.members.map((m) => (m.memberId === consumerId ? { ...m, lastPollAt: event.at } : m)),
+        },
+      },
+    }
+  }
+
   if (fetched.records.length > 0) {
     workingState = {
       ...workingState,
@@ -651,11 +728,11 @@ function applyFetchRequest(topology: KafkaTopology, state: KafkaState, event: Si
     // gì để "đang xử lý". Ghi lại mốc đó lên runtime để UI (Task 8) có thể vẽ
     // trạng thái "consumer đang bận" mà không cần đoán lại từ event queue.
     const processDone = fetched.newEvents.find((e) => e.type === 'process-done')
-    const runtime = workingState.consumers[consumerId]
-    if (processDone && runtime) {
+    const rt = workingState.consumers[consumerId]
+    if (processDone && rt) {
       workingState = {
         ...workingState,
-        consumers: { ...workingState.consumers, [consumerId]: { ...runtime, processingUntil: processDone.at } },
+        consumers: { ...workingState.consumers, [consumerId]: { ...rt, processingUntil: processDone.at } },
       }
     }
   }
@@ -663,12 +740,41 @@ function applyFetchRequest(topology: KafkaTopology, state: KafkaState, event: Si
   return { state: workingState, newEvents: [...fetched.newEvents, nextPoll] }
 }
 
-function applyProcessDone(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+/**
+ * Task 4: thêm nhánh tiêu ngân sách fault `processing-error`
+ * (`faults.ts` arm nó vào `ConsumerRuntime.pendingProcessingErrors`). Còn ngân
+ * sách thì KHÔNG hoàn tất — tự hẹn lại một `process-done` khác sau đúng
+ * `processingMs` của chính consumer đó, mô phỏng "làm lại đúng record vừa xử
+ * lý" (không fetch lại — record vẫn nằm nguyên trong `records` đã giao, chỉ
+ * bước XỬ LÝ lặp lại). Hết ngân sách (hoặc chưa từng có fault) mới hoàn tất
+ * như cũ.
+ */
+function applyProcessDone(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const consumerId = asString(event.payload.consumerId, 'consumerId')
   const count = asNumber(event.payload.count, 'count')
 
   const runtime = state.consumers[consumerId]
   if (!runtime) return { state, newEvents: [] } // consumer đã rời group giữa lúc đang xử lý — no-op, không lỗi
+
+  const pending = runtime.pendingProcessingErrors ?? 0
+  if (pending > 0) {
+    const spec = consumerSpec(topology, consumerId)
+    const processingMs = spec.processingMs ?? 0
+    const nextRuntime: ConsumerRuntime = { ...runtime, pendingProcessingErrors: pending - 1 }
+    const [seq, afterSeq] = nextSeq(state)
+    const retry: SimEvent<KafkaEventType> = { at: event.at + processingMs, seq, type: 'process-done', payload: { consumerId, count } }
+    return {
+      state: {
+        ...afterSeq,
+        consumers: { ...afterSeq.consumers, [consumerId]: nextRuntime },
+        journal: [
+          ...afterSeq.journal,
+          { at: event.at, type: 'process-done', text: `${consumerId} xử lý lỗi ${count} record, thử lại (còn ${pending - 1} lần)`, nodeId: consumerId },
+        ],
+      },
+      newEvents: [retry],
+    }
+  }
 
   const updated: ConsumerRuntime = { ...runtime }
   delete updated.processingUntil
@@ -683,37 +789,46 @@ function applyProcessDone(state: KafkaState, event: SimEvent<KafkaEventType>): R
   }
 }
 
+/**
+ * Task 4 (Ruling C): thay thân hàm cũ (tự tính `committedOffsets` tay, không
+ * kiểm membership, không cập nhật `metrics.lagTotal`) bằng một lời gọi THẬT tới
+ * `commitOffsets` (`group/offsets.ts`) — hàm đó đã đúng ngữ nghĩa offset (không
+ * +1 bug), CÓ kiểm `memberId` thật sự thuộc `group.members` (silent no-op nếu
+ * không — khớp `UNKNOWN_MEMBER_ID` Kafka thật, xem test pin hành vi này ở
+ * `index.test.ts`), và tự cập nhật `metrics.lagTotal`.
+ *
+ * Sau khi commit xong, TỰ HẸN LẠI vòng auto-commit kế tiếp (nếu
+ * `enableAutoCommit` bật) — bất kể lần bắn `'commit'` NÀY đến từ script tường
+ * minh hay từ chính vòng auto-commit trước đó: `scheduleAutoCommit` không phân
+ * biệt nguồn gốc, tái dùng đúng một `KafkaEventType` (`'commit'`), không thêm
+ * loại event mới (xem why-comment ở `scheduleAutoCommit`). Hệ quả: một commit
+ * tường minh giữa chừng cũng "khởi động lại" đồng hồ auto-commit từ mốc đó —
+ * đơn giản hơn theo dõi hai đồng hồ độc lập, và vô hại vì commit chỉ ghi lại vị
+ * trí đọc hiện tại, không có tác dụng phụ nào khác khi lặp lại.
+ */
 function applyCommit(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const consumerId = asString(event.payload.consumerId, 'consumerId')
   const runtime = state.consumers[consumerId]
   if (!runtime) return { state, newEvents: [] }
 
   const spec = consumerSpec(topology, consumerId)
-  const group = state.groups[spec.groupId]
-  if (!group) return { state, newEvents: [] }
 
   // Chỉ commit những partition consumer THỰC SỰ có position — lọc qua
   // `sortedPartitionKeys(state)` thay vì lặp thẳng `Object.keys(runtime.position)`
-  // để giữ determinism (§B6), dù committedOffsets là một Record nên thứ tự chèn ở
-  // đây không đổi giá trị cuối cùng — chỉ đổi thứ tự journal nếu sau này có ghi
-  // journal per-partition.
+  // để giữ determinism (§B6).
   const keys = sortedPartitionKeys(state).filter((key) => runtime.position[key] !== undefined)
-  const committedOffsets = { ...group.committedOffsets }
+  const offsets: Record<string, number> = {}
   for (const key of keys) {
     const offset = runtime.position[key]
     if (offset === undefined) continue // đã lọc ở trên — chỉ để qua noUncheckedIndexedAccess
-    committedOffsets[key] = { offset, committedAt: event.at }
+    offsets[key] = offset
   }
 
-  return {
-    state: {
-      ...state,
-      groups: { ...state.groups, [spec.groupId]: { ...group, committedOffsets } },
-      metrics: { ...state.metrics, commits: state.metrics.commits + 1 },
-      journal: [...state.journal, { at: event.at, type: 'commit', text: `${consumerId} commit ${keys.length} partition`, nodeId: consumerId }],
-    },
-    newEvents: [],
-  }
+  const committed = commitOffsets(state, { groupId: spec.groupId, memberId: consumerId, offsets, at: event.at })
+
+  const autoCommitEvents = scheduleAutoCommit(committed, spec, event.at)
+  const nextState = autoCommitEvents.length > 0 ? { ...committed, seq: committed.seq + 1 } : committed
+  return { state: nextState, newEvents: autoCommitEvents }
 }
 
 function applySeekEvent(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
@@ -746,15 +861,21 @@ function applyResumeEvent(state: KafkaState, event: SimEvent<KafkaEventType>): R
   return { state: applyResume(state, { consumerId, topic, partition }), newEvents: [] }
 }
 
-// --- Reducers: group coordinator (Task 2) ------------------------------------
+// --- Reducers: group coordinator (Task 2, nối thật ở Task 4) -----------------
 //
 // Năm nhánh dưới đây gọi THẲNG hàm cùng tên ở `group/coordinator.ts` — logic
-// rebalance thật, không phải placeholder. Điều CHƯA có ở Task này là ai thật
-// sự SINH ra các event `join-group`/`sync-group`/`heartbeat`/`rebalance-complete`/
-// `member-timeout` từ hoạt động consumer thật (`consumer-join`/`consumer-leave`/
-// một vòng lặp `member-timeout` tự hẹn lại): đó là việc của Task 4. Cho tới lúc
-// đó, `applyConsumerJoin`/`applyConsumerLeave` ở trên vẫn dùng lối ghi nhận
-// member "naive" (Task 1) — KHÔNG đổi ở đây, đổi nó thuộc phạm vi Task 4.
+// rebalance thật, không phải placeholder. Task 4 nối `applyConsumerJoin`/
+// `applyConsumerLeave` (ở trên) để chúng thật sự SINH ra `join-group` gián
+// tiếp qua lời gọi `joinGroup`/`leaveGroup`, và thêm vòng tự hẹn lại cho
+// `heartbeat`/`member-timeout` (hai nhánh dưới đây) — `join-group` với tư cách
+// một `KafkaEventType` riêng vẫn khai báo (Task 2) nhưng không có seedEvents/
+// reducer nào DISPATCH nó qua event queue: `applyConsumerJoin` gọi thẳng hàm
+// `joinGroup` (không đi vòng qua một event `'join-group'`), nên `applyJoinGroup`
+// dưới đây vẫn là một nhánh có thật (đủ kiểu `Record<KafkaEventType, Reducer>`)
+// nhưng KHÔNG có gì dispatch tới nó trong luồng hiện tại — an toàn, không phải
+// một lỗ hổng: `'join-group'` tồn tại như một điểm mở rộng (ví dụ một client
+// muốn tự gọi lại JoinGroupRequest sau `ILLEGAL_GENERATION`), ngoài phạm vi
+// Task 4.
 
 function applyJoinGroup(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const groupId = asString(event.payload.groupId, 'groupId')
@@ -773,15 +894,44 @@ function applySyncGroup(state: KafkaState, event: SimEvent<KafkaEventType>): Red
   return syncGroup(state, { groupId, generationId, at: event.at })
 }
 
+/**
+ * Task 4: `heartbeat` tự hẹn lại VÔ ĐIỀU KIỆN mỗi `HEARTBEAT_INTERVAL_MS`,
+ * hoàn toàn độc lập với vòng `fetch-request` — đúng ý coordinator.ts's
+ * `checkTimeouts` cần ("heartbeat vẫn đều... trong khi vòng xử lý đã treo").
+ * Gate DUY NHẤT để dừng hẳn là `state.consumers[memberId] !== undefined` —
+ * cùng gate `fetch-request` dùng — không gate theo group/membership: một
+ * member vừa bị `checkTimeouts` đá khỏi group vẫn tiếp tục gửi heartbeat cho
+ * tới khi `consumer-leave` thật sự xoá nó khỏi `state.consumers` (client thật
+ * không tự biết ngay mình đã bị đá).
+ *
+ * `generationId` cho lần bắn KẾ TIẾP lấy từ `group.generationId` NGAY BÂY GIỜ
+ * (có thể vừa đổi vì chính heartbeat này, hoặc vì một rebalance khác xảy ra
+ * trước đó) — cố tình KHÔNG đọc lại "tươi" tại thời điểm event kế tiếp THẬT SỰ
+ * bắn 3 giây sau. Nếu một rebalance xảy ra GIỮA lúc hẹn và lúc bắn, generationId
+ * đã "đóng băng" trong payload trở nên CŨ so với group lúc đó — đúng cách
+ * `heartbeat()` phát hiện `ILLEGAL_GENERATION`, không phải một bug.
+ */
 function applyHeartbeat(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const groupId = asString(event.payload.groupId, 'groupId')
   const memberId = asString(event.payload.memberId, 'memberId')
   const generationId = asNumber(event.payload.generationId, 'generationId')
   // `heartbeat()` trả thêm `error?: 'ILLEGAL_GENERATION'` (`HeartbeatResult`) —
-  // một superset cấu trúc của `ReduceResult`, nên trả thẳng ra đây không mất gì
-  // caller (kernel) cần: `state`/`newEvents` vẫn đúng, `error` chỉ có ý nghĩa
-  // với ai gọi trực tiếp `heartbeat()` (test, hoặc một reducer khác đọc lại).
-  return heartbeat(state, { groupId, memberId, generationId, at: event.at })
+  // một superset cấu trúc của `ReduceResult`, không mất gì khi chỉ đọc
+  // `state`/`newEvents` ở đây.
+  const result = heartbeat(state, { groupId, memberId, generationId, at: event.at })
+
+  if (result.state.consumers[memberId] === undefined) return { state: result.state, newEvents: result.newEvents }
+  const group = result.state.groups[groupId]
+  if (!group) return { state: result.state, newEvents: result.newEvents }
+
+  const [seq, afterSeq] = nextSeq(result.state)
+  const nextHeartbeat: SimEvent<KafkaEventType> = {
+    at: event.at + HEARTBEAT_INTERVAL_MS,
+    seq,
+    type: 'heartbeat',
+    payload: { groupId, memberId, generationId: group.generationId },
+  }
+  return { state: afterSeq, newEvents: [...result.newEvents, nextHeartbeat] }
 }
 
 function applyRebalanceComplete(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
@@ -793,11 +943,17 @@ function applyRebalanceComplete(state: KafkaState, event: SimEvent<KafkaEventTyp
 /**
  * `member-timeout` là một tick định kỳ quét MỌI group (`checkTimeouts` tự lặp
  * qua `sortedGroupIds`), không mang theo `groupId` riêng trong payload — khác
- * bốn event kia. Task 4 nối vòng tự hẹn lại (giống `fetch-request` tự hẹn lại ở
- * `applyFetchRequest`); ở đây chỉ chạy đúng một lần quét tại `event.at`.
+ * bốn event kia. Task 4: chạy một lượt quét tại `event.at`, rồi tự hẹn lại
+ * VÔ ĐIỀU KIỆN mỗi `MEMBER_TIMEOUT_SCAN_INTERVAL_MS` — không gate theo có
+ * consumer/group nào tồn tại (seed đầu tiên ở `seedEvents` cũng vậy): quét một
+ * cluster không group nào là một no-op vô hại, không có lý do dừng vòng này
+ * lại giữa chừng một simulation đang chạy.
  */
 function applyMemberTimeout(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
-  return checkTimeouts(state, event.at)
+  const result = checkTimeouts(state, event.at)
+  const [seq, afterSeq] = nextSeq(result.state)
+  const nextScan: SimEvent<KafkaEventType> = { at: event.at + MEMBER_TIMEOUT_SCAN_INTERVAL_MS, seq, type: 'member-timeout', payload: {} }
+  return { state: afterSeq, newEvents: [...result.newEvents, nextScan] }
 }
 
 // --- Reducers: broker faults --------------------------------------------------
@@ -868,7 +1024,7 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     'ack-lost': withPrune(applyAckLossArm),
     'fetch-request': withPrune((state, event) => applyFetchRequest(topology, state, event)),
     deliver: withPrune(placeholderReducer),
-    'process-done': withPrune(applyProcessDone),
+    'process-done': withPrune((state, event) => applyProcessDone(topology, state, event)),
     commit: withPrune((state, event) => applyCommit(topology, state, event)),
     'segment-roll': withPrune(placeholderReducer),
     'retention-delete': withPrune(placeholderReducer),
@@ -884,6 +1040,9 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     heartbeat: withPrune(applyHeartbeat),
     'rebalance-complete': withPrune(applyRebalanceComplete),
     'member-timeout': withPrune(applyMemberTimeout),
+    'consumer-stall': withPrune(applyConsumerStall),
+    'processing-error': withPrune(applyProcessingErrorArm),
+    'replica-lag': withPrune(applyReplicaLag),
   }
 }
 
