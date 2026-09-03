@@ -9,11 +9,16 @@ import type { SimEvent } from '../../../shell/kernel/types'
 // (`replicaFetch`, `shrinkIsr`, `expandIsr`, `electLeader`) không nhận
 // `KafkaTopology` (cùng quy ước `faults.ts`/`group/coordinator.ts`: chỉ những gì
 // KHÔNG suy ra được từ `state` mới đi qua tham số, còn lại tra `topology` là việc
-// của thin wrapper ở `engine/index.ts`). `replicaLagTimeMaxMs`/mặc định
-// `replicaFetchEveryMs` vì vậy là hằng số cục bộ ở đây, không đọc từ
-// `KafkaBrokerSpec` — wrapper truyền `everyMs` đã tra sẵn vào `replicaFetch` khi
-// nó có; `shrinkIsr` dùng thẳng mặc định `10_000` (đúng interface hai tham số
-// `(state, at)` mà task brief đã chốt, không mở rộng thêm một tham số config).
+// của thin wrapper ở `engine/index.ts`). `replicaFetchEveryMs`/`replicaLagTimeMaxMs`
+// đều là config CỦA TỪNG BROKER trên `KafkaBrokerSpec`, nên cả hai hàm nhận giá
+// trị đã tra sẵn qua tham số thay vì đọc `KafkaTopology` trực tiếp:
+// `replicaFetch` nhận `everyMs` (một broker mỗi lời gọi, tra thẳng ở
+// `applyReplicaFetch`); `shrinkIsr` quét TOÀN BỘ partition/replica trong một
+// lượt — có thể chạm nhiều broker với `replicaLagTimeMaxMs` khác nhau cùng lúc
+// — nên nhận `replicaLagTimeMaxMsByBroker`, một map `NodeId -> ms` do
+// `applyIsrShrink` dựng từ `topology.brokers` (chỉ broker có override thật mới
+// vào map). Broker không có trong map (param bỏ trống, hoặc gọi trực tiếp từ
+// test không qua wrapper) dùng `DEFAULT_REPLICA_LAG_TIME_MAX_MS`.
 // ---------------------------------------------------------------------------
 
 /** `KafkaBrokerSpec.replicaFetchEveryMs` mặc định — xem doc-comment tại đó. */
@@ -139,21 +144,28 @@ export function replicaFetch(
 // ---------------------------------------------------------------------------
 
 /**
- * Quét TOÀN BỘ partition (không nhận `brokerId`/`partitionKey` riêng — đúng chữ
- * ký hai tham số `(state, at)` task brief chốt): loại khỏi ISR bất kỳ follower
- * nào có `at - replicaState[id].lastFetchAt > DEFAULT_REPLICA_LAG_TIME_MAX_MS`.
- * Leader LUÔN được giữ lại bất kể `lastFetchAt` của chính nó — leader không
- * "fetch" nên `replicaState[leader].lastFetchAt` chỉ cập nhật mỗi lần append
- * (xem `log.ts`'s `appendRecord`), có thể "cũ" một cách vô hại nếu không có
- * produce nào gần đây; liveness của leader là việc của `brokersOnline`/
- * `electLeader`, không phải của hàm này.
+ * Quét TOÀN BỘ partition (không nhận `brokerId`/`partitionKey` riêng): loại
+ * khỏi ISR bất kỳ follower nào có
+ * `at - replicaState[id].lastFetchAt > replicaLagTimeMaxMsByBroker[id]` —
+ * ngưỡng của TỪNG BROKER (mặc định `DEFAULT_REPLICA_LAG_TIME_MAX_MS` nếu
+ * broker đó không có trong map), đúng ngữ nghĩa `replica.lag.time.max.ms` thật
+ * của Kafka: đây là config trên broker follower, không phải trên partition hay
+ * trên leader. Leader LUÔN được giữ lại bất kể `lastFetchAt` của chính nó —
+ * leader không "fetch" nên `replicaState[leader].lastFetchAt` chỉ cập nhật mỗi
+ * lần append (xem `log.ts`'s `appendRecord`), có thể "cũ" một cách vô hại nếu
+ * không có produce nào gần đây; liveness của leader là việc của
+ * `brokersOnline`/`electLeader`, không phải của hàm này.
  *
  * Loại xong một partition thì gọi `recomputeHighWatermark` NGAY, SAU khi đã
  * cập nhật `isr` — thứ tự này cố ý: một replica chậm bị loại khỏi ISR không
  * còn được tính vào `min(LEO)` nữa, nên HW có thể NHÍCH LÊN ngay tại đây (test
  * "ISR co lại làm HW nhích lên" chốt đúng thứ tự shrink-rồi-mới-recompute).
  */
-export function shrinkIsr(state: KafkaState, at: number): ReplicationResult {
+export function shrinkIsr(
+  state: KafkaState,
+  at: number,
+  replicaLagTimeMaxMsByBroker?: Record<NodeId, number>,
+): ReplicationResult {
   let partitions = state.partitions
   let changed = false
 
@@ -165,7 +177,8 @@ export function shrinkIsr(state: KafkaState, at: number): ReplicationResult {
       if (id === partition.leader) return true
       const rs = partition.replicaState[id]
       if (!rs) return true // chưa từng có replicaState — không đủ căn cứ để loại
-      return at - rs.lastFetchAt <= DEFAULT_REPLICA_LAG_TIME_MAX_MS
+      const lagTimeMaxMs = replicaLagTimeMaxMsByBroker?.[id] ?? DEFAULT_REPLICA_LAG_TIME_MAX_MS
+      return at - rs.lastFetchAt <= lagTimeMaxMs
     })
     if (kept.length === partition.isr.length) continue
 

@@ -66,6 +66,31 @@ describe('replication', () => {
     expect(result.state.partitions[key0]?.isr).toEqual(['b1'])
   })
 
+  it('shrinkIsr tôn trọng replicaLagTimeMaxMs riêng của từng broker (KafkaBrokerSpec)', () => {
+    // b2 và b3 lag CÙNG một khoảng (5_000ms) — nhưng b2 được cấu hình ngưỡng
+    // ngắn (2_000ms, ví dụ một broker rack gần cần phát hiện chậm sớm) còn b3
+    // dùng mặc định 10_000ms. Nếu wrapper `engine/index.ts` tra đúng
+    // `KafkaBrokerSpec.replicaLagTimeMaxMs` của TỪNG broker follower (không
+    // phải một hằng số toàn cục), b2 phải rớt khỏi ISR còn b3 thì không —
+    // đúng ngữ nghĩa `replica.lag.time.max.ms` thật của Kafka (config trên
+    // broker follower, không phải trên partition).
+    let partition = withRecords(['b1', 'b2', 'b3'], 'b1', ['a', 'b', 'c', 'd', 'e'])
+    partition = {
+      ...partition,
+      isr: ['b1', 'b2', 'b3'],
+      replicaState: {
+        b1: { leo: 5, lastFetchAt: 10_000 },
+        b2: { leo: 5, lastFetchAt: 5_000 }, // lag 5_000ms
+        b3: { leo: 5, lastFetchAt: 5_000 }, // lag 5_000ms, giống hệt b2
+      },
+    }
+    const state = withPartition(testState({ replicas: ['b1', 'b2', 'b3'] }), partition)
+
+    const result = shrinkIsr(state, 10_000, { b2: 2_000 }) // b3 không có override — dùng mặc định 10_000
+
+    expect(result.state.partitions[key0]?.isr).toEqual(['b1', 'b3'])
+  })
+
   it('ISR co lại làm high watermark nhích lên — replica chậm không còn giữ nó nữa', () => {
     let partition = withRecords(['b1', 'b2'], 'b1', ['a', 'b', 'c', 'd', 'e'])
     partition = {

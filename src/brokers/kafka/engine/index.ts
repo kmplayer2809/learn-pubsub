@@ -1065,8 +1065,23 @@ function applyReplicaFetch(topology: KafkaTopology, state: KafkaState, event: Si
   return replicaFetch(state, { brokerId, at: event.at, everyMs })
 }
 
-function applyIsrShrink(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
-  return shrinkIsr(state, event.at)
+/**
+ * `shrinkIsr` quét TOÀN BỘ partition/replica trong một lượt — không như
+ * `applyReplicaFetch` chỉ tra một broker theo `event.payload.brokerId` — nên
+ * wrapper ở đây dựng nguyên một map `NodeId -> replicaLagTimeMaxMs` từ
+ * `topology.brokers` (chỉ broker có override thật mới vào map; `shrinkIsr` tự
+ * áp mặc định `10_000` cho phần còn lại) rồi giao cho hàm thuần.
+ */
+function replicaLagTimeMaxMsByBroker(topology: KafkaTopology): Record<NodeId, number> {
+  const map: Record<NodeId, number> = {}
+  for (const broker of topology.brokers) {
+    if (broker.replicaLagTimeMaxMs !== undefined) map[broker.id] = broker.replicaLagTimeMaxMs
+  }
+  return map
+}
+
+function applyIsrShrink(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  return shrinkIsr(state, event.at, replicaLagTimeMaxMsByBroker(topology))
 }
 
 function applyIsrExpand(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
@@ -1148,7 +1163,7 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     'processing-error': withPrune(applyProcessingErrorArm),
     'replica-lag': withPrune(applyReplicaLag),
     'replica-fetch': withPrune((state, event) => applyReplicaFetch(topology, state, event)),
-    'isr-shrink': withPrune(applyIsrShrink),
+    'isr-shrink': withPrune((state, event) => applyIsrShrink(topology, state, event)),
     'isr-expand': withPrune(applyIsrExpand),
     'leader-election': withPrune((state, event) => applyLeaderElection(topology, state, event)),
   }
