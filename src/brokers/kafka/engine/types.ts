@@ -394,3 +394,15 @@ export type KafkaEventType =
   | 'consumer-stall'
   | 'processing-error'
   | 'replica-lag'
+  // Task 6 (`replication.ts`): follower fetch, ISR shrink/expand, leader
+  // election. Bốn reducer ở `engine/index.ts` cho các nhánh này là logic THẬT
+  // (gọi thẳng `replicaFetch`/`shrinkIsr`/`expandIsr`/`electLeader`), không phải
+  // placeholder — chỉ riêng phần khiến hoạt động thật của cluster (produce,
+  // broker down/up…) THẬT SỰ SINH RA các event này (seed lần đầu, tự hẹn lại từ
+  // một nguồn khác ngoài chính `replica-fetch`) là việc của Task 8, ngoài phạm
+  // vi task này — cùng quy ước `join-group`/`sync-group`/`heartbeat` (Task 2) đã
+  // theo.
+  | 'replica-fetch'
+  | 'isr-shrink'
+  | 'isr-expand'
+  | 'leader-election'

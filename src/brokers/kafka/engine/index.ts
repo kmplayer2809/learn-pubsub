@@ -5,6 +5,7 @@ import type { AssignorName } from './group/assignors'
 import { commitOffsets, scheduleAutoCommit } from './group/offsets'
 import { createPartition } from './log'
 import { enqueueRecord, flushBatch, PRODUCE_RESPONSE_TRAVEL_MS } from './produce'
+import { electLeader, expandIsr, replicaFetch, shrinkIsr } from './replication'
 import { partitionKey, sortedPartitionKeys } from './types'
 import type {
   ConsumerRuntime,
@@ -1043,6 +1044,50 @@ function applyBrokerUp(state: KafkaState, event: SimEvent<KafkaEventType>): Redu
   }
 }
 
+// --- Reducers: replication (Task 6, `replication.ts`) -------------------------
+//
+// Bốn nhánh dưới đây là logic THẬT — `replicaFetch`/`shrinkIsr`/`expandIsr`/
+// `electLeader` đã được viết và test đầy đủ ở `replication.ts` — nhưng, đúng
+// quy ước `join-group`/`sync-group`/`heartbeat`/`rebalance-complete`/
+// `member-timeout` (Task 2/4) đã theo, KHÔNG có `seedEvents`/reducer nào trong
+// wiring hiện tại thật sự DISPATCH một event `replica-fetch`/`isr-shrink`/
+// `isr-expand`/`leader-election` — chưa có hoạt động cluster thật nào (produce,
+// broker down/up…) gọi tới chúng. Nối chúng vào hoạt động thật (seed lần đầu
+// một `replica-fetch` cho mỗi broker follower, quét `shrinkIsr`/`expandIsr`
+// định kỳ, gọi `electLeader` khi leader rớt…) là việc của Task 8, ngoài phạm vi
+// task này. Wrapper ở đây chỉ tra những gì `replication.ts` cố tình không nhận
+// (topology) rồi giao thẳng cho hàm thuần tương ứng — không có logic nghiệp vụ
+// nào sống ở đây.
+
+function applyReplicaFetch(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const brokerId = asString(event.payload.brokerId, 'brokerId')
+  const everyMs = topology.brokers.find((b) => b.id === brokerId)?.replicaFetchEveryMs
+  return replicaFetch(state, { brokerId, at: event.at, everyMs })
+}
+
+function applyIsrShrink(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  return shrinkIsr(state, event.at)
+}
+
+function applyIsrExpand(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  return expandIsr(state, event.at)
+}
+
+/**
+ * `uncleanLeaderElection` sống trên `KafkaTopicSpec.config` (topology), không
+ * trên `PartitionState` — `electLeader` (thuần, không nhận topology) vì vậy
+ * nhận nó qua `args`, tra ở đây bằng `partition.topic` (đã có sẵn trên chính
+ * partition, không cần suy ngược từ chuỗi `partitionKey`, vốn không an toàn khi
+ * tên topic chứa dấu `-`).
+ */
+function applyLeaderElection(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const partitionKeyArg = asString(event.payload.partitionKey, 'partitionKey')
+  const partition = state.partitions[partitionKeyArg]
+  const uncleanLeaderElection = partition ? (topicSpec(topology, partition.topic).config?.uncleanLeaderElection ?? false) : false
+  const result = electLeader(state, { partitionKey: partitionKeyArg, at: event.at, uncleanLeaderElection })
+  return { state: result.state, newEvents: result.newEvents }
+}
+
 // --- Reducers: chưa có ai dispatch (placeholder trung thực) --------------------
 //
 // Bốn nhánh dưới đây là thành viên của `KafkaEventType` (Task 1) nhưng KHÔNG một
@@ -1102,6 +1147,10 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     'consumer-stall': withPrune(applyConsumerStall),
     'processing-error': withPrune(applyProcessingErrorArm),
     'replica-lag': withPrune(applyReplicaLag),
+    'replica-fetch': withPrune((state, event) => applyReplicaFetch(topology, state, event)),
+    'isr-shrink': withPrune(applyIsrShrink),
+    'isr-expand': withPrune(applyIsrExpand),
+    'leader-election': withPrune((state, event) => applyLeaderElection(topology, state, event)),
   }
 }
 
