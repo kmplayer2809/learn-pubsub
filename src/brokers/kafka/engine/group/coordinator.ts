@@ -127,6 +127,29 @@ export function sortedMemberIds(group: GroupState): string[] {
 }
 
 /**
+ * True nếu có ít nhất một member đang thuộc BẤT KỲ group nào, bất kể group đó
+ * đang ở state gì (`Empty` sau khi member cuối rời/bị đá vẫn còn NẰM trong
+ * `state.groups` — chỉ `members` rỗng — nên đây phải kiểm `members.length`,
+ * không phải `sortedGroupIds(state).length`, kẻo coi một group đã rỗng như
+ * còn "đang hoạt động").
+ *
+ * Task 4 fix round: `engine/index.ts` dùng hàm này làm điều kiện DUY NHẤT để
+ * quyết định vòng quét `member-timeout` (self-perpetuating, xem
+ * `applyMemberTimeout`) còn cần tự hẹn lại hay không — quét một cluster không
+ * còn ai là việc thừa, không có deadline nào để bắt, và chính việc hẹn lại VÔ
+ * ĐIỀU KIỆN trước đây (bất kể `state.groups` rỗng hay không) là thứ khiến lịch
+ * trình một simulation Kafka không bao giờ cạn (không `nextEventTime() ===
+ * undefined`), silently vô hiệu hoá auto-pause của shell
+ * (`useSimulation.ts:198`) cho MỌI lesson. Ngược lại, "có ít nhất một group
+ * còn Stable với member suốt cả run" (đa số lesson) khiến hàm này vẫn trả
+ * `true` mãi — đúng ý: vòng quét đó theo dõi một deadline THẬT sự còn treo,
+ * không phải một vòng lặp vô nghĩa.
+ */
+export function hasAnyGroupMember(state: KafkaState): boolean {
+  return sortedGroupIds(state).some((groupId) => state.groups[groupId]!.members.length > 0)
+}
+
+/**
  * Eager assignor xoá sạch assignment của MỌI member (kể cả những member không
  * mất partition gì) ngay khi vào `PreparingRebalance` — đó là "stop-the-world"
  * lesson 12 dạy: instance thật gọi `onPartitionsRevoked` cho toàn bộ assignment

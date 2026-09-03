@@ -120,21 +120,55 @@ describe('createKafkaSimulation', () => {
     expect(runtime!.position['zzz-topic-0']).toBe(0)
   })
 
-  it('nextEventTime trả về mốc event kế tiếp — vòng quét member-timeout (Task 4) khiến lịch trình không bao giờ cạn hẳn', () => {
-    // Trước Task 4: không consumer-join thì không vòng lặp nào tự hẹn lại, lịch
-    // trình cạn hẳn sau khi flush xong. Task 4 thêm `member-timeout` — một vòng
-    // quét TOÀN CLUSTER seed đúng một lần lúc khởi tạo (`seedEvents`), tự hẹn lại
-    // VÔ ĐIỀU KIỆN, không gate theo có consumer/group nào tồn tại hay không (xem
-    // why-comment ở `applyMemberTimeout`) — nên giờ MỌI simulation Kafka còn ít
-    // nhất một event treo lơ lửng mãi mãi, kể cả kịch bản không có consumer nào.
+  it('nextEventTime trả về mốc event kế tiếp, undefined khi hết — không consumer-join thì member-timeout không hề khởi động (fix round, post-review)', () => {
+    // Regression test cho phát hiện review round 1: Task 4 ban đầu seed
+    // `member-timeout` VÔ ĐIỀU KIỆN, một lần, lúc khởi tạo simulation — khiến
+    // MỌI simulation Kafka (kể cả kịch bản không hề có consumer nào) còn ít
+    // nhất một event tự hẹn lại mãi mãi, `nextEventTime()` không bao giờ trả
+    // `undefined`, âm thầm vô hiệu hoá auto-pause của shell
+    // (`useSimulation.ts:198` — pause chỉ khi `nextEventTime() === undefined`).
+    // Fix round: `member-timeout` giờ chỉ khởi động khi `applyConsumerJoin`
+    // thấy `hasAnyGroupMember` chuyển false→true (xem why-comment ở đó và ở
+    // `MEMBER_TIMEOUT_SCAN_INTERVAL_MS`) — một kịch bản không consumer-join nào
+    // thì không group/member nào tồn tại, vòng quét không bao giờ được seed.
     const sim = createKafkaSimulation({ topology: makeTopology(), script: [], seed: 1 })
-    expect(sim.nextEventTime()).toBe(1000) // mốc quét member-timeout đầu tiên
+    expect(sim.nextEventTime()).toBeUndefined()
 
+    // Chỉ produce, không consumer-join: lịch trình phải cạn hẳn sau khi flush
+    // xong, đúng property RabbitMQ vẫn giữ (`delivery.test.ts:285`).
     const sim2 = createKafkaSimulation({ ...options, script: [script[0]!, script[1]!] })
     expect(sim2.nextEventTime()).toBe(0)
     sim2.advanceTo(100_000)
-    // Không còn undefined nữa — vòng quét vẫn tiếp tục tự hẹn lại mỗi 1000ms.
-    expect(sim2.nextEventTime()).toBe(101_000)
+    expect(sim2.nextEventTime()).toBeUndefined()
+  })
+
+  it('consumer join rồi leave: MỌI vòng tự hẹn lại (poll/heartbeat/member-timeout) dừng hẳn — lịch trình cạn thật, không chỉ "coi như cạn"', () => {
+    // Bổ sung test cho phát hiện review round 1, đối xứng với test phía trên:
+    // ở đó chứng minh `member-timeout` không khởi động khi KHÔNG có consumer;
+    // test này chứng minh nó khởi động ĐÚNG LÚC (khi member đầu tiên join) và
+    // tự dừng ĐÚNG LÚC (khi member cuối cùng rời) — không phải một vòng chạy
+    // mãi mãi bất kể trạng thái, cũng không phải một vòng không bao giờ chạy.
+    // `maxPollIntervalMs: 300` để `rebalance-complete` (hẹn lúc join) chốt
+    // trước khi test advance xong, không để lại một event xa tít (mặc định
+    // 300_000ms) còn treo lơ lửng làm `nextEventTime()` sai lệch.
+    const topology: KafkaTopology = {
+      ...makeTopology(),
+      consumers: [{ id: 'c1', label: 'Consumer', position: { x: 400, y: 200 }, groupId: 'g1', subscriptions: ['orders'], maxPollIntervalMs: 300 }],
+    }
+    const sim = createKafkaSimulation({
+      topology,
+      script: [
+        { at: 0, kind: 'consumer-join', consumerId: 'c1' },
+        { at: 1000, kind: 'consumer-leave', consumerId: 'c1' },
+      ],
+      seed: 1,
+    })
+    sim.advanceTo(20_000)
+    expect(sim.snapshot().consumers['c1']).toBeUndefined()
+    expect(sim.snapshot().groups['g1']?.members).toEqual([])
+    // Chứng cứ trực tiếp nhất cho việc lịch trình cạn thật: không còn event
+    // nào — của fetch-request, heartbeat, hay member-timeout — treo lơ lửng.
+    expect(sim.nextEventTime()).toBeUndefined()
   })
 })
 

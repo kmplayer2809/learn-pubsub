@@ -1,6 +1,6 @@
 import { applyPause, applyResume, applySeek, fetchRecords } from './consume'
 import { applyConsumerStall, applyProcessingErrorArm, applyReplicaLag } from './faults'
-import { checkTimeouts, completeRebalance, heartbeat, joinGroup, leaveGroup, syncGroup } from './group/coordinator'
+import { checkTimeouts, completeRebalance, hasAnyGroupMember, heartbeat, joinGroup, leaveGroup, syncGroup } from './group/coordinator'
 import type { AssignorName } from './group/assignors'
 import { commitOffsets, scheduleAutoCommit } from './group/offsets'
 import { createPartition } from './log'
@@ -54,12 +54,21 @@ const HEARTBEAT_INTERVAL_MS = 3000
 
 /**
  * Nhịp quét định kỳ của `member-timeout` (Task 4) — một vòng TOÀN CLUSTER
- * (`checkTimeouts` tự lặp qua mọi group), không gắn với một consumer cụ thể
- * nào nên seed MỘT LẦN lúc khởi tạo simulation (`seedEvents`), không phải mỗi
- * lần một consumer join như `fetch-request`/`heartbeat`. Thô hơn
- * `POLL_INTERVAL_MS` là được — `sessionTimeoutMs`/`maxPollIntervalMs` đều tính
- * bằng giây trở lên, chậm hơn 1000ms một khoảng an toàn không làm trễ đáng kể
- * việc phát hiện eviction trong khung thời gian một lesson.
+ * (`checkTimeouts` tự lặp qua mọi group). Thô hơn `POLL_INTERVAL_MS` là được —
+ * `sessionTimeoutMs`/`maxPollIntervalMs` đều tính bằng giây trở lên, chậm hơn
+ * 1000ms một khoảng an toàn không làm trễ đáng kể việc phát hiện eviction
+ * trong khung thời gian một lesson.
+ *
+ * Fix round (post-review): vòng này KHÔNG còn seed một lần vô điều kiện ở
+ * `seedEvents` — nó chỉ khởi động khi `applyConsumerJoin` thấy
+ * `hasAnyGroupMember` chuyển từ false → true (member ĐẦU TIÊN của toàn bộ
+ * simulation), và `applyMemberTimeout` chỉ tự hẹn lại chừng nào
+ * `hasAnyGroupMember` sau khi quét vẫn còn true. Seed vô điều kiện trước đây
+ * khiến lịch trình một simulation Kafka không bao giờ cạn (`nextEventTime()`
+ * không bao giờ `undefined`, kể cả một topology không hề có consumer), âm
+ * thầm vô hiệu hoá auto-pause của shell (`useSimulation.ts:198`) cho MỌI
+ * lesson — xem `hasAnyGroupMember` (`group/coordinator.ts`) để biết vì sao
+ * kiểm `members.length` chứ không phải `state.groups` rỗng.
  */
 const MEMBER_TIMEOUT_SCAN_INTERVAL_MS = 1000
 
@@ -387,13 +396,13 @@ function seedEvents(options: KafkaSimulationOptions): SimEvent<KafkaEventType>[]
     }
   }
 
-  // `member-timeout` (Task 4): vòng quét TOÀN CLUSTER, seed đúng MỘT lần ở đây
-  // — không gate theo có consumer/group nào tồn tại hay không (kể cả kịch bản
-  // không hề có consumer-join nào vẫn seed event này, `checkTimeouts` quét
-  // `state.groups` rỗng là một no-op vô hại). `seq` đặt SAU CÙNG, lớn hơn mọi
-  // event script/fault cùng `at` — cùng nguyên tắc thứ tự cố định Step 3 của
-  // brief yêu cầu.
-  events.push({ at: MEMBER_TIMEOUT_SCAN_INTERVAL_MS, seq: seq++, type: 'member-timeout', payload: {} })
+  // `member-timeout` (Task 4) KHÔNG seed ở đây nữa (fix round, post-review) —
+  // một kịch bản không hề có `consumer-join` (lesson 06-10, `consumers: []`)
+  // không có group/member nào để quét, nên seed vô điều kiện trước đây chỉ
+  // khiến lịch trình không bao giờ cạn cho những lesson đó vì không có gì.
+  // `applyConsumerJoin` (bên dưới) tự khởi động vòng quét này ngay khi member
+  // ĐẦU TIÊN của toàn simulation xuất hiện — xem why-comment ở đó và ở
+  // `hasAnyGroupMember` (`group/coordinator.ts`).
 
   return events
 }
@@ -596,6 +605,15 @@ function applyConsumerJoin(topology: KafkaTopology, state: KafkaState, event: Si
   const consumerId = asString(event.payload.consumerId, 'consumerId')
   const spec = consumerSpec(topology, consumerId)
 
+  // Chụp lại TRƯỚC khi `joinGroup` thêm member này vào bất kỳ group nào — đây
+  // là điều kiện DUY NHẤT quyết định có cần khởi động vòng quét
+  // `member-timeout` hay không (xem why-comment ở `MEMBER_TIMEOUT_SCAN_INTERVAL_MS`
+  // và ở `hasAnyGroupMember`, `group/coordinator.ts`): `false` nghĩa là member
+  // này là member ĐẦU TIÊN của toàn simulation (hoặc vòng quét cũ đã tự dừng vì
+  // mọi group đều rỗng) — hai trường hợp coordinator.ts không phân biệt được từ
+  // bên trong, engine/index.ts (nơi seed event) phải tự phát hiện.
+  const needsFirstScan = !hasAnyGroupMember(state)
+
   const runtime: ConsumerRuntime = { position: {}, paused: [], lastPollAt: event.at }
   const withRuntime: KafkaState = { ...state, consumers: { ...state.consumers, [consumerId]: runtime } }
 
@@ -630,7 +648,19 @@ function applyConsumerJoin(topology: KafkaTopology, state: KafkaState, event: Si
   const autoCommitEvents = scheduleAutoCommit(afterHbSeq, spec, event.at)
   const afterAutoCommitSeq = autoCommitEvents.length > 0 ? { ...afterHbSeq, seq: afterHbSeq.seq + 1 } : afterHbSeq
 
-  return { state: afterAutoCommitSeq, newEvents: [...joined.newEvents, firstPoll, firstHeartbeat, ...autoCommitEvents] }
+  // Khởi động (lại) vòng quét `member-timeout` — chỉ khi `needsFirstScan` (chụp
+  // ở đầu hàm). Một consumer-join thứ hai/ba trong khi vòng đã chạy KHÔNG được
+  // seed thêm một vòng song song: `applyMemberTimeout` tự quét MỌI group mỗi
+  // lần bắn, member mới này đã nằm trong phạm vi quét sẵn có.
+  let finalState = afterAutoCommitSeq
+  const memberTimeoutEvents: SimEvent<KafkaEventType>[] = []
+  if (needsFirstScan) {
+    const [scanSeq, afterScanSeq] = nextSeq(finalState)
+    finalState = afterScanSeq
+    memberTimeoutEvents.push({ at: event.at + MEMBER_TIMEOUT_SCAN_INTERVAL_MS, seq: scanSeq, type: 'member-timeout', payload: {} })
+  }
+
+  return { state: finalState, newEvents: [...joined.newEvents, firstPoll, firstHeartbeat, ...autoCommitEvents, ...memberTimeoutEvents] }
 }
 
 /**
@@ -943,14 +973,22 @@ function applyRebalanceComplete(state: KafkaState, event: SimEvent<KafkaEventTyp
 /**
  * `member-timeout` là một tick định kỳ quét MỌI group (`checkTimeouts` tự lặp
  * qua `sortedGroupIds`), không mang theo `groupId` riêng trong payload — khác
- * bốn event kia. Task 4: chạy một lượt quét tại `event.at`, rồi tự hẹn lại
- * VÔ ĐIỀU KIỆN mỗi `MEMBER_TIMEOUT_SCAN_INTERVAL_MS` — không gate theo có
- * consumer/group nào tồn tại (seed đầu tiên ở `seedEvents` cũng vậy): quét một
- * cluster không group nào là một no-op vô hại, không có lý do dừng vòng này
- * lại giữa chừng một simulation đang chạy.
+ * bốn event kia. Task 4: chạy một lượt quét tại `event.at`, rồi tự hẹn lại mỗi
+ * `MEMBER_TIMEOUT_SCAN_INTERVAL_MS`.
+ *
+ * Fix round (post-review): tự hẹn lại giờ có ĐIỀU KIỆN — chỉ khi
+ * `hasAnyGroupMember` sau khi quét (`result.state`, đã phản ánh mọi eviction
+ * `checkTimeouts` vừa làm) vẫn còn `true`. Trước đây hẹn lại VÔ ĐIỀU KIỆN
+ * khiến vòng này sống mãi bất kể `state.groups` có ai hay không, làm
+ * `sim.nextEventTime()` không bao giờ trả `undefined` — vô hiệu hoá auto-pause
+ * của shell (`useSimulation.ts:198`) cho MỌI lesson Kafka. `applyConsumerJoin`
+ * là nơi (duy nhất) khởi động lại vòng này nếu sau đó có member mới join một
+ * cluster đã quét-tới-rỗng — xem why-comment ở đó.
  */
 function applyMemberTimeout(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const result = checkTimeouts(state, event.at)
+  if (!hasAnyGroupMember(result.state)) return result // không còn ai — dừng hẳn vòng quét, không hẹn lại
+
   const [seq, afterSeq] = nextSeq(result.state)
   const nextScan: SimEvent<KafkaEventType> = { at: event.at + MEMBER_TIMEOUT_SCAN_INTERVAL_MS, seq, type: 'member-timeout', payload: {} }
   return { state: afterSeq, newEvents: [...result.newEvents, nextScan] }
