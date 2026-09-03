@@ -10,12 +10,18 @@ export const offsets: KafkaLesson = {
   summary:
     'Ba con số hay bị gọi chung là "offset": offset của record không đổi, position chạy theo mỗi lần fetch, committed offset chỉ nhích khi commit tường minh.',
   seed: 5,
-  durationMs: 24_000,
+  durationMs: 30_000,
   topology: {
     brokers: [BROKER_1],
     topics: [{ name: 'orders', partitions: 1, replicationFactor: 1 }],
     producers: [PRODUCER],
-    consumers: [{ ...CONSUMER_A, groupId: 'g1', subscriptions: ['orders'], autoOffsetReset: 'latest' }],
+    // `enableAutoCommit: false` — cùng lý do bài 04: auto-commit thật (mặc định
+    // bật, 5s một lần) sẽ tự nhích committed offset ngoài ý script, làm sai
+    // đúng điều bài này muốn chỉ ra ("committed offset chỉ nhích khi commit
+    // tường minh").
+    consumers: [
+      { ...CONSUMER_A, groupId: 'g1', subscriptions: ['orders'], autoOffsetReset: 'latest', enableAutoCommit: false },
+    ],
     controllerBrokerId: BROKER_1.id,
   },
   script: [
@@ -25,19 +31,27 @@ export const offsets: KafkaLesson = {
     { at: 1500, kind: 'produce', producerId: 'p1', topic: 'orders', value: 'đơn-3' },
     { at: 2000, kind: 'produce', producerId: 'p1', topic: 'orders', value: 'đơn-4' },
     { at: 6000, kind: 'consumer-join', consumerId: 'c1' },
-    // 6650/7650/9000/9700 lệch khỏi lưới poll 100ms bắt đầu từ 6000 (6000, 6100,
-    // 6200…) một cách có chủ đích, cùng lý do như bài 04: giữ thứ tự "ghi/seek
-    // xong rồi mới tới lượt poll kế tiếp thấy" tách bạch, không phụ thuộc cách
-    // kernel phá tie giữa hai event trùng `at`.
-    { at: 6650, kind: 'produce', producerId: 'p1', topic: 'orders', value: 'đơn-5' },
-    { at: 7000, kind: 'commit', consumerId: 'c1' },
-    { at: 7650, kind: 'produce', producerId: 'p1', topic: 'orders', value: 'đơn-6' },
-    // 9050, không phải một mốc tròn 9000: 9000 trùng đúng lưới poll (6000 + n*100),
-    // nên seek và lần poll kế tiếp sẽ xử lý trong CÙNG một tick — position bị
-    // đọc lại về 6 ngay lập tức, không còn cách nào quan sát khoảnh khắc "vừa
-    // seek xong, chưa kịp fetch" mà narrative đang muốn chỉ ra.
-    { at: 9050, kind: 'seek', consumerId: 'c1', topic: 'orders', partition: 0, offset: 'earliest' },
-    { at: 9700, kind: 'commit', consumerId: 'c1' },
+    // `c1` join một group MỚI ở đây nên phải đợi hết `maxPollIntervalMs` (5000,
+    // xem default ở `types.ts`) trước khi coordinator chốt assignment — hành vi
+    // CHỦ ĐỘNG của `group/coordinator.ts` (Task 2), không phải độ trễ ngẫu
+    // nhiên. `auto.offset.reset=latest` chỉ thật sự "neo" một khi lần poll ĐẦU
+    // TIÊN có assignment chạy, tức 6000+5000=11000, không phải ngay lúc join —
+    // mọi mốc còn lại trong bài lùi 5000ms so với bản trước khi real group
+    // coordination được nối vào, để giữ nguyên khoảng cách tương đối với mốc đó.
+    //
+    // 11650/12650/14050/14700 lệch khỏi lưới poll 100ms bắt đầu từ 6000 (6000,
+    // 6100, 6200…) một cách có chủ đích, cùng lý do như bài 04: giữ thứ tự
+    // "ghi/seek xong rồi mới tới lượt poll kế tiếp thấy" tách bạch, không phụ
+    // thuộc cách kernel phá tie giữa hai event trùng `at`.
+    { at: 11_650, kind: 'produce', producerId: 'p1', topic: 'orders', value: 'đơn-5' },
+    { at: 12_000, kind: 'commit', consumerId: 'c1' },
+    { at: 12_650, kind: 'produce', producerId: 'p1', topic: 'orders', value: 'đơn-6' },
+    // 14050, không phải một mốc tròn 14000: 14000 trùng đúng lưới poll
+    // (6000 + n*100), nên seek và lần poll kế tiếp sẽ xử lý trong CÙNG một
+    // tick — position bị đọc lại về 6 ngay lập tức, không còn cách nào quan sát
+    // khoảnh khắc "vừa seek xong, chưa kịp fetch" mà narrative đang muốn chỉ ra.
+    { at: 14_050, kind: 'seek', consumerId: 'c1', topic: 'orders', partition: 0, offset: 'earliest' },
+    { at: 14_700, kind: 'commit', consumerId: 'c1' },
   ],
   narrative: [
     {
@@ -49,27 +63,34 @@ export const offsets: KafkaLesson = {
     },
     {
       at: 6000,
-      title: 'auto.offset.reset chỉ chạy khi chưa có gì để bám vào',
+      title: 'Join xong chưa có nghĩa là đọc được ngay',
       body:
-        'Consumer `c1` vào group với `autoOffsetReset: \'latest\'`. Vì chưa từng có position hay committed offset hợp lệ, nó neo ngay vào high watermark hiện tại — bốn record đã ghi trước đó bị bỏ qua hoàn toàn, không đọc lại.',
+        '`c1` gọi join group `g1`. Coordinator không cấp assignment ngay tại đây — nó chủ động đợi hết `maxPollIntervalMs` trước khi chốt ai thuộc group, đúng cơ chế rebalance thật (bài 12 đi sâu vào lý do). Trong lúc chờ, `c1` chưa đọc được record nào, kể cả bốn record đã nằm sẵn trong log.',
       highlight: ['c1', 'orders-0'],
     },
     {
-      at: 7700,
+      at: 11_000,
+      title: 'auto.offset.reset chỉ chạy khi chưa có gì để bám vào',
+      body:
+        'Assignment vừa chốt xong, `c1` có lượt poll đầu tiên thật sự đọc được gì đó. Vì chưa từng có position hay committed offset hợp lệ, `autoOffsetReset: \'latest\'` neo ngay vào high watermark hiện tại — bốn record đã ghi từ trước khi `c1` vào group bị bỏ qua hoàn toàn, không đọc lại.',
+      highlight: ['c1', 'orders-0'],
+    },
+    {
+      at: 12_700,
       title: 'latest chỉ bỏ qua quá khứ, không bỏ qua tương lai',
       body:
-        'Record ghi sau khi `c1` đã vào group vẫn được đọc bình thường — `latest` chỉ quyết định điểm bắt đầu, không phải luật đọc mãi mãi. Ngay lúc này position đã chạy lên phía trước, còn committed offset vẫn đứng nguyên ở giá trị lần commit gần nhất, vì chỉ có gọi commit mới nhích nó.',
+        'Record ghi sau khi `c1` đã có assignment vẫn được đọc bình thường — `latest` chỉ quyết định điểm bắt đầu, không phải luật đọc mãi mãi. Ngay lúc này position đã chạy lên phía trước, còn committed offset vẫn đứng nguyên ở giá trị lần commit gần nhất, vì chỉ có gọi commit mới nhích nó.',
       highlight: ['c1'],
     },
     {
-      at: 9050,
+      at: 14_050,
       title: 'seek: đọc lại có chủ đích',
       body:
         '`c1` seek về `\'earliest\'`. Position lập tức nhảy xuống offset thấp nhất còn trong log — khác hẳn committed offset, vẫn giữ nguyên giá trị cũ cho tới lần commit kế tiếp. Bản thân seek không đọc gì cả, nó chỉ đặt lại vị trí sẽ đọc ở lượt poll kế tiếp.',
       highlight: ['c1', 'orders-0'],
     },
     {
-      at: 9700,
+      at: 14_700,
       title: 'Committed offset là con số cho lần khởi động lại',
       body:
         'Sau khi đọc lại toàn bộ log từ đầu, `c1` commit lần nữa. Trong Kafka thật, chính con số vừa lưu là thứ quyết định một consumer nên đọc lại từ đâu khi nó rời rồi vào lại group — khác cả position (chạy theo từng lần fetch) lẫn `auto.offset.reset` (chỉ có tác dụng khi chưa hề có committed offset hợp lệ). Bài này chỉ dựng tới bước commit; phần một consumer mới đọc lại đúng con số đó thuộc về group coordinator, một cấu phần chưa có ở đây.',
@@ -78,7 +99,7 @@ export const offsets: KafkaLesson = {
   ],
   checkpoints: [
     {
-      at: 20_000,
+      at: 25_000,
       question: 'Giữa offset của record, position và committed offset, đâu là điểm khác nhau đúng?',
       options: [
         'Cả ba chỉ là ba tên gọi khác nhau của cùng một con số',

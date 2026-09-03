@@ -95,36 +95,39 @@ describe('lesson 04 — vòng đời record', () => {
     })
     sim.advanceTo(produceConsume.durationMs)
     const group = sim.snapshot().groups['g1']!
-    expect(group.committedOffsets['orders-0']).toEqual({ offset: 2, committedAt: 2000 })
+    expect(group.committedOffsets['orders-0']).toEqual({ offset: 2, committedAt: 7000 })
   })
 })
 
 describe('lesson 05 — offset', () => {
   it('auto.offset.reset=latest bỏ qua mọi record ghi trước khi consumer vào', () => {
     const sim = createKafkaSimulation({ topology: offsets.topology, script: offsets.script, seed: offsets.seed })
-    sim.advanceTo(6100)
+    // Join ở t=6000 phải đợi hết `maxPollIntervalMs` (5000, xem `lessons/types.ts`)
+    // trước khi coordinator chốt assignment — advance qua mốc đó (11000) cộng
+    // thêm một khoảng đệm trên lưới poll 100ms trước khi kiểm `position`.
+    sim.advanceTo(11_100)
     const runtime = sim.snapshot().consumers['c1']!
-    expect(runtime.position['orders-0']).toBe(4) // 4 record đã ghi trước lúc join, latest bỏ qua hết
+    expect(runtime.position['orders-0']).toBe(4) // 4 record đã ghi trước khi c1 có assignment, latest bỏ qua hết
   })
 
   it('position chạy trước, committed offset chỉ nhích khi commit tường minh', () => {
     const sim = createKafkaSimulation({ topology: offsets.topology, script: offsets.script, seed: offsets.seed })
-    sim.advanceTo(7800)
+    sim.advanceTo(12_800)
     const state = sim.snapshot()
     expect(state.consumers['c1']!.position['orders-0']).toBe(6)
-    expect(state.groups['g1']!.committedOffsets['orders-0']).toEqual({ offset: 5, committedAt: 7000 })
+    expect(state.groups['g1']!.committedOffsets['orders-0']).toEqual({ offset: 5, committedAt: 12_000 })
   })
 
   it('seek earliest đọc lại từ đầu log, không đụng committed offset', () => {
     const sim = createKafkaSimulation({ topology: offsets.topology, script: offsets.script, seed: offsets.seed })
-    sim.advanceTo(9080)
+    sim.advanceTo(14_080)
     const state = sim.snapshot()
     expect(state.consumers['c1']!.position['orders-0']).toBe(0)
-    expect(state.groups['g1']!.committedOffsets['orders-0']).toEqual({ offset: 5, committedAt: 7000 })
+    expect(state.groups['g1']!.committedOffsets['orders-0']).toEqual({ offset: 5, committedAt: 12_000 })
 
-    sim.advanceTo(9700)
+    sim.advanceTo(14_700)
     const after = sim.snapshot()
     expect(after.consumers['c1']!.position['orders-0']).toBe(6)
-    expect(after.groups['g1']!.committedOffsets['orders-0']).toEqual({ offset: 6, committedAt: 9700 })
+    expect(after.groups['g1']!.committedOffsets['orders-0']).toEqual({ offset: 6, committedAt: 14_700 })
   })
 })
