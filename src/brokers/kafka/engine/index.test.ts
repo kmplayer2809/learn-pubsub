@@ -304,4 +304,68 @@ describe('commit (Task 4, Ruling C — consolidate lên commitOffsets)', () => {
     expect(state.groups['g1']?.committedOffsets).toEqual({})
     expect(state.metrics.commits).toBe(0)
   })
+
+  it('rebalance thu hồi partition thì commit sau đó (từ consumer cũ, vẫn còn là member) không được đè offset của chủ mới', () => {
+    // Bug thật (dispatch giữa Task 5 và Task 8/10): `runtime.position` chỉ được
+    // cập nhật lúc FETCH — rebalance thu hồi một partition KHÔNG hề đụng tới nó,
+    // chỉ đụng `group.members[...].assignment`. `applyCommit` bản cũ lọc "partition
+    // cần commit" CHỈ theo "có position", không kiểm assignment HIỆN TẠI — nên một
+    // consumer vừa mất `orders-0` qua rebalance (còn là member — không hề
+    // `consumer-leave`) mà commit lại (script hoặc auto-commit) vẫn đè offset CŨ,
+    // ĐÃ ĐÓNG BĂNG của chính nó lên `committedOffsets`, xoá mất offset MỚI hơn mà
+    // chủ hiện tại đã ghi — im lặng, không lỗi, không dấu vết journal.
+    //
+    // Kịch bản: `orders` chỉ có 1 partition. `z-consumer` join một mình, giữ
+    // `orders-0`, seek offset 5 (giả lập vị trí đọc dở dang). `a-consumer` join
+    // sau, kích hoạt rebalance (`range`, 1 partition, 2 member sort theo
+    // memberId: 'a-consumer' đứng trước 'z-consumer' → nhận toàn bộ, 'z-consumer'
+    // mất `orders-0` nhưng VẪN còn trong `group.members`, chỉ `assignment: []`).
+    // `a-consumer` seek offset 20 rồi commit — offset mới ghi xuống
+    // `committedOffsets`. `z-consumer` (stale, position vẫn 5) commit SAU đó:
+    // trước fix, offset `committedOffsets['orders-0']` bị đè về 5; sau fix, commit
+    // của `z-consumer` chỉ tính trên assignment hiện tại của nó (rỗng) nên
+    // `orders-0` không nằm trong lượt commit này — offset 20 của `a-consumer`
+    // phải sống sót nguyên vẹn.
+    const topology: KafkaTopology = {
+      brokers: [{ id: 'b1', label: 'Broker 1', position: { x: 0, y: 0 } }],
+      topics: [{ name: 'orders', partitions: 1, replicationFactor: 1 }],
+      producers: [],
+      consumers: [
+        { id: 'z-consumer', label: 'Z', position: { x: 0, y: 0 }, groupId: 'g1', subscriptions: ['orders'], rebalanceTimeoutMs: 100, enableAutoCommit: false },
+        { id: 'a-consumer', label: 'A', position: { x: 0, y: 0 }, groupId: 'g1', subscriptions: ['orders'], rebalanceTimeoutMs: 100, enableAutoCommit: false },
+      ],
+      controllerBrokerId: 'b1',
+    }
+    const sim = createKafkaSimulation({
+      topology,
+      script: [
+        { at: 0, kind: 'consumer-join', consumerId: 'z-consumer' }, // gen 1, rebalance-complete @100 — z-consumer một mình, nhận orders-0
+        { at: 120, kind: 'seek', consumerId: 'z-consumer', topic: 'orders', partition: 0, offset: 5 }, // vị trí đọc dở dang, ĐÓNG BĂNG từ đây
+        { at: 150, kind: 'consumer-join', consumerId: 'a-consumer' }, // gen 2, rebalance-complete @250 — orders-0 đổi chủ sang a-consumer
+        { at: 260, kind: 'seek', consumerId: 'a-consumer', topic: 'orders', partition: 0, offset: 20 }, // chủ mới đọc xa hơn
+        { at: 270, kind: 'commit', consumerId: 'a-consumer' }, // committedOffsets['orders-0'] = { offset: 20, committedAt: 270 }
+        { at: 280, kind: 'commit', consumerId: 'z-consumer' }, // z-consumer stale — KHÔNG được đè offset 20 về 5
+      ],
+      seed: 1,
+    })
+    sim.advanceTo(300)
+    const state = sim.snapshot()
+
+    // Tiền đề: rebalance đúng như mô tả — z-consumer vẫn là member, nhưng mất
+    // assignment; a-consumer là chủ mới của orders-0.
+    const group = state.groups['g1']
+    expect(group?.members.find((m) => m.memberId === 'z-consumer')?.assignment).toEqual([])
+    expect(group?.members.find((m) => m.memberId === 'a-consumer')?.assignment).toEqual([{ topic: 'orders', partition: 0 }])
+    // Tiền đề: position của z-consumer thật sự vẫn đứng yên ở giá trị stale.
+    expect(state.consumers['z-consumer']?.position['orders-0']).toBe(5)
+
+    // Khẳng định chính: offset của chủ mới sống sót qua lượt commit của chủ cũ.
+    expect(group?.committedOffsets['orders-0']?.offset).toBe(20)
+    expect(group?.committedOffsets['orders-0']?.committedAt).toBe(270)
+
+    // z-consumer's commit vẫn "thành công" theo nghĩa nó là member hợp lệ — chỉ
+    // là không còn partition nào để commit (đúng nghĩa client thật chỉ commit
+    // cái nó đang giữ).
+    expect(state.journal.some((e) => e.text === 'z-consumer commit 0 partition (group g1)')).toBe(true)
+  })
 })

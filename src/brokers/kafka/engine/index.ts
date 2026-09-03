@@ -835,6 +835,23 @@ function applyProcessDone(topology: KafkaTopology, state: KafkaState, event: Sim
  * tường minh giữa chừng cũng "khởi động lại" đồng hồ auto-commit từ mốc đó —
  * đơn giản hơn theo dõi hai đồng hồ độc lập, và vô hại vì commit chỉ ghi lại vị
  * trí đọc hiện tại, không có tác dụng phụ nào khác khi lặp lại.
+ *
+ * Fix round (sau Task 5, trước Task 8/10): `runtime.position` chỉ được cập
+ * nhật lúc FETCH — một rebalance thu hồi partition khỏi consumer này KHÔNG hề
+ * đụng tới `state.consumers[consumerId].position` (chỉ `group.members[...].assignment`
+ * đổi). Nếu lọc CHỈ theo "có position" như bản cũ, một consumer vừa mất
+ * partition qua rebalance (còn là member — không hề `consumer-leave`, nên
+ * `commitOffsets`'s `isMember` check vẫn qua) mà vẫn còn tự hẹn auto-commit
+ * (hoặc bị script bắn `commit` tường minh) sẽ đem offset CŨ, ĐÃ ĐÓNG BĂNG của
+ * chính nó đè lên `committedOffsets` mà chủ mới (đang thật sự giữ partition đó)
+ * đã ghi sau — im lặng, không lỗi, không dấu vết ở journal. Giao (intersect)
+ * `keys` với assignment HIỆN TẠI của đúng member này trong `group.members`
+ * (không phải "đã từng có position") mới khớp cách một Kafka client thật hoạt
+ * động: nó chỉ commit những partition nó đang thật sự giữ. Một partition có
+ * position cũ nhưng KHÔNG còn trong assignment bị loại khỏi lượt commit này —
+ * không lỗi, không throw, chỉ đơn giản không có trong `offsets` — xem test
+ * "rebalance thu hồi partition thì commit sau đó không được đè offset của chủ
+ * mới" ở `index.test.ts`.
  */
 function applyCommit(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const consumerId = asString(event.payload.consumerId, 'consumerId')
@@ -843,10 +860,14 @@ function applyCommit(topology: KafkaTopology, state: KafkaState, event: SimEvent
 
   const spec = consumerSpec(topology, consumerId)
 
-  // Chỉ commit những partition consumer THỰC SỰ có position — lọc qua
-  // `sortedPartitionKeys(state)` thay vì lặp thẳng `Object.keys(runtime.position)`
+  const member = state.groups[spec.groupId]?.members.find((m) => m.memberId === consumerId)
+  const assignedKeys = new Set((member?.assignment ?? []).map((p) => partitionKey(p.topic, p.partition)))
+
+  // Chỉ commit những partition consumer THỰC SỰ có position VÀ đang thật sự
+  // được group phân công cho nó NGAY LÚC NÀY (xem why-comment ở trên) — lọc
+  // qua `sortedPartitionKeys(state)` thay vì lặp thẳng `Object.keys(runtime.position)`
   // để giữ determinism (§B6).
-  const keys = sortedPartitionKeys(state).filter((key) => runtime.position[key] !== undefined)
+  const keys = sortedPartitionKeys(state).filter((key) => runtime.position[key] !== undefined && assignedKeys.has(key))
   const offsets: Record<string, number> = {}
   for (const key of keys) {
     const offset = runtime.position[key]
