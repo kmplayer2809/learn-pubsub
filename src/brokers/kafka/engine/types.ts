@@ -247,6 +247,13 @@ export interface ProducerRuntime {
   // tự tiêm state) — xem why-comment ở `flushBatch`.
   pendingAckLosses?: number
   txnState?: 'Empty' | 'Ongoing' | 'PrepareCommit' | 'PrepareAbort'
+  // Task 9 (`transaction.ts`, §B5.5): id của transaction ĐANG MỞ, gán bởi
+  // `beginTransaction` — `commitTransaction`/`abortTransaction` dùng nó để tìm
+  // đúng những partition đã ghi record thuộc transaction này (quét `txnId` trong
+  // log từng partition) và biết ghi control record cho txnId nào. Bị xoá (không
+  // gán `undefined` tường minh, cùng quy ước `stickyPartition`) khi transaction
+  // kết thúc — `txnState` quay lại `'Empty'` cùng lúc.
+  currentTxnId?: string
   // Ba trường dưới đây phục vụ `pickPartition` (Task 4, `partitioner.ts`) — không
   // khai báo ở Task 1 vì spec §B3 cũng không liệt kê chúng, nhưng `enqueueRecord`
   // cần một chỗ thuần (không phải biến ngoài) để thread trạng thái partitioner
@@ -424,3 +431,13 @@ export type KafkaEventType =
   | 'isr-shrink'
   | 'isr-expand'
   | 'leader-election'
+  // Task 9 (`transaction.ts`, §B5.5): mở/kết thúc một transaction của producer.
+  // `txn-begin` gọi thẳng `beginTransaction`; `txn-marker` gọi `commitTransaction`
+  // hoặc `abortTransaction` tuỳ `payload.outcome` — MỘT event cho cả hai chiều vì
+  // cả hai chỉ khác nhau ở record `control` ghi vào log (`'commit'`/`'abort'`),
+  // không khác gì ở chỗ sinh sự kiện. `seedEvents` (`engine/index.ts`) sinh chúng
+  // từ ba lệnh kịch bản `begin-transaction`/`commit-transaction`/`abort-transaction`
+  // (đã có sẵn trong `KafkaScriptedCommand` từ trước) — trước Task 9 ba lệnh đó bị
+  // bỏ qua có chủ đích vì hai event này chưa tồn tại.
+  | 'txn-begin'
+  | 'txn-marker'

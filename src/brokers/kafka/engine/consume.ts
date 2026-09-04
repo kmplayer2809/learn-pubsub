@@ -1,4 +1,5 @@
 import { readFrom } from './log'
+import { filterForIsolation, recomputeLastStableOffset } from './transaction'
 import { partitionKey, sortedPartitionKeys } from './types'
 import type { ConsumerRuntime, KafkaConsumerSpec, KafkaEventType, KafkaState, LogEntry, NodeId, PartitionState } from './types'
 import type { SimEvent } from '../../../shell/kernel/types'
@@ -11,6 +12,12 @@ import type { SimEvent } from '../../../shell/kernel/types'
 // `group/coordinator.ts` (Task 4, `assignedPartitionKeys` dưới đây) để biết
 // đọc partition nào — commit thật (`__consumer_offsets`) vẫn sống ở `group/`
 // (`offsets.ts`), không phải file này.
+//
+// Task 9 (`transaction.ts`, §B5.5): `fetchRecords` lọc record trả về theo
+// `consumer.isolationLevel` — `read_committed` cắt tại `lastStableOffset` và
+// giấu record thuộc transaction đã abort, `read_uncommitted` đọc nguyên tới
+// `highWatermark` như trước Task 9. Logic lọc thật sự sống ở `transaction.ts`
+// (`filterForIsolation`/`recomputeLastStableOffset`) — file này chỉ gọi lại.
 // ---------------------------------------------------------------------------
 
 /** `max.poll.records` mặc định của consumer Kafka thật. */
@@ -18,6 +25,9 @@ const DEFAULT_MAX_POLL_RECORDS = 500
 
 /** `auto.offset.reset` mặc định của consumer Kafka thật là `'latest'`, không phải `'earliest'`. */
 const DEFAULT_AUTO_OFFSET_RESET: 'earliest' | 'latest' = 'latest'
+
+/** `isolation.level` mặc định của consumer Kafka thật là `'read_uncommitted'`. */
+const DEFAULT_ISOLATION_LEVEL: 'read_uncommitted' | 'read_committed' = 'read_uncommitted'
 
 /**
  * `auto.offset.reset` chỉ có tác dụng khi consumer **không có** position hợp lệ:
@@ -130,6 +140,7 @@ export function fetchRecords(
   const runtime = getConsumerRuntime(state, consumer.id)
   const maxPollRecords = consumer.maxPollRecords ?? DEFAULT_MAX_POLL_RECORDS
   const autoOffsetReset = consumer.autoOffsetReset ?? DEFAULT_AUTO_OFFSET_RESET
+  const isolationLevel = consumer.isolationLevel ?? DEFAULT_ISOLATION_LEVEL
 
   // Partition "assigned" cho lần poll này — `GroupMember.assignment` THẬT
   // (Task 4, Ruling D), không còn `consumer.subscriptions` ở mức topic. Dùng
@@ -166,29 +177,64 @@ export function fetchRecords(
 
   const records: LogEntry[] = []
   let remaining = maxPollRecords
+  // Số record bị GIẤU khỏi `read_committed` VÌ thuộc một transaction đã abort —
+  // khác record bị cắt bởi LSO (chưa từng thật sự được fetch, xem why-comment ở
+  // dưới) và khác control record (không phải "bị bỏ qua", chúng chưa từng là dữ
+  // liệu ứng dụng). `metrics.abortedRecordsSkipped` chỉ đếm đúng phần này.
+  let abortedSkipped = 0
 
   for (const key of assignedKeys) {
     if (remaining <= 0) break
     if (workingRuntime.paused.includes(key)) continue
-    const partition = state.partitions[key]
-    if (!partition) continue
+    const rawPartition = state.partitions[key]
+    if (!rawPartition) continue
+
+    // `lastStableOffset` chỉ chắc chắn mới ngay sau lần `recomputeLastStableOffset`
+    // gần nhất (`transaction.ts`) — không có gì trong đường produce thường
+    // (`produce.ts`, ngoài phạm vi Task 9) tự gọi lại nó mỗi lần append. Tính lại
+    // NGAY TRƯỚC khi dùng, chỉ khi thật sự cần (`read_committed`) — partition
+    // không transactional thì không tốn gì thêm ở nhánh `read_uncommitted`.
+    const partition = isolationLevel === 'read_committed' ? recomputeLastStableOffset(rawPartition) : rawPartition
 
     // Đã được gán ở vòng trên cho mọi partition không pause tới đây —
     // `?? partition.logStartOffset` chỉ là rào chắn kiểu cho
     // `noUncheckedIndexedAccess`, không phải một nhánh thật sự chạy được.
     const position = workingRuntime.position[key] ?? partition.logStartOffset
-    const fetched = readFrom(partition, position, remaining)
-    if (fetched.length === 0) continue
-    workingRuntime = { ...workingRuntime, position: { ...workingRuntime.position, [key]: position + fetched.length } }
-    records.push(...fetched)
-    remaining -= fetched.length
+    const rawFetched = readFrom(partition, position, remaining)
+    if (rawFetched.length === 0) continue
+
+    // `read_committed` không bao giờ đọc quá `lastStableOffset` — dù `readFrom` ở
+    // trên đã trả record tới tận `highWatermark` (biên của `read_uncommitted`).
+    // Cắt NGAY tại đây, TRƯỚC khi cập nhật `position`: một record nằm sau LSO
+    // hoàn toàn CHƯA được coi là "đã đọc" — nó phải còn nguyên để lần fetch KẾ
+    // TIẾP (sau khi transaction đang treo nó commit/abort) đọc lại đúng chỗ, chứ
+    // không phải bị im lặng nhảy qua như thể consumer đã bỏ lỡ nó.
+    const consumed =
+      isolationLevel === 'read_committed' ? rawFetched.filter((entry) => entry.offset < partition.lastStableOffset) : rawFetched
+    if (consumed.length === 0) continue
+
+    workingRuntime = { ...workingRuntime, position: { ...workingRuntime.position, [key]: position + consumed.length } }
+    remaining -= consumed.length
+
+    const visible = filterForIsolation(consumed, partition, isolationLevel)
+    // Những gì đáng lẽ thấy được nếu bỏ qua riêng luật abort (chỉ còn bị chặn bởi
+    // control record, không phải luật này) — hiệu số với `visible` chính là phần
+    // luật abort loại thêm.
+    const candidateVisible = consumed.filter((entry) => entry.control === undefined)
+    abortedSkipped += candidateVisible.length - visible.length
+
+    records.push(...visible)
   }
 
   workingRuntime = { ...workingRuntime, lastPollAt: at }
   let nextState = putRuntime(state, consumer.id, workingRuntime)
   nextState = {
     ...nextState,
-    metrics: { ...nextState.metrics, recordsConsumed: nextState.metrics.recordsConsumed + records.length },
+    metrics: {
+      ...nextState.metrics,
+      recordsConsumed: nextState.metrics.recordsConsumed + records.length,
+      abortedRecordsSkipped: nextState.metrics.abortedRecordsSkipped + abortedSkipped,
+    },
   }
 
   const newEvents: SimEvent<KafkaEventType>[] = []

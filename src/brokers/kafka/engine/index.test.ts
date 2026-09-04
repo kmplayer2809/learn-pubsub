@@ -369,3 +369,53 @@ describe('commit (Task 4, Ruling C — consolidate lên commitOffsets)', () => {
     expect(state.journal.some((e) => e.text === 'z-consumer commit 0 partition (group g1)')).toBe(true)
   })
 })
+
+// Task 9 (`transaction.ts`, §B5.5): các lệnh kịch bản `begin-transaction`/
+// `commit-transaction`/`abort-transaction` — trước Task 9 chúng bị `seedEvents`
+// bỏ qua có chủ đích (chưa có `txn-begin`/`txn-marker` trong `KafkaEventType`).
+// Test này khẳng định wiring THẬT: script → event → reducer → `transaction.ts`.
+//
+// Lưu ý phạm vi: `produce.ts` (đường produce thường) KHÔNG nằm trong Task 9 —
+// một record được `produce` trong lúc transaction đang mở KHÔNG tự động mang
+// `txnId` (đó là việc của một task sau, gắn `enqueueRecord`/`flushBatch` với
+// `ProducerRuntime.currentTxnId`). Test dưới đây vì vậy chỉ khẳng định máy trạng
+// thái transaction/journal chạy đúng — không khẳng định record có `txnId`.
+describe('transaction scripted commands (Task 9)', () => {
+  it('begin-transaction rồi commit-transaction chạy qua đúng máy trạng thái, có journal', () => {
+    const sim = createKafkaSimulation({
+      topology: makeTopology(),
+      script: [
+        { at: 0, kind: 'begin-transaction', producerId: 'p1' },
+        { at: 500, kind: 'commit-transaction', producerId: 'p1' },
+      ],
+      seed: 1,
+    })
+
+    sim.advanceTo(100)
+    expect(sim.snapshot().producers['p1']?.txnState).toBe('Ongoing')
+    expect(sim.snapshot().producers['p1']?.currentTxnId).toBeDefined()
+
+    sim.advanceTo(1000)
+    const state = sim.snapshot()
+    expect(state.producers['p1']?.txnState).toBe('Empty')
+    expect(state.producers['p1']?.currentTxnId).toBeUndefined()
+    expect(state.journal.some((e) => e.type === 'txn-begin' && e.text.includes('bắt đầu transaction'))).toBe(true)
+    expect(state.journal.some((e) => e.type === 'txn-marker' && e.text.includes('commit transaction'))).toBe(true)
+  })
+
+  it('abort-transaction cũng chạy qua đúng máy trạng thái, journal ghi đúng outcome', () => {
+    const sim = createKafkaSimulation({
+      topology: makeTopology(),
+      script: [
+        { at: 0, kind: 'begin-transaction', producerId: 'p1' },
+        { at: 500, kind: 'abort-transaction', producerId: 'p1' },
+      ],
+      seed: 1,
+    })
+
+    sim.advanceTo(1000)
+    const state = sim.snapshot()
+    expect(state.producers['p1']?.txnState).toBe('Empty')
+    expect(state.journal.some((e) => e.type === 'txn-marker' && e.text.includes('abort transaction'))).toBe(true)
+  })
+})

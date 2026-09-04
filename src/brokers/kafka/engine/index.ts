@@ -8,6 +8,7 @@ import { createPartition, recomputeHighWatermark } from './log'
 import { enqueueRecord, flushBatch, PRODUCE_RESPONSE_TRAVEL_MS, resolvePendingAcks } from './produce'
 import { applyRetention, rollSegments } from './segments'
 import { electLeader, expandIsr, replicaFetch, shrinkIsr, withUnderReplicatedMetric } from './replication'
+import { abortTransaction, beginTransaction, commitTransaction } from './transaction'
 import { partitionKey, sortedPartitionKeys } from './types'
 import type {
   ConsumerRuntime,
@@ -136,6 +137,11 @@ function asOptionalNumber(value: unknown, field: string): number | undefined {
 function asOffset(value: unknown, field: string): number | 'earliest' | 'latest' {
   if (value === 'earliest' || value === 'latest') return value
   return asNumber(value, field)
+}
+
+function asTxnOutcome(value: unknown, field: string): 'commit' | 'abort' {
+  if (value === 'commit' || value === 'abort') return value
+  throw new Error(`kafka engine: payload.${field} is not 'commit' | 'abort'`)
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
@@ -406,12 +412,23 @@ function seedEvents(options: KafkaSimulationOptions): SimEvent<KafkaEventType>[]
         })
         break
       case 'begin-transaction':
+        events.push({ at: command.at, seq: seq++, type: 'txn-begin', payload: { producerId: command.producerId } })
+        break
       case 'commit-transaction':
+        events.push({
+          at: command.at,
+          seq: seq++,
+          type: 'txn-marker',
+          payload: { producerId: command.producerId, outcome: 'commit' },
+        })
+        break
       case 'abort-transaction':
-        // Giao dịch (transaction.ts, §B5.5) thuộc một plan sau — `KafkaEventType`
-        // (Task 1) chưa có event nào cho ba loại lệnh này. Bỏ qua có chủ đích thay
-        // vì throw: một lesson lỡ dùng chúng trước khi engine hỗ trợ chỉ đơn giản
-        // không thấy hiệu ứng gì, không làm sập cả simulation.
+        events.push({
+          at: command.at,
+          seq: seq++,
+          type: 'txn-marker',
+          payload: { producerId: command.producerId, outcome: 'abort' },
+        })
         break
     }
   }
@@ -1013,6 +1030,37 @@ function applyResumeEvent(state: KafkaState, event: SimEvent<KafkaEventType>): R
   return { state: applyResume(state, { consumerId, topic, partition }), newEvents: [] }
 }
 
+// --- Reducers: transaction (Task 9, `transaction.ts`, §B5.5) ----------------
+
+function applyTxnBegin(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const producerId = asString(event.payload.producerId, 'producerId')
+  const nextState = beginTransaction(state, { producerId, at: event.at })
+  return {
+    state: {
+      ...nextState,
+      journal: [...nextState.journal, { at: event.at, type: 'txn-begin', text: `${producerId} bắt đầu transaction`, nodeId: producerId }],
+    },
+    newEvents: [],
+  }
+}
+
+function applyTxnMarker(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const producerId = asString(event.payload.producerId, 'producerId')
+  const outcome = asTxnOutcome(event.payload.outcome, 'outcome')
+  const nextState =
+    outcome === 'commit'
+      ? commitTransaction(state, { producerId, at: event.at })
+      : abortTransaction(state, { producerId, at: event.at })
+  const label = outcome === 'commit' ? 'commit' : 'abort'
+  return {
+    state: {
+      ...nextState,
+      journal: [...nextState.journal, { at: event.at, type: 'txn-marker', text: `${producerId} ${label} transaction`, nodeId: producerId }],
+    },
+    newEvents: [],
+  }
+}
+
 // --- Reducers: group coordinator (Task 2, nối thật ở Task 4) -----------------
 //
 // Năm nhánh dưới đây gọi THẲNG hàm cùng tên ở `group/coordinator.ts` — logic
@@ -1450,6 +1498,8 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     'isr-shrink': withPrune((state, event) => applyIsrShrink(topology, state, event)),
     'isr-expand': withPrune((state, event) => applyIsrExpand(topology, state, event)),
     'leader-election': withPrune((state, event) => applyLeaderElection(topology, state, event)),
+    'txn-begin': withPrune(applyTxnBegin),
+    'txn-marker': withPrune(applyTxnMarker),
   }
 }
 

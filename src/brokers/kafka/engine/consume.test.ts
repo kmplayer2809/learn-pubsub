@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { appendRecord } from './log'
 import { applyPause, applyResume, applySeek, fetchRecords, resolvePosition } from './consume'
 import { testState } from './testState'
+import { abortTransaction, beginTransaction, commitTransaction } from './transaction'
 import { partitionKey, sortedPartitionKeys } from './types'
 import type { ConsumerRuntime, GroupMember, GroupState, KafkaConsumerSpec, KafkaState } from './types'
 
@@ -218,5 +219,62 @@ describe('consume', () => {
     const { state: after, records } = fetchRecords(state, { consumer: c, at: 0 })
     expect(records).toHaveLength(3)
     expect(after.metrics.recordsConsumed).toBe(state.metrics.recordsConsumed + 3)
+  })
+
+  // Task 9 (`transaction.ts`, §B5.5): `fetchRecords` phải TỰ lọc theo
+  // `consumer.isolationLevel` — không chỉ `filterForIsolation` đứng riêng
+  // (`transaction.test.ts` đã test thẳng hàm đó), mà cả đường produce/consume
+  // thật qua `fetchRecords` này.
+  describe('isolationLevel (Task 9)', () => {
+    it('read_committed chỉ thấy record đã commit, read_uncommitted thấy cả record đang mở/đã abort', () => {
+      let base = testState({ topics: [{ name: orders, partitions: 1, replicationFactor: 1 }] })
+      base = beginTransaction(base, { producerId: 'p1', at: 0 })
+      const openTxnId = base.producers['p1']?.currentTxnId
+      const partitionWithOpenRecord = appendRecord(base.partitions[key0]!, {
+        key: null,
+        value: 'open',
+        timestamp: 0,
+        bytes: 10,
+        txnId: openTxnId,
+      }).partition
+      base = { ...base, partitions: { ...base.partitions, [key0]: partitionWithOpenRecord } }
+
+      // Hai consumer độc lập (mỗi cái một group `g1` riêng qua `withConsumer`,
+      // KHÔNG cùng chung một state — `withConsumer` thay hẳn `groups.g1`, gọi hai
+      // lần trên cùng state sẽ đè lẫn nhau) — chỉ khác `isolationLevel`.
+      const committedState = withConsumer(base, 'c1')
+      const uncommittedState = withConsumer(base, 'c1')
+
+      const committedReader = consumerSpec({ autoOffsetReset: 'earliest', isolationLevel: 'read_committed' })
+      const uncommittedReader = consumerSpec({ autoOffsetReset: 'earliest', isolationLevel: 'read_uncommitted' })
+
+      expect(fetchRecords(committedState, { consumer: committedReader, at: 1 }).records).toEqual([])
+      expect(fetchRecords(uncommittedState, { consumer: uncommittedReader, at: 1 }).records.map((r) => r.value)).toEqual(['open'])
+
+      // Sau khi commit, `read_committed` giờ thấy được — vẫn qua đúng `fetchRecords`,
+      // không phải một API riêng cho transaction.
+      const afterCommitState = commitTransaction(committedState, { producerId: 'p1', at: 2 })
+      const afterCommit = fetchRecords(afterCommitState, { consumer: committedReader, at: 3 })
+      expect(afterCommit.records.map((r) => r.value)).toEqual(['open'])
+    })
+
+    it('metrics.abortedRecordsSkipped tăng đúng khi read_committed bỏ qua record đã abort qua fetchRecords thật', () => {
+      let state = testState({ topics: [{ name: orders, partitions: 1, replicationFactor: 1 }] })
+      state = beginTransaction(state, { producerId: 'p1', at: 0 })
+      const txnId = state.producers['p1']?.currentTxnId
+      let partition = state.partitions[key0]
+      if (!partition) throw new Error('test: missing partition')
+      partition = appendRecord(partition, { key: null, value: 'a', timestamp: 0, bytes: 10, txnId }).partition
+      partition = appendRecord(partition, { key: null, value: 'b', timestamp: 1, bytes: 10, txnId }).partition
+      state = { ...state, partitions: { ...state.partitions, [key0]: partition } }
+      state = abortTransaction(state, { producerId: 'p1', at: 5 })
+      state = { ...state, partitions: { ...state.partitions, [key0]: appendRecord(state.partitions[key0]!, { key: null, value: 'c', timestamp: 6, bytes: 10 }).partition } }
+      state = withConsumer(state, 'c1')
+
+      const c = consumerSpec({ autoOffsetReset: 'earliest', isolationLevel: 'read_committed' })
+      const { state: after, records } = fetchRecords(state, { consumer: c, at: 10 })
+      expect(records.map((r) => r.value)).toEqual(['c']) // 'a'/'b' (abort) và control record đều bị giấu
+      expect(after.metrics.abortedRecordsSkipped).toBe(state.metrics.abortedRecordsSkipped + 2)
+    })
   })
 })
