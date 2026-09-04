@@ -1,4 +1,5 @@
 import { recomputeHighWatermark } from './log'
+import { PRODUCE_RESPONSE_TRAVEL_MS } from './produce'
 import { sortedPartitionKeys } from './types'
 import type { KafkaEventType, KafkaState, NodeId, PartitionState } from './types'
 import { nextInt } from '../../../shell/kernel/rng'
@@ -346,6 +347,41 @@ export function electLeader(
 
   const truncatedLog = partition.log.filter((entry) => entry.offset < bestLeo)
   const dataLoss = partition.log.length - truncatedLog.length
+
+  // Post-review fix: một `PendingAck` (`produce.ts`) đang đậu ở partition này
+  // với `offset >= bestLeo` trỏ tới đúng record vừa bị cắt khỏi `truncatedLog`
+  // — và offset đó sẽ bị TÁI SỬ DỤNG bởi lần `appendRecord` kế tiếp, vì offset
+  // mới luôn bắt đầu từ `partition.leo`, vừa đặt lại thành `bestLeo` ngay dưới
+  // đây. `resolvePendingAcks` (`produce.ts`) chỉ so `pending.offset <
+  // partition.highWatermark` — không biết gì về việc log đã bị cắt — nên nếu
+  // để entry này đậu lại, một khi record ghi đè đúng số offset đó được ack sau
+  // này, nó sẽ trả THÀNH CÔNG giả cho producer gốc dù dữ liệu producer đó gửi
+  // đã mất thật, phá đúng bảo đảm "acks=all không bao giờ nói dối" mà cả
+  // `pendingAcks` tồn tại để giữ. Phải chốt lỗi NGAY tại đây, tại đúng thời
+  // điểm truncation xảy ra — trước khi số offset đó có cơ hội bị tái dùng —
+  // chứ không thể chờ `resolveAllPendingAcks` quét chung sau election
+  // (`engine/index.ts`'s `applyLeaderElection`), vì tới lúc đó thông tin
+  // "offset này đã bị cắt" không còn cách nào phục hồi được nữa (`PendingAck`
+  // không mang `leaderEpoch`/generation marker nào để tự phát hiện chuyện này).
+  // Entry với `offset < bestLeo` (đã có tới `bestLeo`) sống sót nguyên vẹn —
+  // vẫn resolve bình thường qua cơ chế chung khi HW bắt kịp, không đụng gì ở
+  // đây.
+  const strandedPendingAcks = partition.pendingAcks.filter((pending) => pending.offset >= bestLeo)
+  const survivingPendingAcks = partition.pendingAcks.filter((pending) => pending.offset < bestLeo)
+
+  let working = state
+  const strandedEvents: SimEvent<KafkaEventType>[] = []
+  for (const pending of strandedPendingAcks) {
+    const [seq, afterSeq] = nextSeq(working)
+    working = afterSeq
+    strandedEvents.push({
+      at: at + PRODUCE_RESPONSE_TRAVEL_MS,
+      seq,
+      type: 'produce-response',
+      payload: { producerId: pending.producerId, topic: partition.topic, partition: partition.index, error: 'NOT_ENOUGH_REPLICAS' },
+    })
+  }
+
   const elected: PartitionState = {
     ...partition,
     leader: best,
@@ -355,14 +391,15 @@ export function electLeader(
     highWatermark: bestLeo,
     isr: [best],
     replicaState: { ...partition.replicaState, [best]: { leo: bestLeo, lastFetchAt: at } },
+    pendingAcks: survivingPendingAcks,
   }
   const next = withUnderReplicatedMetric({
-    ...state,
-    partitions: { ...state.partitions, [key]: elected },
+    ...working,
+    partitions: { ...working.partitions, [key]: elected },
     journal: [
-      ...state.journal,
+      ...working.journal,
       { at, type: 'leader-election', text: `${key}: unclean election — leader mới ${best}, mất ${dataLoss} record`, nodeId: best },
     ],
   })
-  return { state: next, newEvents: [], dataLoss }
+  return { state: next, newEvents: strandedEvents, dataLoss }
 }

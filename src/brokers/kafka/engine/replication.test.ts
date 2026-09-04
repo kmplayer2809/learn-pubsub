@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { electLeader, expandIsr, replicaFetch, shrinkIsr } from './replication'
 import { appendRecord, createPartition, recomputeHighWatermark } from './log'
-import { enqueueRecord, flushBatch, PRODUCE_RESPONSE_TRAVEL_MS } from './produce'
+import { enqueueRecord, flushBatch, PRODUCE_RESPONSE_TRAVEL_MS, resolvePendingAcks } from './produce'
 import { testState } from './testState'
 import { partitionKey } from './types'
 import type { KafkaProducerSpec, KafkaState, KafkaTopicSpec, PartitionState } from './types'
@@ -197,6 +197,98 @@ describe('replication', () => {
     expect(result.state.partitions[key0]?.isr).toEqual(['b3'])
     expect(result.dataLoss).toBeGreaterThan(0)
     expect(result.dataLoss).toBe(3) // 5 record cũ - 2 record b3 thật sự có = 3 mất
+  })
+
+  it('unclean bật: pendingAck cho offset bị cắt nhận lỗi thật NGAY lúc bầu lại, không đậu lại chờ bị hiểu nhầm', () => {
+    let partition = withRecords(['b1', 'b2', 'b3'], 'b1', ['a', 'b', 'c', 'd', 'e'])
+    partition = {
+      ...partition,
+      isr: ['b1'], // chỉ leader trong ISR
+      replicaState: {
+        b1: { leo: 5, lastFetchAt: 0 },
+        b2: { leo: 0, lastFetchAt: 0 },
+        b3: { leo: 2, lastFetchAt: 0 }, // duy nhất online, tụt lại phía sau
+      },
+      // Hai acks=all đang đậu lại chờ HW bắt kịp (xem why-comment ở
+      // `PartitionState.pendingAcks`, `types.ts`): offset 4 nằm trong phần log
+      // SẮP bị unclean election cắt bỏ (bestLeo sẽ là 2) — đây chính là kịch
+      // bản reviewer mô tả. offset 1 nằm dưới bestLeo nên sống sót.
+      pendingAcks: [
+        { producerId: 'p1', offset: 4, requestedAt: 650 },
+        { producerId: 'p1', offset: 1, requestedAt: 600 },
+      ],
+    }
+    const state = withPartition(
+      testState({ replicas: ['b1', 'b2', 'b3'], brokersOnline: { b1: false, b2: false, b3: true } }),
+      partition,
+    )
+
+    const result = electLeader(state, { partitionKey: key0, at: 700, uncleanLeaderElection: true })
+
+    // pendingAck ở offset 4 (bị cắt) phải nhận lỗi thật NGAY, không được đậu
+    // lại chờ `resolveAllPendingAcks` quét chung sau — tới lúc đó offset 4 đã
+    // biến mất khỏi ý nghĩa "record thật", và append kế tiếp sẽ tái dùng đúng
+    // số 2 (bestLeo), không phải 4, nên không có nguy cơ nhầm ở CHÍNH offset
+    // này — nhưng nếu để mảng cũ nguyên vẹn, sai lệch xảy ra qua ngả khác (xem
+    // test dưới). Ở đây ta chốt: entry offset 4 phải rời `pendingAcks` kèm một
+    // response lỗi thật, không phải bị lặng lẽ xoá.
+    expect(result.newEvents).toHaveLength(1)
+    const [failure] = result.newEvents
+    expect(failure?.type).toBe('produce-response')
+    expect(failure?.payload).toMatchObject({ producerId: 'p1', topic: 'orders', partition: 0, error: 'NOT_ENOUGH_REPLICAS' })
+    expect(failure?.payload.offset).toBeUndefined() // lỗi không có offset thành công đi kèm
+    expect(failure?.at).toBe(700 + PRODUCE_RESPONSE_TRAVEL_MS)
+
+    // offset 1 (< bestLeo) sống sót nguyên vẹn — vẫn đậu lại, chưa bị đụng gì
+    // ở bước này, đúng "cơ chế đã có" (`resolvePendingAcks`) sẽ giải quyết nó
+    // sau, không phải trách nhiệm của `electLeader`.
+    expect(result.state.partitions[key0]?.pendingAcks).toEqual([{ producerId: 'p1', offset: 1, requestedAt: 600 }])
+  })
+
+  it('unclean bật: append kế tiếp tái dùng số offset vừa bị cắt không hồi sinh acks=all cũ thành công giả', () => {
+    let partition = withRecords(['b1', 'b2', 'b3'], 'b1', ['a', 'b', 'c', 'd', 'e'])
+    partition = {
+      ...partition,
+      isr: ['b1'],
+      replicaState: {
+        b1: { leo: 5, lastFetchAt: 0 },
+        b2: { leo: 0, lastFetchAt: 0 },
+        b3: { leo: 2, lastFetchAt: 0 },
+      },
+      // offset 4 là request gốc, bị mất thật trong unclean election.
+      pendingAcks: [{ producerId: 'p-stale', offset: 4, requestedAt: 650 }],
+    }
+    const state = withPartition(
+      testState({ replicas: ['b1', 'b2', 'b3'], brokersOnline: { b1: false, b2: false, b3: true } }),
+      partition,
+    )
+
+    const elected = electLeader(state, { partitionKey: key0, at: 700, uncleanLeaderElection: true })
+    // p-stale đã nhận lỗi thật ngay tại đây (xem test trên) — mảng pendingAcks
+    // rỗng cho partition này từ giờ trở đi.
+    expect(elected.state.partitions[key0]?.pendingAcks).toEqual([])
+
+    // Producer mới ghi một record sau election — offset mới TÁI DÙNG đúng số 2
+    // (bestLeo), số offset vừa bị cắt khỏi log cũ.
+    const afterAppend = appendRecord(elected.state.partitions[key0] as PartitionState, { key: null, value: 'f', timestamp: 701, bytes: 10 })
+    expect(afterAppend.offset).toBe(2) // đúng offset bị tái dùng, xác nhận kịch bản reviewer mô tả
+    const caughtUp = recomputeHighWatermark(afterAppend.partition) // isr=['b3'] một mình, bắt kịp ngay
+    expect(caughtUp.highWatermark).toBeGreaterThan(2)
+
+    const stateAfterReuse = withPartition(elected.state, caughtUp)
+    const resolved = resolvePendingAcks(stateAfterReuse, { partitionKey: key0, at: 701 })
+
+    // Không có response THÀNH CÔNG nào cho p-stale — pendingAcks đã rỗng từ
+    // bước election, nên `resolvePendingAcks` (cơ chế chung, không biết gì về
+    // truncation) không còn gì để lặp qua và không phát sự kiện nào cho
+    // partition này nữa. Trước khi sửa: entry offset 4 của p-stale còn nằm
+    // trong `pendingAcks`, và once `highWatermark` vượt 4 (đúng như
+    // `caughtUp.highWatermark` ở trên khi offset mới cũng leo lên đủ cao),
+    // nhánh `offset < highWatermark` của `resolvePendingAcks` sẽ phát MỘT
+    // `produce-response` THÀNH CÔNG giả cho `p-stale` tại offset 4 — dữ liệu
+    // nó gửi đã mất thật. Assertion dưới đây khoá đúng hành vi đã sửa.
+    expect(resolved.newEvents).toEqual([])
+    expect(resolved.newEvents.some((e) => e.payload.producerId === 'p-stale' && e.payload.offset !== undefined)).toBe(false)
   })
 
   it('leaderEpoch tăng mỗi lần bầu lại', () => {
