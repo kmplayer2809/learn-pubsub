@@ -1,7 +1,7 @@
-import { appendRecord, estimateBytes, recomputeHighWatermark } from './log'
+import { appendRecord, estimateBytes } from './log'
 import { pickPartition } from './partitioner'
 import { partitionKey } from './types'
-import type { KafkaEventType, KafkaProducerSpec, KafkaState, KafkaTopicSpec, NodeId, PartitionState, ProducerRuntime } from './types'
+import type { KafkaEventType, KafkaProducerSpec, KafkaState, KafkaTopicSpec, NodeId, PartitionState, PendingAck, ProducerRuntime } from './types'
 import type { JournalEntry, SimEvent } from '../../../shell/kernel/types'
 
 // ---------------------------------------------------------------------------
@@ -317,11 +317,12 @@ export function checkIsrSufficient(
 /**
  * Gọi SAU khi append đã xảy ra, để xác nhận response thật. `acks=1` chỉ cần
  * leader đã append — không đợi follower, nên luôn `true` ngay khi hàm được
- * gọi. `acks=all` cần HW đã vượt qua offset vừa ghi; ở plan này chưa có
- * replication (Task 3's design: mỗi `appendRecord` coi như đã tới toàn bộ ISR
- * ngay lập tức), nên nhánh đó luôn `true` — plan sau thay `appendRecord` bằng
- * follower fetch thật, lúc đó hàm này mới có thể trả `false` một cách hợp lệ,
- * và chữ ký không cần đổi.
+ * gọi. `acks=all` cần HW đã vượt qua offset vừa ghi — kể từ Task 8
+ * (`appendRecord`, `log.ts`, gọi `recomputeHighWatermark` thật thay vì
+ * hardcode `highWatermark: leo`), nhánh này CÓ THỂ trả `false` thật sự khi
+ * partition nhiều replica và follower chưa kịp fetch. `flushBatch` là nơi xử
+ * lý nhánh `false` đó (đậu request lại `PartitionState.pendingAcks` thay vì
+ * trả response ngay) — xem why-comment ở đó và ở `resolvePendingAcks`.
  */
 export function isAckSatisfied(state: KafkaState, args: IsAckSatisfiedArgs): boolean {
   if (args.acks !== 'all') return true
@@ -531,23 +532,14 @@ export function flushBatch(
     }
     idx++
   }
-  // `appendRecord` (log.ts) chỉ cập nhật `replicaState` của LEADER, và tự đặt
-  // `highWatermark = leo` trực tiếp — đúng cho trường hợp một replica, nhưng
-  // với nhiều replica thì `recomputeHighWatermark` (min LEO trên ISR) sẽ đọc
-  // lại `replicaState` của follower vẫn còn kẹt ở giá trị khởi tạo (`leo: 0`)
-  // vì plan này chưa có reducer follower-fetch nào từng đụng tới nó — kéo HW
-  // tụt về 0 dù `appendRecord` vừa đặt đúng. Rule 6 của brief nói thẳng: "ở
-  // plan này chưa có replication nên replicaState của MỌI replica được coi là
-  // bắt kịp ngay" — tức phần việc "coi như bắt kịp" đó thuộc về `produce.ts`
-  // (nơi duy nhất gọi `recomputeHighWatermark` ở plan này), không phải một
-  // hành vi ẩn bên trong `appendRecord`. Plan sau thay đoạn này bằng follower
-  // fetch thật cập nhật `replicaState` theo thời gian, và dòng dưới đây biến
-  // mất.
-  const caughtUpReplicaState = Object.fromEntries(
-    workingPartition.replicas.map((replicaId) => [replicaId, { leo: workingPartition.leo, lastFetchAt: at }]),
-  )
-  workingPartition = { ...workingPartition, replicaState: { ...workingPartition.replicaState, ...caughtUpReplicaState } }
-  workingPartition = recomputeHighWatermark(workingPartition)
+  // Task 8: khối "coi mọi replica đã bắt kịp ngay" đã BIẾN MẤT ở đây, đúng như
+  // why-comment cũ của nó dự báo — `appendRecord` (log.ts) giờ tự gọi
+  // `recomputeHighWatermark` thật (dựa trên `isr`/`replicaState` thật) sau MỖI
+  // record, nên `workingPartition.highWatermark` ở đây đã là sự thật: bằng
+  // `leo` khi partition chỉ một replica (leader tự cập nhật `replicaState`
+  // của chính nó ngay lúc append), và CÓ THỂ thấp hơn `leo` khi partition
+  // nhiều replica mà follower chưa kịp `replica-fetch` — không cần (và không
+  // được) ép nó lên nữa ở đây.
 
   let next: KafkaState = {
     ...state,
@@ -618,15 +610,93 @@ export function flushBatch(
     return retryOrTerminal(lost, batch.records, 'ACK_LOST_RETRIES_EXHAUSTED', true)
   }
 
-  // ISR đã được gate ở trên cho `acks=all`, và `acks=1` không cần ISR — tới
-  // đây không còn đường nào tạo lỗi nữa trong plan này, nên response luôn
-  // thành công. `isAckSatisfied` vẫn được gọi (thay vì bỏ qua) để giữ đúng chỗ
-  // móc vào cho plan sau, khi nó có thể thật sự trả `false`.
+  // ISR đã được gate ở trên cho `acks=all` (đủ ISR TRƯỚC append), và `acks=1`
+  // không cần ISR. Append đã chắc chắn thành công tới đây — câu hỏi còn lại
+  // DUY NHẤT là network hiện tại có đủ để trả response NGAY hay chưa:
+  // `isAckSatisfied` luôn `true` cho `acks=1` (leader vừa ghi xong là đủ), và
+  // cho `acks=all` một partition-replica (ISR chỉ có leader, tự bắt kịp ngay
+  // trong `appendRecord`). Chỉ khi partition nhiều replica MÀ follower chưa
+  // kịp fetch, nó mới thật sự trả `false` (Task 8) — nhánh đó đậu request lại
+  // thay vì trả lỗi HAY thành công ngay, vì append đã THẬT SỰ xảy ra, chỉ là
+  // chưa đủ ISR xác nhận.
   const satisfied = isAckSatisfied(next, { acks, topic, partition, offset: lastOffset })
+  if (!satisfied) {
+    // `resolvePendingAcks` (dưới đây) là nơi DUY NHẤT phát `produce-response`
+    // cho yêu cầu này về sau — gọi từ mọi reducer có thể làm HW/ISR đổi
+    // (`replica-fetch`/`isr-shrink`/`isr-expand`/`leader-election`,
+    // `engine/index.ts`) mỗi khi lượt đó chạy xong. Không sinh `newEvents` ở
+    // đây: chưa có gì để báo producer cả, cả thành công lẫn thất bại.
+    const parkedPartition = getPartitionState(next, pKey)
+    const parked: PartitionState = {
+      ...parkedPartition,
+      pendingAcks: [...parkedPartition.pendingAcks, { producerId: producer.id, offset: lastOffset, requestedAt: at }],
+    }
+    return { state: { ...next, partitions: { ...next.partitions, [pKey]: parked } }, newEvents: [] }
+  }
+
   const [seq, afterSeq] = nextSeq(next)
-  const extra = satisfied ? { offset: lastOffset } : {}
   return {
     state: afterSeq,
-    newEvents: [responseEvent(seq, at + PRODUCE_RESPONSE_TRAVEL_MS, producer.id, topic.name, partition, extra)],
+    newEvents: [responseEvent(seq, at + PRODUCE_RESPONSE_TRAVEL_MS, producer.id, topic.name, partition, { offset: lastOffset })],
+  }
+}
+
+/**
+ * Task 8: phát `produce-response` THẬT cho mọi `PendingAck` của MỘT partition
+ * đã đủ điều kiện — gọi từ mọi reducer có thể làm `highWatermark`/`isr` đổi
+ * (`replica-fetch`/`isr-shrink`/`isr-expand`/`leader-election`/broker-down,
+ * `engine/index.ts`, qua `resolveAllPendingAcks` quét TOÀN BỘ partition).
+ *
+ * Hai nhánh, xét theo đúng thứ tự Kafka thật sẽ hoàn tất một delayed produce:
+ *   - `offset < highWatermark`: HW đã thật sự vượt qua — thành công, trả offset.
+ *   - Còn lại nhưng `isr.length < minInsyncReplicas`: ISR đã tụt dưới sàn
+ *     TRƯỚC khi kịp bắt — không còn cách nào thoả được nữa, trả lỗi
+ *     `NOT_ENOUGH_REPLICAS` ngay thay vì treo request vĩnh viễn (đây chính là
+ *     điều kiện "eventually resolves, never hangs" — không có nhánh thứ ba).
+ *   - Không rơi vào cả hai: vẫn còn hợp lý để chờ tiếp — giữ nguyên trong
+ *     `pendingAcks`, lượt sau lại xét.
+ *
+ * `minInsyncReplicas` nhận qua tham số (không đọc `KafkaTopology`, cùng quy
+ * ước `checkIsrSufficient`/`isAckSatisfied`) — mặc định `1` khi không truyền,
+ * khớp mặc định Kafka thật khi topic không set `min.insync.replicas`.
+ */
+export function resolvePendingAcks(
+  state: KafkaState,
+  args: { partitionKey: string; at: number; minInsyncReplicas?: number },
+): { state: KafkaState; newEvents: SimEvent<KafkaEventType>[] } {
+  const partition = state.partitions[args.partitionKey]
+  if (!partition || partition.pendingAcks.length === 0) return { state, newEvents: [] }
+
+  const minInsyncReplicas = args.minInsyncReplicas ?? 1
+  const isrInsufficient = partition.isr.length < minInsyncReplicas
+
+  const stillWaiting: PendingAck[] = []
+  const events: SimEvent<KafkaEventType>[] = []
+  let working = state
+
+  for (const pending of partition.pendingAcks) {
+    if (pending.offset < partition.highWatermark) {
+      const [seq, afterSeq] = nextSeq(working)
+      working = afterSeq
+      events.push(responseEvent(seq, args.at + PRODUCE_RESPONSE_TRAVEL_MS, pending.producerId, partition.topic, partition.index, { offset: pending.offset }))
+    } else if (isrInsufficient) {
+      const [seq, afterSeq] = nextSeq(working)
+      working = afterSeq
+      events.push(
+        responseEvent(seq, args.at + PRODUCE_RESPONSE_TRAVEL_MS, pending.producerId, partition.topic, partition.index, {
+          error: 'NOT_ENOUGH_REPLICAS',
+        }),
+      )
+    } else {
+      stillWaiting.push(pending)
+    }
+  }
+
+  if (events.length === 0) return { state, newEvents: [] }
+
+  const resolvedPartition: PartitionState = { ...partition, pendingAcks: stillWaiting }
+  return {
+    state: { ...working, partitions: { ...working.partitions, [args.partitionKey]: resolvedPartition } },
+    newEvents: events,
   }
 }

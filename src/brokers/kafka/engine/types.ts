@@ -129,6 +129,16 @@ export interface PartitionState {
   replicaState: Record<NodeId, { leo: number; lastFetchAt: number }>
   segments: { baseOffset: number; bytes: number; createdAt: number; sealed: boolean }[]
   leaderEpoch: number
+  // Task 8: `acks=all` mà `isAckSatisfied` (`produce.ts`) trả `false` ngay sau
+  // append (HW chưa vượt offset vừa ghi — nay là sự thật thật, không còn
+  // `appendRecord` fake catch-up) không còn cách nào trả lời NGAY — request bị
+  // "đậu" lại đây thay vì rớt một `produce-response` với payload rỗng vô nghĩa.
+  // `resolvePendingAcks` (`produce.ts`), gọi từ mọi reducer có thể làm HW/ISR
+  // đổi (`replica-fetch`/`isr-shrink`/`isr-expand`/`leader-election`,
+  // `engine/index.ts`), quét mảng này mỗi lần: `offset < highWatermark` mới
+  // ⇒ phát `produce-response` thật lúc đó; ISR tụt dưới `minInsyncReplicas`
+  // trước khi kịp ⇒ phát lỗi `NOT_ENOUGH_REPLICAS` thay vì treo vĩnh viễn.
+  pendingAcks: PendingAck[]
   // Broker nhớ sequence cuối cùng đã CHẤP NHẬN cho từng producerId trên chính
   // partition này — đúng cách Kafka thật chặn duplicate/out-of-order cho idempotent
   // producer, xem `checkSequence` (`produce.ts`). Khoá theo `producerId` (số,
@@ -136,6 +146,14 @@ export interface PartitionState {
   // lần lượt tái sử dụng cùng một `producerId` số trong một plan sau (transaction
   // epoch bump); ở plan này mỗi node giữ đúng một producerId suốt đời chạy.
   producerState: Record<number, { epoch: number; lastSequence: number }>
+}
+
+/** Một yêu cầu `acks=all` đã append THẬT nhưng chưa thoả HW — xem why-comment ở
+ *  `PartitionState.pendingAcks`. */
+export interface PendingAck {
+  producerId: NodeId
+  offset: number
+  requestedAt: number
 }
 
 export interface LogEntry {

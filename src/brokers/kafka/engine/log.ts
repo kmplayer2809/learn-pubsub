@@ -31,31 +31,39 @@ export function createPartition(args: { topic: string; index: number; leader: No
     segments: [{ baseOffset: 0, bytes: 0, createdAt: 0, sealed: false }],
     leaderEpoch: 0,
     producerState: {},
+    pendingAcks: [],
   }
 }
 
+/**
+ * Task 8 (Ā): trước đây hàm này TỰ đặt `highWatermark: leo` — coi mỗi append là
+ * "đã tới ISR" ngay lập tức, vì plan trước chưa có follower fetch thật. Giờ
+ * `replicaFetch` (`replication.ts`) đã chạy thật và tự cập nhật
+ * `replicaState` của follower theo thời gian, nên nguồn sự thật duy nhất cho
+ * `highWatermark` phải là `recomputeHighWatermark` (dựa trên `isr`/
+ * `replicaState`), KHÔNG còn hardcode `leo` nữa.
+ *
+ * Với partition một replica (`isr` chỉ có đúng `leader`) hành vi không đổi:
+ * dòng dưới đây vẫn cập nhật `replicaState[leader]` ngay tại đây, nên
+ * `recomputeHighWatermark` cho `min(LEO trên isr) = leo` tức khắc — `acks=1`/
+ * `acks=all` ở mọi lesson `replicationFactor: 1` (01-16) tiếp tục xong ngay,
+ * không đổi thời điểm phản hồi. Chỉ partition NHIỀU replica mới thấy
+ * `highWatermark` tụt lại sau `leo` cho tới khi follower thật sự fetch kịp —
+ * xem test "readFrom không bao giờ trả record vượt quá high watermark".
+ */
 export function appendRecord(partition: PartitionState, record: Omit<LogEntry, 'offset'>): { partition: PartitionState; offset: number } {
   const offset = partition.leo
   const entry: LogEntry = { ...record, offset }
   const leo = offset + 1
-  // Task này chưa nối replication (đó là plan sau) — không có reducer nào gọi
-  // fetch request để đẩy `replicaState` follower tiến lên, nên nếu `highWatermark`
-  // không tự theo `leo` ở đây thì nó kẹt ở 0 mãi mãi và không record nào từng đọc
-  // được. Coi mỗi append là "đã tới ISR" ngay lập tức — đúng trường hợp
-  // single-replica được brief yêu cầu. Khi plan sau nối replication thật,
-  // `recomputeHighWatermark` (dựa trên `isr`/`replicaState`) sẽ là nguồn sự thật
-  // và có thể kéo `highWatermark` xuống dưới `leo` — xem test "readFrom không bao
-  // giờ trả record vượt quá high watermark" cho cách override thủ công đó.
-  const next: PartitionState = {
+  const next: PartitionState = recomputeHighWatermark({
     ...partition,
     log: [...partition.log, entry],
     leo,
-    highWatermark: leo,
     replicaState: {
       ...partition.replicaState,
       [partition.leader]: { leo, lastFetchAt: record.timestamp },
     },
-  }
+  })
   return { partition: next, offset }
 }
 

@@ -10,7 +10,9 @@ import {
   isAckSatisfied,
   PRODUCE_RESPONSE_TRAVEL_MS,
   PRODUCE_RETRY_BACKOFF_MS,
+  resolvePendingAcks,
 } from './produce'
+import { replicaFetch } from './replication'
 import { testState } from './testState'
 import type { KafkaProducerSpec, KafkaState, KafkaTopicSpec, KafkaTopology, ProducerRuntime } from './types'
 import { partitionKey } from './types'
@@ -119,19 +121,53 @@ describe('produce', () => {
     expect(newEvents[0]?.payload.error).toBeUndefined()
   })
 
-  it('acks=all chờ mọi replica trong ISR bắt kịp', () => {
+  it('acks=all: append thành công NGAY nhưng response ĐẬU LẠI cho tới khi follower thật sự fetch kịp (Task 8)', () => {
     const twoReplicaTopic: KafkaTopicSpec = { name: 'orders', partitions: 1, replicationFactor: 2, config: { minInsyncReplicas: 2 } }
     let state = testState({ topics: [twoReplicaTopic], replicas: ['b1', 'b2'] })
     const p = producer({ acks: 'all', batchSize: 100_000, lingerMs: 0 })
     state = enqueueRecord(state, { producer: p, topic: twoReplicaTopic, key: null, value: 'a', at: 0 }).state
 
     const { state: after, newEvents } = flushBatch(state, { producer: p, topic: twoReplicaTopic, partition: 0, at: 0 })
-    // Chưa có replication thật ở plan này (Task 3's design) — mỗi append coi như
-    // đã tới toàn bộ ISR ngay lập tức, nên response vẫn trả thành công không cần
-    // một event chờ HW riêng.
+    // Record đã THẬT SỰ vào log — append không chờ ai cả.
     expect(after.partitions[key0]?.log).toHaveLength(1)
-    expect(newEvents[0]).toMatchObject({ type: 'produce-response', payload: { offset: 0 } })
-    expect(newEvents[0]?.payload.error).toBeUndefined()
+    // Nhưng b2 (follower) chưa từng fetch — HW vẫn 0, isAckSatisfied false —
+    // KHÔNG có response nào bay ra ngay, request "đậu" lại pendingAcks thay vì
+    // trả thành công giả hoặc lỗi giả.
+    expect(newEvents).toEqual([])
+    expect(after.partitions[key0]?.pendingAcks).toEqual([{ producerId: 'p1', offset: 0, requestedAt: 0 }])
+
+    // b2 fetch thật (replication.ts) — HW nhích lên, và `resolvePendingAcks`
+    // (gọi từ wrapper `replica-fetch`, engine/index.ts, mô phỏng ở đây bằng lời
+    // gọi thẳng) phát đúng response bị đậu, với offset thật.
+    const fetched = replicaFetch(after, { brokerId: 'b2', at: 100 })
+    expect(fetched.state.partitions[key0]?.highWatermark).toBe(1)
+    const resolved = resolvePendingAcks(fetched.state, { partitionKey: key0, at: 100, minInsyncReplicas: 2 })
+    expect(resolved.state.partitions[key0]?.pendingAcks).toEqual([])
+    expect(resolved.newEvents).toHaveLength(1)
+    expect(resolved.newEvents[0]).toMatchObject({
+      type: 'produce-response',
+      at: 100 + PRODUCE_RESPONSE_TRAVEL_MS,
+      payload: { offset: 0 },
+    })
+  })
+
+  it('acks=all đậu lại: ISR tụt dưới min.insync.replicas trước khi kịp bắt thì resolvePendingAcks trả lỗi, không treo vĩnh viễn', () => {
+    const twoReplicaTopic: KafkaTopicSpec = { name: 'orders', partitions: 1, replicationFactor: 2, config: { minInsyncReplicas: 2 } }
+    let state = testState({ topics: [twoReplicaTopic], replicas: ['b1', 'b2'] })
+    const p = producer({ acks: 'all', batchSize: 100_000, lingerMs: 0 })
+    state = enqueueRecord(state, { producer: p, topic: twoReplicaTopic, key: null, value: 'a', at: 0 }).state
+
+    const { state: after } = flushBatch(state, { producer: p, topic: twoReplicaTopic, partition: 0, at: 0 })
+    expect(after.partitions[key0]?.pendingAcks).toHaveLength(1)
+
+    // b2 rớt khỏi ISR trước khi kịp fetch — chỉ còn b1, dưới minInsyncReplicas.
+    const partition = after.partitions[key0]
+    if (!partition) throw new Error('test setup: missing partition')
+    const shrunk = { ...after, partitions: { ...after.partitions, [key0]: { ...partition, isr: ['b1'] } } }
+
+    const resolved = resolvePendingAcks(shrunk, { partitionKey: key0, at: 200, minInsyncReplicas: 2 })
+    expect(resolved.state.partitions[key0]?.pendingAcks).toEqual([]) // không còn treo
+    expect(resolved.newEvents[0]).toMatchObject({ type: 'produce-response', payload: { error: 'NOT_ENOUGH_REPLICAS' } })
   })
 
   it('acks=all lỗi NOT_ENOUGH_REPLICAS khi ISR nhỏ hơn min.insync.replicas', () => {

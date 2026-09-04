@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { appendRecord, createPartition, readFrom, recomputeHighWatermark } from './log'
 
-const empty = () => createPartition({ topic: 'orders', index: 0, leader: 'b1', replicas: ['b1', 'b2'] })
+// Replica đơn (`replicas: ['b1']`) là mặc định: leader luôn tự cập nhật
+// `replicaState` của chính nó ở mỗi `appendRecord`, nên `recomputeHighWatermark`
+// (giờ chạy NGAY trong `appendRecord`, Task 8) cho `highWatermark = leo` tức
+// khắc — đúng test "readFrom trả đúng số record tối đa" cần (không phải kiểm
+// hành vi ISR nhiều replica, hai test cuối file tự dựng `replicas: ['b1','b2']`
+// và ghi đè `isr`/`replicaState` tay khi cần điều đó).
+const empty = () => createPartition({ topic: 'orders', index: 0, leader: 'b1', replicas: ['b1'] })
 
 const push = (p: ReturnType<typeof empty>, value: string) =>
   appendRecord(p, { key: null, value, timestamp: 0, bytes: 10 }).partition

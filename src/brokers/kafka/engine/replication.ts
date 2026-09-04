@@ -58,8 +58,14 @@ function nextSeq(state: KafkaState): [number, KafkaState] {
  * count của một lesson chỉ vài chục), và tránh một nguồn lệch nếu hai lời gọi
  * `shrinkIsr`/`expandIsr`/`electLeader` chồng lên cùng partition trong cùng một
  * lượt kernel.
+ *
+ * Exported (Task 8): `engine/index.ts`'s `applyBrokerDown` cũng tự tay chỉnh
+ * `isr` (loại broker vừa down ra khỏi ISR của mọi partition nó là follower,
+ * NGAY tại thời điểm down thay vì chờ `shrinkIsr`'s quét theo
+ * `replicaLagTimeMaxMs`) nên cần gọi lại đúng hàm này, không viết lại một bản
+ * đếm khác.
  */
-function withUnderReplicatedMetric(state: KafkaState): KafkaState {
+export function withUnderReplicatedMetric(state: KafkaState): KafkaState {
   let count = 0
   for (const key of sortedPartitionKeys(state)) {
     const partition = state.partitions[key]
@@ -96,12 +102,18 @@ function withUnderReplicatedMetric(state: KafkaState): KafkaState {
  * (scheduler theo `(at, seq)`) sắp xếp xác định, không phụ thuộc việc RNG có
  * "song song" hay không.
  *
- * Broker đang offline: không fetch được gì (an toàn no-op cho state) và KHÔNG
- * tự hẹn lại — cùng nguyên tắc `applyMemberTimeout` dừng hẳn vòng quét khi
- * không còn gì để làm, tránh một vòng lặp sự kiện chết không bao giờ dừng cho
- * một broker đã rời cluster vĩnh viễn trong lesson đó. Việc khởi động lại vòng
- * này khi broker quay lại (`broker-up`) thuộc phạm vi Task 8 ("nối
- * `replication.ts` vào hoạt động thật"), không phải task này.
+ * Broker đang offline: không fetch được gì (an toàn no-op cho `partitions`)
+ * nhưng vẫn TỰ HẸN LẠI như bình thường — Task 8 (fix round, mirroring bug lớp
+ * `member-timeout` một reviewer trước đã bắt): bản trước KHÔNG hẹn lại khi
+ * offline, nghĩa là một khi broker rớt, vòng fetch của NÓ chết vĩnh viễn, kể
+ * cả sau khi `broker-up` đưa nó trở lại — không có gì trong `applyBrokerUp`
+ * (`engine/index.ts`, không đổi ở Task 8) biết cách khởi động lại một vòng
+ * fetch cho đúng broker đó. Giữ vòng SỐNG (chỉ bỏ qua phần VIỆC fetch, không
+ * bỏ qua việc HẸN LẠI) là cách đơn giản nhất: một khi `brokersOnline[brokerId]`
+ * trở lại `true`, lần tự hẹn KẾ TIẾP (chậm nhất `everyMs` sau đó) tự nhiên fetch
+ * lại bình thường — không cần `broker-up` biết bất kỳ điều gì về replication.
+ * Không tốn thêm sự kiện nào so với trước cho lesson KHÔNG bao giờ down broker
+ * này (vòng vẫn chỉ tự hẹn đúng một lần mỗi `everyMs` như cũ).
  */
 export function replicaFetch(
   state: KafkaState,
@@ -110,22 +122,20 @@ export function replicaFetch(
   const { brokerId, at } = args
   const everyMs = args.everyMs ?? DEFAULT_REPLICA_FETCH_EVERY_MS
 
-  if (state.brokersOnline[brokerId] === false) {
-    return { state, newEvents: [] }
-  }
-
   let partitions = state.partitions
-  for (const key of sortedPartitionKeys(state)) {
-    const partition = partitions[key]
-    if (!partition) continue
-    if (partition.leader === brokerId) continue // leader không fetch từ chính mình
-    if (!partition.replicas.includes(brokerId)) continue
+  if (state.brokersOnline[brokerId] !== false) {
+    for (const key of sortedPartitionKeys(state)) {
+      const partition = partitions[key]
+      if (!partition) continue
+      if (partition.leader === brokerId) continue // leader không fetch từ chính mình
+      if (!partition.replicas.includes(brokerId)) continue
 
-    const updated: PartitionState = {
-      ...partition,
-      replicaState: { ...partition.replicaState, [brokerId]: { leo: partition.leo, lastFetchAt: at } },
+      const updated: PartitionState = {
+        ...partition,
+        replicaState: { ...partition.replicaState, [brokerId]: { leo: partition.leo, lastFetchAt: at } },
+      }
+      partitions = { ...partitions, [key]: recomputeHighWatermark(updated) }
     }
-    partitions = { ...partitions, [key]: recomputeHighWatermark(updated) }
   }
 
   const [jitter, nextRng] = nextInt(state.rng, REPLICA_FETCH_JITTER_MS)
@@ -250,6 +260,14 @@ export function expandIsr(state: KafkaState, at: number): ReplicationResult {
  * watermark, nên không mất gì mà consumer từng thấy được — `dataLoss = 0`,
  * không đụng `log`. Chỉ tăng `leaderEpoch` khi thật sự có người được bầu.
  *
+ * Task 8: nhánh sạch NHÂN TIỆN lọc khỏi `isr` mọi thành viên đang OFFLINE
+ * (gồm chính leader vừa chết) — trước đây `isr` giữ nguyên, để lại một broker
+ * đã chết nằm lì trong ISR cho tới khi `shrinkIsr`'s quét theo
+ * `replicaLagTimeMaxMs` (mặc định 10s) dọn nó, một độ trễ không cần thiết
+ * ngay tại chính thời điểm ta VỪA xác nhận nó chết. Không đụng gì tới việc
+ * "ai được bầu" — chỉ dọn sạch state đã biết chắc là stale ngay lúc đang sửa
+ * `isr` cho partition này.
+ *
  * Không còn ứng viên sạch (ISR rỗng hoặc mọi thành viên ISR đều offline):
  *   - `uncleanLeaderElection` tắt (mặc định): KHÔNG bầu ai. `partition.leader`
  *     GIỮ NGUYÊN — thường vẫn đang trỏ tới broker vừa chết, và gate
@@ -284,7 +302,8 @@ export function electLeader(
 
   const cleanCandidate = partition.replicas.find((id) => partition.isr.includes(id) && isOnline(id))
   if (cleanCandidate !== undefined) {
-    const elected: PartitionState = { ...partition, leader: cleanCandidate, leaderEpoch: partition.leaderEpoch + 1 }
+    const prunedIsr = partition.isr.filter((id) => isOnline(id))
+    const elected: PartitionState = { ...partition, leader: cleanCandidate, leaderEpoch: partition.leaderEpoch + 1, isr: prunedIsr }
     const next = withUnderReplicatedMetric({
       ...state,
       partitions: { ...state.partitions, [key]: elected },

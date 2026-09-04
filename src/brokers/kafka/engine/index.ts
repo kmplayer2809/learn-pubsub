@@ -1,11 +1,13 @@
+import { compact } from './compaction'
 import { applyPause, applyResume, applySeek, fetchRecords } from './consume'
 import { applyConsumerStall, applyProcessingErrorArm, applyReplicaLag } from './faults'
 import { checkTimeouts, completeRebalance, hasAnyGroupMember, heartbeat, joinGroup, leaveGroup, syncGroup } from './group/coordinator'
 import type { AssignorName } from './group/assignors'
 import { commitOffsets, scheduleAutoCommit } from './group/offsets'
-import { createPartition } from './log'
-import { enqueueRecord, flushBatch, PRODUCE_RESPONSE_TRAVEL_MS } from './produce'
-import { electLeader, expandIsr, replicaFetch, shrinkIsr } from './replication'
+import { createPartition, recomputeHighWatermark } from './log'
+import { enqueueRecord, flushBatch, PRODUCE_RESPONSE_TRAVEL_MS, resolvePendingAcks } from './produce'
+import { applyRetention, rollSegments } from './segments'
+import { electLeader, expandIsr, replicaFetch, shrinkIsr, withUnderReplicatedMetric } from './replication'
 import { partitionKey, sortedPartitionKeys } from './types'
 import type {
   ConsumerRuntime,
@@ -18,6 +20,7 @@ import type {
   KafkaTopicSpec,
   KafkaTopology,
   NodeId,
+  PartitionState,
   ProducerRuntime,
 } from './types'
 import { validateKafkaTopology, type KafkaIssueCode, type KafkaValidationIssue } from './validate'
@@ -72,6 +75,18 @@ const HEARTBEAT_INTERVAL_MS = 3000
  * kiểm `members.length` chứ không phải `state.groups` rỗng.
  */
 const MEMBER_TIMEOUT_SCAN_INTERVAL_MS = 1000
+
+/**
+ * Nhịp quét ISR định kỳ (Task 8) — một vòng TOÀN CLUSTER (`applyIsrShrink`
+ * quét mọi partition, rồi tự chain một `isr-expand` cùng lượt). Không seed vô
+ * điều kiện — cùng kỷ luật đã sửa cho `MEMBER_TIMEOUT_SCAN_INTERVAL_MS`: chỉ
+ * seed khi topology THẬT SỰ có ít nhất một partition nhiều hơn một replica
+ * (`followerBrokerIds`, bên dưới), nếu không mọi lesson `replicationFactor: 1`
+ * (01-16) sẽ có một vòng sự kiện sống mãi vô nghĩa, vô hiệu hoá auto-pause của
+ * shell. 500ms đủ nhanh để lộ rõ hiệu ứng "ISR co lại, HW nhích lên" trong
+ * khung 20-30s của một lesson mà không tạo quá nhiều sự kiện thừa.
+ */
+const ISR_SCAN_INTERVAL_MS = 500
 
 export interface KafkaSimulationOptions {
   topology: KafkaTopology
@@ -212,18 +227,31 @@ function brokerAt(brokerIds: NodeId[], index: number): NodeId {
   return brokerIds[index % brokerIds.length] ?? ''
 }
 
-function createState(topology: KafkaTopology, seed: number): KafkaState {
-  const brokerIds = topology.brokers.map((b) => b.id)
-  const partitions: KafkaState['partitions'] = {}
+interface PartitionAssignment {
+  topic: string
+  index: number
+  leader: NodeId
+  replicas: NodeId[]
+}
 
-  // Leader rải vòng tròn qua TOÀN BỘ cluster bằng một bộ đếm KHÔNG reset lại ở
-  // mỗi topic: partition đầu tiên của topic thứ hai tiếp tục đúng vị trí broker
-  // kế tiếp thay vì luôn quay lại `brokers[0]`, giống cách nhiều topic tạo liên
-  // tiếp trên một cluster thật không dồn hết partition đầu của mọi topic vào
-  // cùng một broker. Thứ tự dựng ở đây (topic theo `topology.topics`, partition
-  // theo index tăng dần) chỉ ảnh hưởng gán leader/replica — thứ tự ĐỌC LẠI
-  // partition sau đó luôn đi qua `sortedPartitionKeys`, nên thứ tự chèn ở vòng
-  // lặp này không bao giờ rò vào hành vi (§B6).
+/**
+ * Leader rải vòng tròn qua TOÀN BỘ cluster bằng một bộ đếm KHÔNG reset lại ở
+ * mỗi topic: partition đầu tiên của topic thứ hai tiếp tục đúng vị trí broker
+ * kế tiếp thay vì luôn quay lại `brokers[0]`, giống cách nhiều topic tạo liên
+ * tiếp trên một cluster thật không dồn hết partition đầu của mọi topic vào
+ * cùng một broker. Thứ tự dựng ở đây (topic theo `topology.topics`, partition
+ * theo index tăng dần) chỉ ảnh hưởng gán leader/replica — thứ tự ĐỌC LẠI
+ * partition sau đó luôn đi qua `sortedPartitionKeys`, nên thứ tự chèn ở vòng
+ * lặp này không bao giờ rò vào hành vi (§B6).
+ *
+ * Task 8: tách ra khỏi `createState` thành một hàm thuần riêng — `seedEvents`
+ * (bên dưới) giờ cũng cần đúng phép gán này, để biết broker nào là FOLLOWER
+ * của ít nhất một partition (`followerBrokerIds`) mà không cần dựng cả một
+ * `KafkaState`.
+ */
+function assignPartitions(topology: KafkaTopology): PartitionAssignment[] {
+  const brokerIds = topology.brokers.map((b) => b.id)
+  const assignments: PartitionAssignment[] = []
   let globalIndex = 0
   for (const topic of topology.topics) {
     for (let index = 0; index < topic.partitions; index++) {
@@ -233,9 +261,36 @@ function createState(topology: KafkaTopology, seed: number): KafkaState {
       for (let r = 0; r < topic.replicationFactor; r++) {
         replicas.push(brokerAt(brokerIds, leaderPos + r))
       }
-      partitions[partitionKey(topic.name, index)] = createPartition({ topic: topic.name, index, leader, replicas })
+      assignments.push({ topic: topic.name, index, leader, replicas })
       globalIndex++
     }
+  }
+  return assignments
+}
+
+/**
+ * Mọi broker xuất hiện trong `replicas` của một partition mà KHÔNG phải leader
+ * của chính partition đó — tức broker thật sự cần một vòng `replica-fetch`
+ * (Task 8). Topology `replicationFactor: 1` thuần (mọi lesson 01-16) trả về
+ * tập rỗng: không broker nào từng là follower, nên không gì được seed —
+ * đúng bất biến "không seed vòng lặp vô nghĩa" đã lập ở
+ * `MEMBER_TIMEOUT_SCAN_INTERVAL_MS`.
+ */
+function followerBrokerIds(topology: KafkaTopology): Set<NodeId> {
+  const followers = new Set<NodeId>()
+  for (const assignment of assignPartitions(topology)) {
+    for (const id of assignment.replicas) {
+      if (id !== assignment.leader) followers.add(id)
+    }
+  }
+  return followers
+}
+
+function createState(topology: KafkaTopology, seed: number): KafkaState {
+  const brokerIds = topology.brokers.map((b) => b.id)
+  const partitions: KafkaState['partitions'] = {}
+  for (const assignment of assignPartitions(topology)) {
+    partitions[partitionKey(assignment.topic, assignment.index)] = createPartition(assignment)
   }
 
   return {
@@ -405,6 +460,22 @@ function seedEvents(options: KafkaSimulationOptions): SimEvent<KafkaEventType>[]
   // ĐẦU TIÊN của toàn simulation xuất hiện — xem why-comment ở đó và ở
   // `hasAnyGroupMember` (`group/coordinator.ts`).
 
+  // Task 8: seed vòng `replica-fetch` (một cho mỗi broker THẬT SỰ là follower
+  // của ít nhất một partition — `followerBrokerIds`) và một vòng quét
+  // `isr-shrink` (cluster-wide, tự chain `isr-expand` mỗi lượt — xem
+  // `applyIsrShrink`) — cùng kỷ luật "không seed vô điều kiện" như
+  // `member-timeout`: topology `replicationFactor: 1` thuần (01-16) không có
+  // follower nào, `followers` rỗng, KHÔNG seed gì — auto-pause của shell giữ
+  // nguyên hành vi cho mọi lesson đó. Sắp xếp theo id (mảng đã sort, §B6) để
+  // thứ tự các broker cùng bắn tại `at: 0` là xác định.
+  const followers = followerBrokerIds(options.topology)
+  if (followers.size > 0) {
+    for (const brokerId of [...followers].sort()) {
+      events.push({ at: 0, seq: seq++, type: 'replica-fetch', payload: { brokerId } })
+    }
+    events.push({ at: 0, seq: seq++, type: 'isr-shrink', payload: {} })
+  }
+
   return events
 }
 
@@ -432,18 +503,41 @@ function applyProduceRequest(topology: KafkaTopology, state: KafkaState, event: 
   })
 }
 
+/**
+ * Task 8: sau một `flushBatch` THẬT SỰ append được record (so log length của
+ * đúng partition này trước/sau) — nối một `segment-roll` NGAY tại `event.at`.
+ * `rollSegments`/`applyRetention` (`segments.ts`) đều an toàn gọi lại nhiều
+ * lần từ nguồn sự thật `partition.log`, nên tần suất "mỗi lần có ghi mới" là
+ * đủ, không cần một vòng quét định kỳ riêng (khác `isr-shrink` — retention là
+ * quyết định BYTE/TUỔI theo segment, không phải một cuộc đua với thời gian ảo
+ * trôi qua không kèm ghi nào).
+ */
+function chainSegmentRoll(pKey: string, beforeLogLength: number, result: ReduceResult): ReduceResult {
+  const afterLogLength = result.state.partitions[pKey]?.log.length ?? 0
+  if (afterLogLength <= beforeLogLength) return result
+  const [seq, afterSeq] = nextSeq(result.state)
+  const rollEvent: SimEvent<KafkaEventType> = { at: result.state.now, seq, type: 'segment-roll', payload: { partitionKey: pKey } }
+  return { state: afterSeq, newEvents: [...result.newEvents, rollEvent] }
+}
+
 function applyBatchFlush(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const producerId = asString(event.payload.producerId, 'producerId')
   const topicName = asString(event.payload.topic, 'topic')
   const partition = asNumber(event.payload.partition, 'partition')
+  const pKey = partitionKey(topicName, partition)
+  const beforeLogLength = state.partitions[pKey]?.log.length ?? 0
 
-  const leader = state.partitions[partitionKey(topicName, partition)]?.leader
-  const flushed = flushBatch(state, {
-    producer: producerSpec(topology, producerId),
-    topic: topicSpec(topology, topicName),
-    partition,
-    at: event.at,
-  })
+  const leader = state.partitions[pKey]?.leader
+  const flushed = chainSegmentRoll(
+    pKey,
+    beforeLogLength,
+    flushBatch(state, {
+      producer: producerSpec(topology, producerId),
+      topic: topicSpec(topology, topicName),
+      partition,
+      at: event.at,
+    }),
+  )
 
   if (leader === undefined) return flushed // unknown partition — flushBatch already threw if this mattered
 
@@ -559,15 +653,21 @@ function applyProduceRetry(topology: KafkaTopology, state: KafkaState, event: Si
   const attempt = asNumber(event.payload.attempt, 'attempt')
   const retryRecords = asOptionalRetryRecords(event.payload.records)
 
-  const leader = state.partitions[partitionKey(topicName, partition)]?.leader
-  const flushed = flushBatch(state, {
-    producer: producerSpec(topology, producerId),
-    topic: topicSpec(topology, topicName),
-    partition,
-    at: event.at,
-    attempt,
-    retryRecords,
-  })
+  const pKey = partitionKey(topicName, partition)
+  const beforeLogLength = state.partitions[pKey]?.log.length ?? 0
+  const leader = state.partitions[pKey]?.leader
+  const flushed = chainSegmentRoll(
+    pKey,
+    beforeLogLength,
+    flushBatch(state, {
+      producer: producerSpec(topology, producerId),
+      topic: topicSpec(topology, topicName),
+      partition,
+      at: event.at,
+      attempt,
+      retryRecords,
+    }),
+  )
 
   if (leader === undefined) return flushed // unknown partition — flushBatch đã throw trước nếu điều đó quan trọng
 
@@ -1018,19 +1118,70 @@ function applyMemberTimeout(state: KafkaState, event: SimEvent<KafkaEventType>):
 
 // --- Reducers: broker faults --------------------------------------------------
 
-function applyBrokerDown(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+/**
+ * Task 8: `applyBrokerDown` giờ làm BA việc thay vì chỉ lật cờ:
+ *
+ * 1. Với mọi partition mà broker này là FOLLOWER (nằm trong `isr`, không phải
+ *    `leader`) — loại nó khỏi `isr` NGAY, không đợi `shrinkIsr`'s quét định kỳ
+ *    theo `replicaLagTimeMaxMs` (mặc định 10s). Một broker vừa báo down chắc
+ *    chắn không "in sync" — chờ 10 giây thời gian ảo chỉ để xác nhận điều đã
+ *    biết chắc là một độ trễ dạy học vô ích (và khiến lesson 18's kịch bản
+ *    "mất một broker là produce lỗi ngay" không kịp xảy ra trong khung giờ của
+ *    nó). Bỏ qua partition mà broker này đang LÀ leader — nhánh 2 xử lý riêng.
+ * 2. Với mọi partition mà broker này đang là LEADER — chain một event
+ *    `leader-election` NGAY tại `event.at` (không gọi thẳng `electLeader`):
+ *    tái dùng đúng `applyLeaderElection`'s tra `uncleanLeaderElection` từ
+ *    topology, không lặp lại logic đó ở đây — cùng khuôn `applyIsrShrink`
+ *    chain `isr-expand`, `applySegmentRoll` chain `retention-delete`.
+ * 3. `resolveAllPendingAcks` — cả hai việc trên có thể làm `isr`/HW đổi, nên
+ *    một `PendingAck` (Task 8, `produce.ts`) có thể vừa đủ điều kiện phát
+ *    response (thành công HOẶC lỗi `NOT_ENOUGH_REPLICAS`) ngay tại đây.
+ */
+function applyBrokerDown(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const brokerId = asString(event.payload.brokerId, 'brokerId')
   if (state.brokersOnline[brokerId] === false) return { state, newEvents: [] } // đã down — no-op
-  return {
-    state: {
-      ...state,
-      brokersOnline: { ...state.brokersOnline, [brokerId]: false },
-      journal: [...state.journal, { at: event.at, type: 'broker-down', text: `# ${brokerId} down`, nodeId: brokerId }],
-    },
-    newEvents: [],
+
+  let working: KafkaState = {
+    ...state,
+    brokersOnline: { ...state.brokersOnline, [brokerId]: false },
+    journal: [...state.journal, { at: event.at, type: 'broker-down', text: `# ${brokerId} down`, nodeId: brokerId }],
   }
+
+  let partitions = working.partitions
+  let isrChanged = false
+  for (const key of sortedPartitionKeys(working)) {
+    const partition = partitions[key]
+    if (!partition || partition.leader === brokerId || !partition.isr.includes(brokerId)) continue
+    isrChanged = true
+    const shrunk: PartitionState = { ...partition, isr: partition.isr.filter((id) => id !== brokerId) }
+    partitions = { ...partitions, [key]: recomputeHighWatermark(shrunk) }
+  }
+  working = { ...working, partitions }
+  if (isrChanged) working = withUnderReplicatedMetric(working)
+
+  const electionEvents: SimEvent<KafkaEventType>[] = []
+  for (const key of sortedPartitionKeys(working)) {
+    const partition = working.partitions[key]
+    if (!partition || partition.leader !== brokerId) continue
+    const [seq, afterSeq] = nextSeq(working)
+    working = afterSeq
+    electionEvents.push({ at: event.at, seq, type: 'leader-election', payload: { partitionKey: key } })
+  }
+
+  const resolved = resolveAllPendingAcks(topology, working, event.at)
+  return { state: resolved.state, newEvents: [...electionEvents, ...resolved.newEvents] }
 }
 
+/**
+ * Task 8: KHÔNG đụng gì tới replication ở đây, có chủ đích — quyết định thiết
+ * kế của task này là để `replicaFetch` (`replication.ts`) tự chịu trách nhiệm
+ * phục hồi: nó tự hẹn lại VÔ ĐIỀU KIỆN kể cả khi offline (chỉ bỏ qua phần VIỆC
+ * fetch), nên một khi broker quay lại online, lần tự hẹn KẾ TIẾP của chính nó
+ * (chậm nhất `everyMs` sau đó) tự nhiên fetch lại bình thường — không cần
+ * `applyBrokerUp` tra topology để biết broker này follower của partition nào
+ * rồi seed lại một vòng fetch MỚI (dễ double-seed nếu gọi hai lần, hoặc bỏ sót
+ * nếu tra sai). Xem why-comment ở `replicaFetch` cho lý do đầy đủ.
+ */
 function applyBrokerUp(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const brokerId = asString(event.payload.brokerId, 'brokerId')
   if (state.brokersOnline[brokerId] === true) return { state, newEvents: [] } // đã up — no-op
@@ -1044,25 +1195,45 @@ function applyBrokerUp(state: KafkaState, event: SimEvent<KafkaEventType>): Redu
   }
 }
 
-// --- Reducers: replication (Task 6, `replication.ts`) -------------------------
+// --- Reducers: replication (Task 6, `replication.ts`; nối thật ở Task 8) ------
 //
-// Bốn nhánh dưới đây là logic THẬT — `replicaFetch`/`shrinkIsr`/`expandIsr`/
-// `electLeader` đã được viết và test đầy đủ ở `replication.ts` — nhưng, đúng
-// quy ước `join-group`/`sync-group`/`heartbeat`/`rebalance-complete`/
-// `member-timeout` (Task 2/4) đã theo, KHÔNG có `seedEvents`/reducer nào trong
-// wiring hiện tại thật sự DISPATCH một event `replica-fetch`/`isr-shrink`/
-// `isr-expand`/`leader-election` — chưa có hoạt động cluster thật nào (produce,
-// broker down/up…) gọi tới chúng. Nối chúng vào hoạt động thật (seed lần đầu
-// một `replica-fetch` cho mỗi broker follower, quét `shrinkIsr`/`expandIsr`
-// định kỳ, gọi `electLeader` khi leader rớt…) là việc của Task 8, ngoài phạm vi
-// task này. Wrapper ở đây chỉ tra những gì `replication.ts` cố tình không nhận
-// (topology) rồi giao thẳng cho hàm thuần tương ứng — không có logic nghiệp vụ
-// nào sống ở đây.
+// Bốn nhánh dưới đây gọi logic THẬT — `replicaFetch`/`shrinkIsr`/`expandIsr`/
+// `electLeader` (`replication.ts`) — và, kể từ Task 8, cũng LÀ những gì thật
+// sự khiến các event này được DISPATCH: `seedEvents` seed vòng `replica-fetch`
+// đầu tiên cho mỗi broker follower và vòng `isr-shrink` đầu tiên (khi topology
+// có ít nhất một partition nhiều replica — xem `followerBrokerIds`),
+// `applyBrokerDown` chain `leader-election`, và bản thân bốn nhánh này tự hẹn
+// lại/chain nhau (`applyReplicaFetch`/`applyIsrShrink` tự hẹn lại, `applyIsrShrink`
+// chain `isr-expand` cùng lượt). Mỗi nhánh, sau khi gọi hàm thuần tương ứng,
+// còn gọi `resolveAllPendingAcks` — HW/ISR vừa đổi có thể vừa đủ điều kiện
+// phát một `produce-response` đã bị đậu lại (Task 8, `produce.ts`).
+
+/**
+ * Task 8: quét MỌI partition, phát `produce-response` cho bất kỳ `PendingAck`
+ * nào vừa đủ điều kiện (`resolvePendingAcks`, `produce.ts`) — gọi từ mọi
+ * reducer có thể làm `highWatermark`/`isr` đổi. Không tốn gì cho partition
+ * không có `pendingAcks` (nhánh đầu của `resolvePendingAcks` trả ngay).
+ */
+function resolveAllPendingAcks(topology: KafkaTopology, state: KafkaState, at: number): ReduceResult {
+  let working = state
+  const newEvents: SimEvent<KafkaEventType>[] = []
+  for (const key of sortedPartitionKeys(working)) {
+    const partition = working.partitions[key]
+    if (!partition || partition.pendingAcks.length === 0) continue
+    const minInsyncReplicas = topicSpec(topology, partition.topic).config?.minInsyncReplicas
+    const resolved = resolvePendingAcks(working, { partitionKey: key, at, minInsyncReplicas })
+    working = resolved.state
+    newEvents.push(...resolved.newEvents)
+  }
+  return { state: working, newEvents }
+}
 
 function applyReplicaFetch(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
   const brokerId = asString(event.payload.brokerId, 'brokerId')
   const everyMs = topology.brokers.find((b) => b.id === brokerId)?.replicaFetchEveryMs
-  return replicaFetch(state, { brokerId, at: event.at, everyMs })
+  const fetched = replicaFetch(state, { brokerId, at: event.at, everyMs })
+  const resolved = resolveAllPendingAcks(topology, fetched.state, event.at)
+  return { state: resolved.state, newEvents: [...fetched.newEvents, ...resolved.newEvents] }
 }
 
 /**
@@ -1080,12 +1251,51 @@ function replicaLagTimeMaxMsByBroker(topology: KafkaTopology): Record<NodeId, nu
   return map
 }
 
+/**
+ * Task 8: nhịp quét ISR định kỳ — chain một `isr-expand` NGAY cùng lượt (thứ
+ * tự shrink-rồi-expand khớp cách `replication.ts` tài liệu hoá "ISR co lại làm
+ * HW nhích lên" rồi "replica bắt kịp lại được nhận vào"), rồi tự hẹn lại
+ * `isr-shrink` kế tiếp sau `ISR_SCAN_INTERVAL_MS`. Vòng này chỉ được SEED lần
+ * đầu khi topology có follower thật (`seedEvents`) — một khi đã seed, nó chạy
+ * suốt đời simulation (không có điều kiện dừng như `member-timeout`, cùng lý
+ * do `heartbeat`/`replica-fetch` không dừng: một cluster nhiều replica THẬT
+ * SỰ có công việc nền chạy liên tục, không phải một vòng quét chờ-tới-khi-rỗng).
+ */
 function applyIsrShrink(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
-  return shrinkIsr(state, event.at, replicaLagTimeMaxMsByBroker(topology))
+  const shrunk = shrinkIsr(state, event.at, replicaLagTimeMaxMsByBroker(topology))
+  const resolved = resolveAllPendingAcks(topology, shrunk.state, event.at)
+
+  const [expandSeq, afterExpandSeq] = nextSeq(resolved.state)
+  const expandEvent: SimEvent<KafkaEventType> = { at: event.at, seq: expandSeq, type: 'isr-expand', payload: {} }
+  const [scanSeq, afterScanSeq] = nextSeq(afterExpandSeq)
+  const nextScan: SimEvent<KafkaEventType> = { at: event.at + ISR_SCAN_INTERVAL_MS, seq: scanSeq, type: 'isr-shrink', payload: {} }
+
+  return { state: afterScanSeq, newEvents: [...shrunk.newEvents, ...resolved.newEvents, expandEvent, nextScan] }
 }
 
-function applyIsrExpand(state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
-  return expandIsr(state, event.at)
+function applyIsrExpand(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const expanded = expandIsr(state, event.at)
+  const resolved = resolveAllPendingAcks(topology, expanded.state, event.at)
+  return { state: resolved.state, newEvents: [...expanded.newEvents, ...resolved.newEvents] }
+}
+
+/**
+ * Task 8 (fault `replica-lag`, faults.ts): sau khi `applyReplicaLag` backdate
+ * `lastFetchAt` của broker này, chạy NGAY một lượt `shrinkIsr` phản ứng — nếu
+ * không, vòng `replica-fetch` ĐỘC LẬP của chính broker đó (đã chạy từ `at: 0`,
+ * không hề biết gì về fault này) sẽ "chữa lành" `lastFetchAt` ngay ở lượt tự
+ * hẹn kế tiếp của nó (chậm nhất `everyMs` sau, ~200-250ms) — TRƯỚC KHI vòng
+ * quét `isr-shrink` định kỳ (mỗi `ISR_SCAN_INTERVAL_MS`) có cơ hội nhìn thấy
+ * độ trễ giả này, khiến fault trở thành vô tác dụng trong phần lớn trường hợp.
+ * Gọi thẳng `shrinkIsr` (không chain một event `isr-shrink` MỚI) để không tạo
+ * thêm một vòng tự hẹn lại song song với vòng định kỳ đã có — đây là một lượt
+ * quét PHẢN ỨNG một lần, không phải một vòng lặp mới.
+ */
+function applyReplicaLagFault(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const lagged = applyReplicaLag(state, event)
+  const shrunk = shrinkIsr(lagged.state, event.at, replicaLagTimeMaxMsByBroker(topology))
+  const resolved = resolveAllPendingAcks(topology, shrunk.state, event.at)
+  return { state: resolved.state, newEvents: [...lagged.newEvents, ...shrunk.newEvents, ...resolved.newEvents] }
 }
 
 /**
@@ -1100,32 +1310,106 @@ function applyLeaderElection(topology: KafkaTopology, state: KafkaState, event: 
   const partition = state.partitions[partitionKeyArg]
   const uncleanLeaderElection = partition ? (topicSpec(topology, partition.topic).config?.uncleanLeaderElection ?? false) : false
   const result = electLeader(state, { partitionKey: partitionKeyArg, at: event.at, uncleanLeaderElection })
-  return { state: result.state, newEvents: result.newEvents }
+  const resolved = resolveAllPendingAcks(topology, result.state, event.at)
+  return { state: resolved.state, newEvents: [...result.newEvents, ...resolved.newEvents] }
+}
+
+// --- Reducers: segment roll, retention, compaction (Task 8, `segments.ts`/`compaction.ts`) ---
+//
+// `applySegmentRoll` chain LUÔN một `retention-delete` cùng lượt (thứ tự roll
+// rồi mới retention khớp Kafka thật: retention chỉ xoá SEGMENT đã sealed, và
+// một record vừa khiến segment cũ sealed thì segment đó mới có thể bị retention
+// xét ngay lượt sau). Compaction (nếu `cleanupPolicy: 'compact'`) chạy NGAY khi
+// một segment MỚI vừa sealed — `compact()` chỉ đụng segment sealed, nên đây là
+// điểm sớm nhất nó có việc để làm; không cần một vòng quét định kỳ riêng.
+
+function applySegmentRoll(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const pKey = asString(event.payload.partitionKey, 'partitionKey')
+  const partition = state.partitions[pKey]
+  if (!partition) return { state, newEvents: [] }
+  const topic = topicSpec(topology, partition.topic)
+
+  const rolled = rollSegments(partition, topic.config, event.at)
+  const sealedNew = rolled.segments.length > partition.segments.length
+
+  let working = rolled
+  let compactedRemoved = 0
+  if (sealedNew && topic.config?.cleanupPolicy === 'compact') {
+    const compacted = compact(working, event.at)
+    working = compacted.partition
+    compactedRemoved = compacted.removed
+  }
+
+  let next: KafkaState = { ...state, partitions: { ...state.partitions, [pKey]: working } }
+  if (compactedRemoved > 0) {
+    next = {
+      ...next,
+      metrics: { ...next.metrics, recordsCompacted: next.metrics.recordsCompacted + compactedRemoved },
+      journal: [
+        ...next.journal,
+        { at: event.at, type: 'segment-roll', text: `${pKey}: compaction xoá ${compactedRemoved} bản ghi cũ theo key`, nodeId: partition.leader },
+      ],
+    }
+  }
+
+  const [seq, afterSeq] = nextSeq(next)
+  const retentionEvent: SimEvent<KafkaEventType> = { at: event.at, seq, type: 'retention-delete', payload: { partitionKey: pKey } }
+  return { state: afterSeq, newEvents: [retentionEvent] }
+}
+
+function applyRetentionDelete(topology: KafkaTopology, state: KafkaState, event: SimEvent<KafkaEventType>): ReduceResult {
+  const pKey = asString(event.payload.partitionKey, 'partitionKey')
+  const partition = state.partitions[pKey]
+  if (!partition) return { state, newEvents: [] }
+  const topic = topicSpec(topology, partition.topic)
+
+  const { partition: retained, removed } = applyRetention(partition, topic.config, event.at)
+  if (removed === 0) return { state, newEvents: [] }
+
+  return {
+    state: {
+      ...state,
+      partitions: { ...state.partitions, [pKey]: retained },
+      metrics: { ...state.metrics, recordsExpired: state.metrics.recordsExpired + removed },
+      journal: [
+        ...state.journal,
+        {
+          at: event.at,
+          type: 'retention-delete',
+          text: `${pKey}: retention xoá ${removed} bản ghi, logStartOffset → ${retained.logStartOffset}`,
+          nodeId: partition.leader,
+        },
+      ],
+    },
+    newEvents: [],
+  }
 }
 
 // --- Reducers: chưa có ai dispatch (placeholder trung thực) --------------------
 //
-// Bốn nhánh dưới đây là thành viên của `KafkaEventType` (Task 1) nhưng KHÔNG một
+// Hai nhánh dưới đây là thành viên của `KafkaEventType` (Task 1) nhưng KHÔNG một
 // event nào trong wiring hiện tại từng sinh ra chúng — `REDUCERS` vẫn phải khai đủ
 // vì nó được gõ kiểu `Record<KafkaEventType, Reducer>`, và đó chính là lý do union
 // này tồn tại: thiếu một nhánh là lỗi compile, không phải lỗi runtime im lặng. Mỗi
 // nhánh chỉ trả nguyên state, không sinh event nào — GIỐNG mọi reducer không phát
-// event khác trong file này (`applyProcessDone`, `applyCommit`,
-// `applyBrokerDown`/`Up`, `applyProduceErrorArm`, `applySeekEvent`,
-// `applyPauseEvent`/`applyResumeEvent`): KHÔNG gọi `nextSeq`. `seq` chỉ tồn tại để
-// đánh dấu thứ tự cho EVENT MỚI được sinh ra (dùng làm tie-break trong scheduler)
-// — một reducer không sinh event nào thì không có gì cần đánh dấu, gọi `nextSeq`
-// ở đó chỉ tăng một con số không ai đọc. (Một bản trước của comment này nói ngược
-// lại — "mọi event đi qua kernel đều tiêu một seq" — sai, đã sửa ở Task 11.)
+// event khác trong file này (`applyProcessDone`, `applyCommit`, `applyBrokerUp`,
+// `applyProduceErrorArm`, `applySeekEvent`, `applyPauseEvent`/`applyResumeEvent`):
+// KHÔNG gọi `nextSeq`. `seq` chỉ tồn tại để đánh dấu thứ tự cho EVENT MỚI được
+// sinh ra (dùng làm tie-break trong scheduler) — một reducer không sinh event nào
+// thì không có gì cần đánh dấu, gọi `nextSeq` ở đó chỉ tăng một con số không ai
+// đọc. (Một bản trước của comment này nói ngược lại — "mọi event đi qua kernel đều
+// tiêu một seq" — sai, đã sửa ở Task 11.)
 //   - `append`: phần ghi log của broker hiện GỘP thẳng vào `flushBatch` (Task 4),
 //     gọi từ `batch-flush` ở trên. Event `append` tách riêng để dành cho một plan
-//     sau muốn chèn độ trễ giữa "request tới broker" và "broker ghi xong đĩa".
+//     SAU CẢ Task 8 muốn chèn độ trễ giữa "request tới broker" và "broker ghi
+//     xong đĩa" — không phải việc của task này (nối replication/retention/
+//     compaction), vẫn đứng ngoài phạm vi.
 //   - `deliver`: tương tự cho hướng consumer — `fetchRecords` (Task 5) trả record
 //     ngay trong `fetch-request`, không qua một chặng mạng tách riêng.
-//   - `segment-roll`/`retention-delete`: `rollSegments`/`applyRetention` (Task 3)
-//     là hàm thuần đã có và đã test, nhưng chưa được nối vào bất kỳ reducer nào ở
-//     plan này — không lesson nào trong phạm vi P1-P3 (basics/producer) cần
-//     retention chạy qua một simulation thật.
+//
+// `segment-roll`/`retention-delete` đã CHUYỂN sang nhóm thật ở trên (Task 8) —
+// `applySegmentRoll` chain `applyRetentionDelete` cùng lượt, cả hai đều
+// DISPATCH thật mỗi khi `flushBatch` append thành công (`chainSegmentRoll`).
 function placeholderReducer(state: KafkaState, _event: SimEvent<KafkaEventType>): ReduceResult {
   return { state, newEvents: [] }
 }
@@ -1145,14 +1429,14 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     deliver: withPrune(placeholderReducer),
     'process-done': withPrune((state, event) => applyProcessDone(topology, state, event)),
     commit: withPrune((state, event) => applyCommit(topology, state, event)),
-    'segment-roll': withPrune(placeholderReducer),
-    'retention-delete': withPrune(placeholderReducer),
+    'segment-roll': withPrune((state, event) => applySegmentRoll(topology, state, event)),
+    'retention-delete': withPrune((state, event) => applyRetentionDelete(topology, state, event)),
     'consumer-join': withPrune((state, event) => applyConsumerJoin(topology, state, event)),
     'consumer-leave': withPrune((state, event) => applyConsumerLeave(topology, state, event)),
     seek: withPrune(applySeekEvent),
     pause: withPrune(applyPauseEvent),
     resume: withPrune(applyResumeEvent),
-    'broker-down': withPrune(applyBrokerDown),
+    'broker-down': withPrune((state, event) => applyBrokerDown(topology, state, event)),
     'broker-up': withPrune(applyBrokerUp),
     'join-group': withPrune(applyJoinGroup),
     'sync-group': withPrune(applySyncGroup),
@@ -1161,10 +1445,10 @@ function createReducers(topology: KafkaTopology): Record<KafkaEventType, Reducer
     'member-timeout': withPrune(applyMemberTimeout),
     'consumer-stall': withPrune(applyConsumerStall),
     'processing-error': withPrune(applyProcessingErrorArm),
-    'replica-lag': withPrune(applyReplicaLag),
+    'replica-lag': withPrune((state, event) => applyReplicaLagFault(topology, state, event)),
     'replica-fetch': withPrune((state, event) => applyReplicaFetch(topology, state, event)),
     'isr-shrink': withPrune((state, event) => applyIsrShrink(topology, state, event)),
-    'isr-expand': withPrune(applyIsrExpand),
+    'isr-expand': withPrune((state, event) => applyIsrExpand(topology, state, event)),
     'leader-election': withPrune((state, event) => applyLeaderElection(topology, state, event)),
   }
 }

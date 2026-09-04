@@ -111,7 +111,15 @@ describe('faults', () => {
       failures: [{ at: 100, kind: 'replica-lag', brokerId: 'b2', ms: 5000 }],
       seed: 1,
     })
-    sim.advanceTo(200)
+    // Dừng lại đúng t=100 (thời điểm fault bắn), KHÔNG đi xa hơn: kể từ Task 8,
+    // `replica-fetch` chạy thật (topology này replicationFactor 2 nên có
+    // follower) — lần tự hẹn KẾ TIẾP của chính broker b2 (~200-250ms sau lần
+    // seed ở t=0) sẽ "chữa lành" đúng field này ngay khi nó tới lượt, che mất
+    // hiệu ứng fault nếu advance qua khỏi mốc đó. Dừng đúng t=100 thấy được
+    // trạng thái NGAY SAU fault (và lượt `shrinkIsr` phản ứng nó tự chain —
+    // `shrinkIsr` không đụng `lastFetchAt`, chỉ đụng `isr`) mà không dính lượt
+    // fetch tiếp theo.
+    sim.advanceTo(100)
     const state = sim.snapshot()
 
     // `orders-0` leader=b1 replicas=[b1,b2]; `orders-1` leader=b2 replicas=[b2,b1]

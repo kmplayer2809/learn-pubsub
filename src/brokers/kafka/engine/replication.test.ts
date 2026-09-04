@@ -224,6 +224,45 @@ describe('replication', () => {
     expect(second.state.partitions[key0]?.leaderEpoch).toBe(2)
   })
 
+  it('leader chết: nhánh sạch dọn luôn broker chết khỏi ISR, không đợi shrinkIsr', () => {
+    let partition = withRecords(['b1', 'b2', 'b3'], 'b1', ['a', 'b'])
+    partition = {
+      ...partition,
+      isr: ['b1', 'b2', 'b3'],
+      replicaState: {
+        b1: { leo: 2, lastFetchAt: 0 },
+        b2: { leo: 2, lastFetchAt: 0 },
+        b3: { leo: 2, lastFetchAt: 0 },
+      },
+    }
+    const state = withPartition(testState({ replicas: ['b1', 'b2', 'b3'], brokersOnline: { b1: false } }), partition)
+
+    const result = electLeader(state, { partitionKey: key0, at: 500 })
+
+    // b1 (vừa chết) không còn nằm lì trong ISR chờ shrinkIsr dọn 10 giây sau —
+    // bầu sạch tự dọn nó ngay tại đây.
+    expect(result.state.partitions[key0]?.isr).toEqual(['b2', 'b3'])
+  })
+
+  it('broker offline vẫn tự hẹn lại replica-fetch — quay lại online thì tự fetch tiếp, không cần broker-up biết gì về replication', () => {
+    const partition = withRecords(['b1', 'b2'], 'b1', ['a', 'b', 'c'])
+    let state = withPartition(testState({ replicas: ['b1', 'b2'], brokersOnline: { b2: false } }), partition)
+
+    // b2 offline: không fetch được gì, nhưng vẫn phải tự hẹn lại — đây chính là
+    // fix Task 8 (trước đó offline thì `newEvents` rỗng, vòng chết vĩnh viễn).
+    const whileOffline = replicaFetch(state, { brokerId: 'b2', at: 100 })
+    expect(whileOffline.state.partitions[key0]?.replicaState.b2?.leo).toBe(0) // không fetch được gì
+    expect(whileOffline.newEvents).toHaveLength(1)
+    expect(whileOffline.newEvents[0]).toMatchObject({ type: 'replica-fetch', payload: { brokerId: 'b2' } })
+
+    // b2 quay lại online (mô phỏng `broker-up`, không đụng gì tới replication) —
+    // lần fetch KẾ TIẾP (đã được vòng offline ở trên tự hẹn) chạy bình thường.
+    state = { ...whileOffline.state, brokersOnline: { ...whileOffline.state.brokersOnline, b2: true } }
+    const nextFetchAt = whileOffline.newEvents[0]!.at
+    const afterUp = replicaFetch(state, { brokerId: 'b2', at: nextFetchAt })
+    expect(afterUp.state.partitions[key0]?.replicaState.b2?.leo).toBe(3) // bắt kịp ngay khi online trở lại
+  })
+
   it('metrics.underReplicatedPartitions đếm partition có ISR nhỏ hơn replicationFactor', () => {
     const fullyReplicated = withRecords(['b1', 'b2'], 'b1', ['a'])
     let state = testState({ replicas: ['b1', 'b2'] })
