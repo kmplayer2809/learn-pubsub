@@ -16,6 +16,11 @@ import { assignors } from './13-assignors'
 import { commitStrategies } from './14-commit-strategies'
 import { consumerLag } from './15-consumer-lag'
 import { maxPollInterval } from './16-max-poll-interval'
+import { replicationIsr } from './17-replication-isr'
+import { minInsyncReplicas } from './18-min-insync-replicas'
+import { leaderElection } from './19-leader-election'
+import { retention } from './20-retention'
+import { compaction } from './21-compaction'
 
 export const KAFKA_LESSON_GROUPS: LessonGroupSpec[] = [
   { id: 'basics', label: 'Cơ bản' },
@@ -43,4 +48,9 @@ export const LESSONS: KafkaLesson[] = [
   commitStrategies,
   consumerLag,
   maxPollInterval,
+  replicationIsr,
+  minInsyncReplicas,
+  leaderElection,
+  retention,
+  compaction,
 ]
