@@ -26,19 +26,19 @@ export function Transport({
 
   return (
     <div
-      className={`flex shrink-0 items-center border-t border-slate-800/80 bg-slate-950/95 px-3 py-2 ${compact ? 'gap-1.5' : 'gap-3'}`}
+      className={`flex shrink-0 items-center border-t border-ink-800/80 bg-ink-950/95 px-3 py-2 ${compact ? 'gap-2' : 'gap-3'}`}
       data-testid="transport"
     >
       <button
         onClick={() => seek(0)}
         aria-label="Chạy lại"
-        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-800 active:bg-slate-700 ${tap}`}
+        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-ink-300 hover:bg-ink-800 active:bg-ink-700 ${tap}`}
       >
         {compact ? <ReplayIcon /> : <><ReplayIcon className="h-4 w-4" /> Chạy lại</>}
       </button>
       <button
         onClick={() => (playing ? pause() : play())}
-        className={`flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-sky-950/50 hover:bg-sky-500 active:bg-sky-600 ${tap}`}
+        className={`flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-accent-950/50 hover:bg-accent-500 active:bg-accent-600 ${tap}`}
         data-testid="play-pause"
       >
         {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
@@ -50,7 +50,7 @@ export function Transport({
           onStep()
         }}
         aria-label="Bước"
-        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-800 active:bg-slate-700 ${tap}`}
+        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-ink-300 hover:bg-ink-800 active:bg-ink-700 ${tap}`}
       >
         {compact ? <StepForwardIcon /> : <><StepForwardIcon className="h-4 w-4" /> Bước</>}
       </button>
@@ -66,7 +66,7 @@ export function Transport({
         aria-label="scrub"
       />
       <span
-        className={`${compact ? 'w-11' : 'w-16'} text-right font-mono text-[11px] text-slate-400${compact ? ' shrink-0' : ''}`}
+        className={`${compact ? 'w-11' : 'w-16'} text-right font-mono text-[11px] text-ink-400${compact ? ' shrink-0' : ''}`}
       >
         {(virtualTime / 1000).toFixed(1)}s
       </span>
@@ -74,7 +74,7 @@ export function Transport({
       <select
         value={speed}
         onChange={(e) => setSpeed(Number(e.target.value) as Speed)}
-        className={`rounded-lg bg-slate-800 px-2 py-1.5 text-xs text-slate-200 hover:bg-slate-700${compact ? ' shrink-0 min-h-11' : ''}`}
+        className={`rounded-lg bg-ink-800 px-2 py-1.5 text-xs text-ink-200 hover:bg-ink-700${compact ? ' shrink-0 min-h-11' : ''}`}
         aria-label="speed"
       >
         {SPEEDS.map((s) => (

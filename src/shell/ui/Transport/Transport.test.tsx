@@ -29,4 +29,10 @@ describe('Transport', () => {
     rerender(<Transport durationMs={10_000} onStep={vi.fn()} compact />)
     expect(screen.getByLabelText('scrub')).toBeInTheDocument()
   })
+
+  it('chế độ compact dùng khoảng cách 8px giữa nút, không phải 6px', () => {
+    render(<Transport durationMs={10_000} onStep={vi.fn()} compact />)
+    expect(screen.getByTestId('transport').className).toContain('gap-2')
+    expect(screen.getByTestId('transport').className).not.toContain('gap-1.5')
+  })
 })
