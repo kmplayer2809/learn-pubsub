@@ -21,6 +21,9 @@ import { minInsyncReplicas } from './18-min-insync-replicas'
 import { leaderElection } from './19-leader-election'
 import { retention } from './20-retention'
 import { compaction } from './21-compaction'
+import { transactionsEos } from './22-transactions-eos'
+import { retryDlq } from './23-retry-dlq'
+import { sizingTuning } from './24-sizing-tuning'
 
 export const KAFKA_LESSON_GROUPS: LessonGroupSpec[] = [
   { id: 'basics', label: 'Cơ bản' },
@@ -53,4 +56,7 @@ export const LESSONS: KafkaLesson[] = [
   leaderElection,
   retention,
   compaction,
+  transactionsEos,
+  retryDlq,
+  sizingTuning,
 ]
