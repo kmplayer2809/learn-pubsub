@@ -30,14 +30,12 @@ export function TabletLayout(props: LayoutProps) {
               editable={editable}
             />
           </div>
-          <div className="border-t border-slate-800">
+          <div className="border-t border-slate-800/80">
             <StatePanel state={state} dense />
           </div>
-          <div className="border-t border-slate-800">
-            <Transport durationMs={durationMs} onStep={onStep} />
-          </div>
+          <Transport durationMs={durationMs} onStep={onStep} />
         </main>
-        <aside className="w-72 shrink-0 overflow-y-auto border-l border-slate-800 p-3">
+        <aside className="w-72 shrink-0 overflow-y-auto border-l border-slate-800/80 bg-slate-950 p-3">
           <SidePanel {...props} />
         </aside>
       </div>
@@ -49,9 +47,9 @@ export function TabletLayout(props: LayoutProps) {
           <div
             aria-hidden
             onClick={() => setDrawerOpen(false)}
-            className="fixed inset-0 z-10 bg-slate-950/70"
+            className="fixed inset-0 z-10 bg-slate-950/70 backdrop-blur-sm"
           />
-          <aside className="fixed inset-y-0 left-0 z-20 w-64 border-r border-slate-800 bg-slate-950">
+          <aside className="fixed inset-y-0 left-0 z-20 w-64 border-r border-slate-800 bg-slate-950 shadow-2xl shadow-black/50">
             <LessonSidebar hideBrokerSwitcher />
           </aside>
         </>

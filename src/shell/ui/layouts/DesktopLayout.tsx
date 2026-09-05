@@ -10,7 +10,7 @@ export function DesktopLayout(props: LayoutProps) {
 
   return (
     <div className="flex h-full bg-slate-950 text-slate-100">
-      <aside className="w-60 shrink-0 border-r border-slate-800">
+      <aside className="w-64 shrink-0 border-r border-slate-800/80 bg-slate-950">
         <LessonSidebar />
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
@@ -24,14 +24,12 @@ export function DesktopLayout(props: LayoutProps) {
             editable={editable}
           />
         </div>
-        <div className="border-t border-slate-800">
+        <div className="border-t border-slate-800/80 bg-slate-950">
           <StatePanel state={state} />
         </div>
-        <div className="border-t border-slate-800">
-          <Transport durationMs={durationMs} onStep={onStep} />
-        </div>
+        <Transport durationMs={durationMs} onStep={onStep} />
       </main>
-      <aside className="w-80 shrink-0 border-l border-slate-800 p-3">
+      <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-800/80 bg-slate-950 p-3.5">
         <SidePanel {...props} />
       </aside>
     </div>

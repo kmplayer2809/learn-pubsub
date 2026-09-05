@@ -1,4 +1,5 @@
 import { SPEEDS, useAppStore, type Speed } from '../../store'
+import { PauseIcon, PlayIcon, ReplayIcon, StepForwardIcon } from '../icons'
 
 export function Transport({
   durationMs,
@@ -24,20 +25,24 @@ export function Transport({
   const tap = compact ? 'min-h-11 min-w-11' : ''
 
   return (
-    <div className={`flex items-center px-3 py-2 ${compact ? 'gap-1.5' : 'gap-3'}`} data-testid="transport">
+    <div
+      className={`flex shrink-0 items-center border-t border-slate-800/80 bg-slate-950/95 px-3 py-2 ${compact ? 'gap-1.5' : 'gap-3'}`}
+      data-testid="transport"
+    >
       <button
         onClick={() => seek(0)}
         aria-label="Chạy lại"
-        className={`rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 ${tap}`}
+        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-800 active:bg-slate-700 ${tap}`}
       >
-        {compact ? '⟲' : 'Chạy lại'}
+        {compact ? <ReplayIcon /> : <><ReplayIcon className="h-4 w-4" /> Chạy lại</>}
       </button>
       <button
         onClick={() => (playing ? pause() : play())}
-        className={`rounded bg-sky-600 px-3 py-1 text-xs font-medium text-white hover:bg-sky-500 ${tap}`}
+        className={`flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-sky-950/50 hover:bg-sky-500 active:bg-sky-600 ${tap}`}
         data-testid="play-pause"
       >
-        {playing ? 'Tạm dừng' : 'Chạy'}
+        {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
+        {!compact && (playing ? 'Tạm dừng' : 'Chạy')}
       </button>
       <button
         onClick={() => {
@@ -45,9 +50,9 @@ export function Transport({
           onStep()
         }}
         aria-label="Bước"
-        className={`rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 ${tap}`}
+        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-800 active:bg-slate-700 ${tap}`}
       >
-        {compact ? '⏭' : 'Bước'}
+        {compact ? <StepForwardIcon /> : <><StepForwardIcon className="h-4 w-4" /> Bước</>}
       </button>
 
       <input
@@ -57,7 +62,7 @@ export function Transport({
         step={50}
         value={Math.min(virtualTime, max)}
         onChange={(e) => seek(Number(e.target.value))}
-        className={`${compact ? 'min-w-0 ' : ''}flex-1 accent-sky-500`}
+        className={`${compact ? 'min-w-0 ' : ''}flex-1`}
         aria-label="scrub"
       />
       <span
@@ -69,7 +74,7 @@ export function Transport({
       <select
         value={speed}
         onChange={(e) => setSpeed(Number(e.target.value) as Speed)}
-        className={`rounded bg-slate-800 px-2 py-1 text-xs text-slate-200${compact ? ' shrink-0 min-h-11' : ''}`}
+        className={`rounded-lg bg-slate-800 px-2 py-1.5 text-xs text-slate-200 hover:bg-slate-700${compact ? ' shrink-0 min-h-11' : ''}`}
         aria-label="speed"
       >
         {SPEEDS.map((s) => (

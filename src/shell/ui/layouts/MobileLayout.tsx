@@ -31,7 +31,7 @@ export function MobileLayout(props: LayoutProps) {
                 editable={editable}
               />
             </div>
-            <div className="border-t border-slate-800">
+            <div className="border-t border-slate-800/80">
               <StatePanel state={state} dense />
             </div>
           </div>
@@ -39,7 +39,7 @@ export function MobileLayout(props: LayoutProps) {
 
         {pane === 'state' && (
           <div className="flex h-full flex-col overflow-y-auto">
-            <div className="border-b border-slate-800">
+            <div className="border-b border-slate-800/80">
               <StatePanel state={state} />
             </div>
             <div className="min-h-0 flex-1 p-3">
@@ -52,9 +52,7 @@ export function MobileLayout(props: LayoutProps) {
       {/* Transport nằm ngoài khối pane: tua thời gian ảo là hành động xuyên suốt,
           ẩn nó ở tab `lessons`/`state` là lấy mất khả năng điều khiển mô phỏng
           đang xem. */}
-      <div className="shrink-0 border-t border-slate-800">
-        <Transport durationMs={durationMs} onStep={onStep} compact />
-      </div>
+      <Transport durationMs={durationMs} onStep={onStep} compact />
       <MobileTabBar />
     </div>
   )

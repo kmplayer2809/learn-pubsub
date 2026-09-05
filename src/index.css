@@ -19,6 +19,99 @@ body {
   /* Chặn bounce và pull-to-refresh của Safari iOS: canvas được pan bằng một
      ngón, và không có dòng này thì mỗi cú pan dọc lại kéo cả trang. */
   overscroll-behavior: none;
+  background: #020617;
+}
+
+/* Bàn phím điều hướng cần thấy được đang ở đâu — mặc định trình duyệt outline
+   xanh dương lệch tông với slate/sky của app, và một số nút bên dưới tự tắt
+   outline bằng hover style. `:focus-visible` chỉ hiện với bàn phím/switch,
+   không hiện khi bấm chuột, nên không thêm viền thừa cho thao tác chạm/click. */
+@layer base {
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  [role='tab']:focus-visible,
+  [role='button']:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    button,
+    [role='tab'] {
+      transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+    }
+  }
+}
+
+/* Thanh cuộn mảnh, cùng tông với panel — mặc định của trình duyệt (xám nhạt,
+   14-17px) chọc thẳng vào nền slate-950 và chiếm chỗ đáng kể trong các cột
+   360-480px hẹp (LessonSidebar, SidePanel). Chỉ Chromium/WebKit hỗ trợ các
+   thuộc tính `::-webkit-scrollbar-*`; Firefox rơi về `scrollbar-width: thin`
+   ở dưới, không có rule nào bị bỏ sót gây scrollbar to trở lại. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #334155;
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #475569;
+}
+
+/*
+ * Transport dùng `<input type="range">` trơn của trình duyệt — track/thumb mặc
+ * định dày, vuông, không đồng bộ với phần còn lại của giao diện. Vẽ lại bằng
+ * `appearance: none` + track/thumb riêng cho cả hai engine (WebKit và Firefox
+ * dùng hai bộ pseudo-element khác nhau, không cái nào hiểu cái kia).
+ */
+input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: #1e293b;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #0ea5e9;
+  border: 2px solid #e0f2fe;
+  cursor: pointer;
+  margin-top: 0;
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #0ea5e9;
+  border: 2px solid #e0f2fe;
+  cursor: pointer;
+}
+
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: #1e293b;
 }
 
 /* Tailwind không có utility cho safe area, và thêm hẳn một plugin chỉ vì hai

@@ -12,7 +12,7 @@ export function BrokerSwitcher() {
 
   return (
     <div
-      className="flex gap-1 border-b border-slate-800 px-2 py-2"
+      className="flex gap-1 border-b border-slate-800/80 p-2"
       aria-label="Chọn broker"
       data-testid="broker-switcher"
     >
@@ -23,10 +23,10 @@ export function BrokerSwitcher() {
           data-testid="broker-tab"
           data-broker-id={broker.id}
           onClick={() => setBroker(broker.id)}
-          className={`min-h-11 flex-1 rounded px-2 py-1 text-xs md:min-h-0 ${
+          className={`min-h-11 flex-1 rounded-lg px-2 py-1 text-xs font-medium md:min-h-0 ${
             broker.id === brokerId
-              ? 'bg-slate-800 text-sky-300'
-              : 'text-slate-400 hover:bg-slate-900'
+              ? 'bg-sky-500/15 text-sky-300 ring-1 ring-inset ring-sky-500/40'
+              : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
           }`}
         >
           {broker.label}
