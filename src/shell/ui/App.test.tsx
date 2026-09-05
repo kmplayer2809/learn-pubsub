@@ -154,6 +154,15 @@ describe('App', () => {
     expect(exportButton.className).toContain('md:min-h-0')
   })
 
+  it('shows the Sandbox button for Kafka, which now ships one', () => {
+    // Trước Task 12, chỉ RabbitMQ có `sandbox` — Kafka thì không, nên nút Sandbox từng
+    // ẩn khi chuyển sang Kafka. Giờ Kafka đã có `sandbox` (`src/brokers/kafka/index.ts`),
+    // nút này phải hiện lại đúng như RabbitMQ.
+    render(<App />)
+    act(() => useAppStore.getState().setBroker('kafka'))
+    expect(screen.getByTestId('open-sandbox')).toBeTruthy()
+  })
+
   it('renders the Redis keyspace panel, with no inflight panel or sandbox button', () => {
     // Redis ships neither `sandbox` nor `ExportDialog` (both optional slots); this is
     // the proof the shell reads that as genuinely optional rather than crashing or

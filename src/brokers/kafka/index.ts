@@ -7,12 +7,23 @@ import {
   type KafkaValidationIssue,
 } from './engine'
 import { KAFKA_LESSON_GROUPS, LESSONS } from './lessons/registry'
+import { SandboxPanel } from './sandbox/SandboxPanel'
+import { getScript, getTopology, resetSandbox, subscribe } from './sandbox/kafkaStore'
 import { LogPanel } from './ui/LogPanel'
+import { onConnect, onNodesChange } from './ui/editing'
 import { issueText } from './ui/issueText'
 import { NodeConfig } from './ui/NodeConfig'
 import { BrokerNode, ConsumerGroupNode, ConsumerNode, PartitionNode, ProducerNode } from './ui/nodes'
 import { toFlowEdges, toFlowNodes } from './ui/toFlow'
 import type { BrokerModule } from '../types'
+
+// A user-built topology can loop and, unlike a lesson script, nobody vetted it — mirrors
+// RabbitMQ's own `SANDBOX_MAX_EVENTS` reasoning in `rabbitmq/index.ts`.
+const SANDBOX_MAX_EVENTS = 20_000
+
+// Sandbox runs are open-ended; this just gives the transport scrubber a finite range to
+// draw, same role as RabbitMQ's `SANDBOX_TRANSPORT_DURATION_MS`.
+const SANDBOX_TRANSPORT_DURATION_MS = 60_000
 
 export const kafka: BrokerModule<KafkaState, KafkaTopology, KafkaScriptedCommand, KafkaValidationIssue> = {
   id: 'kafka',
@@ -50,6 +61,16 @@ export const kafka: BrokerModule<KafkaState, KafkaTopology, KafkaScriptedCommand
   // ngầm, và tự nó không thoả `Record<string, number>` về mặt cấu trúc.
   metrics: (state) => ({ ...state.metrics }),
   NodeConfig,
-  // Chưa có `sandbox`, chưa có `ExportDialog` — cả hai là slot optional trong
-  // `BrokerModule`, nên để trống chứ không stub. Plan sau bổ sung.
+  // Chưa có `ExportDialog` — slot optional trong `BrokerModule`, để trống chứ không stub.
+  // Task 13 bổ sung.
+  sandbox: {
+    Panel: SandboxPanel,
+    getTopology,
+    getScript,
+    subscribe,
+    reset: resetSandbox,
+    maxEvents: SANDBOX_MAX_EVENTS,
+    transportDurationMs: SANDBOX_TRANSPORT_DURATION_MS,
+    editing: { onNodesChange, onConnect },
+  },
 }
