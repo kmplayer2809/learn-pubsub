@@ -23,7 +23,7 @@ body {
 }
 
 /* Bàn phím điều hướng cần thấy được đang ở đâu — mặc định trình duyệt outline
-   xanh dương lệch tông với slate/sky của app, và một số nút bên dưới tự tắt
+   xanh dương lệch tông với ink/accent của app, và một số nút bên dưới tự tắt
    outline bằng hover style. `:focus-visible` chỉ hiện với bàn phím/switch,
    không hiện khi bấm chuột, nên không thêm viền thừa cho thao tác chạm/click. */
 @layer base {
@@ -47,7 +47,7 @@ body {
 }
 
 /* Thanh cuộn mảnh, cùng tông với panel — mặc định của trình duyệt (xám nhạt,
-   14-17px) chọc thẳng vào nền slate-950 và chiếm chỗ đáng kể trong các cột
+   14-17px) chọc thẳng vào nền ink-950 và chiếm chỗ đáng kể trong các cột
    360-480px hẹp (LessonSidebar, SidePanel). Chỉ Chromium/WebKit hỗ trợ các
    thuộc tính `::-webkit-scrollbar-*`; Firefox rơi về `scrollbar-width: thin`
    ở dưới, không có rule nào bị bỏ sót gây scrollbar to trở lại. */
@@ -123,7 +123,7 @@ input[type='range']::-moz-range-track {
 }
 
 /*
- * React Flow ships a light control strip. Match the slate-950 canvas instead.
+ * React Flow ships a light control strip. Match the ink-950 canvas instead.
  * `!important` is required here, not decorative: `CanvasView.tsx` imports
  * `@xyflow/react/dist/style.css` beneath `App`, which Vite emits into the
  * document AFTER this file (imported at the top of `main.tsx`). Same
@@ -172,7 +172,7 @@ input[type='range']::-moz-range-track {
 
 /*
  * Handles are the connection dots on each node. React Flow rings them in pure
- * white, which reads as a stray highlight against slate-950 rather than as part
+ * white, which reads as a stray highlight against ink-950 rather than as part
  * of the node it belongs to.
  */
 .react-flow__handle {
