@@ -251,6 +251,13 @@ export function enqueueRecord(
     sequence = nextRuntime.nextSequence[pKey] ?? 0
     nextRuntime = { ...nextRuntime, nextSequence: { ...nextRuntime.nextSequence, [pKey]: sequence + 1 } }
   }
+  // Task 10: `txnId` chụp `currentTxnId` của producer NGAY LÚC NÀY (`.send()`),
+  // cùng khuôn với `producerId`/`sequence` ở trên — không phải lúc flush. Thực
+  // Kafka gắn một record với transaction đang mở tại thời điểm app gọi
+  // `producer.send()`, không phải tại thời điểm batch thật sự rời client; xem
+  // why-comment dài hơn ở khai báo `txnId` trong `ProducerRuntime.batches`
+  // (`types.ts`) so sánh trực tiếp với vì sao `producerEpoch` (`flushBatch`
+  // bên dưới) lại phải làm NGƯỢC LẠI (đọc lại lúc append, không snapshot).
   const record = {
     key,
     value,
@@ -258,6 +265,7 @@ export function enqueueRecord(
     timestamp: at,
     bytes,
     ...(assignedProducerId !== undefined ? { producerId: assignedProducerId, sequence } : {}),
+    ...(runtime.currentTxnId !== undefined ? { txnId: runtime.currentTxnId } : {}),
   }
 
   const existing = nextRuntime.batches[pKey]
@@ -517,6 +525,13 @@ export function flushBatch(
       // đúng thời điểm append, không phải biến `runtime` đóng gói từ đầu hàm.
       producerEpoch: record.producerId !== undefined ? (runtime.epoch ?? 0) : undefined,
       sequence: record.sequence,
+      // Task 10: `record.txnId` — chụp lúc `enqueueRecord`, KHÔNG đọc lại
+      // `getProducerRuntime(state, producer.id).currentTxnId` ở đây. Khác hẳn
+      // `producerEpoch` phía trên: transaction mà một record thuộc về do phía
+      // APP quyết định lúc gọi `.send()`, không phải một sự thật broker-side có
+      // thể đổi giữa lúc gọi hàm này (như epoch fencing) — xem why-comment ở
+      // khai báo `txnId` trong `ProducerRuntime.batches` (`types.ts`).
+      txnId: record.txnId,
     })
     workingPartition = appended.partition
     lastOffset = appended.offset

@@ -223,6 +223,20 @@ export interface ProducerRuntime {
         // của nó qua mọi lần retry, dù batch có bị dọn khỏi accumulator hay không.
         producerId?: number
         sequence?: number
+        // Task 10: id của transaction đang mở tại thời điểm app gọi `.send()`
+        // (`enqueueRecord`), CÙNG khuôn với `sequence` ở trên — gán MỘT LẦN lúc
+        // enqueue, không phải lúc flush, và đi theo record suốt đời qua mọi lần
+        // retry. Đây KHÔNG cùng khuôn với `producerEpoch` (`flushBatch`, `produce.ts`):
+        // epoch phải đọc LẠI runtime hiện tại lúc append vì nó là thứ broker dùng để
+        // fencing một epoch cũ — đọc epoch cũ chụp sẵn sẽ stamp sai epoch. `txnId`
+        // ngược lại: ý nghĩa của nó do PHÍA APP quyết định tại thời điểm gọi
+        // `.send()` — một record thuộc transaction nào là cố định ngay lúc đó, dù
+        // transaction có commit/abort trước hay sau khi batch của nó thật sự flush.
+        // Đọc lại `currentTxnId` tại thời điểm append (thay vì snapshot lúc enqueue)
+        // sẽ gán nhầm record cho một transaction KHÁC (hoặc không transaction nào)
+        // nếu producer đã begin/commit một transaction mới trong lúc batch cũ còn
+        // đang chờ linger/retry.
+        txnId?: string
       }[]
       bytes: number
       openedAt: number

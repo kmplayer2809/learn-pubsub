@@ -14,6 +14,7 @@ import {
 } from './produce'
 import { replicaFetch } from './replication'
 import { testState } from './testState'
+import { beginTransaction, commitTransaction } from './transaction'
 import type { KafkaProducerSpec, KafkaState, KafkaTopicSpec, KafkaTopology, ProducerRuntime } from './types'
 import { partitionKey } from './types'
 
@@ -628,5 +629,53 @@ describe('ack-lost fault qua toàn bộ simulation (wiring engine/index.ts) — 
     expect(snap.metrics.recordsProduced).toBe(1)
     expect(snap.metrics.duplicatesPrevented).toBe(0)
     expect(snap.metrics.retries).toBe(0) // không có resend nào thực sự xảy ra
+  })
+})
+
+// Task 10: `enqueueRecord`/`flushBatch` giờ stamp `txnId` (trước đó, Task 9 chỉ
+// dựng máy trạng thái transaction/`endTransaction` mà không đụng đường produce
+// thường — xem why-comment ở `types.ts`'s `ProducerRuntime.batches[...].records`
+// và ở `enqueueRecord` giải thích vì sao snapshot LÚC ENQUEUE, không phải lúc
+// flush, đúng ngữ nghĩa Kafka thật).
+describe('txnId stamping (Task 10)', () => {
+  it('record enqueue trong lúc có transaction đang mở mang đúng txnId của transaction đó', () => {
+    const p = producer({ idempotent: true, transactionalId: 'tx-1', batchSize: 100_000, lingerMs: 10_000 })
+    let state = testState({ producers: [p] })
+    state = beginTransaction(state, { producerId: 'p1', at: 0 })
+    const txnId = state.producers['p1']?.currentTxnId
+    expect(txnId).toBeDefined()
+
+    const { state: after } = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'a', at: 100 })
+    expect(after.producers['p1']?.batches[key0]?.records[0]?.txnId).toBe(txnId)
+  })
+
+  it('record enqueue khi KHÔNG có transaction nào đang mở thì không mang txnId', () => {
+    const p = producer({ idempotent: true, batchSize: 100_000, lingerMs: 10_000 })
+    const state = testState({ producers: [p] })
+
+    const { state: after } = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'a', at: 100 })
+    expect(after.producers['p1']?.batches[key0]?.records[0]?.txnId).toBeUndefined()
+  })
+
+  it('txnId đi theo record tới tận log qua flushBatch/appendRecord', () => {
+    const p = producer({ idempotent: true, transactionalId: 'tx-1', batchSize: 100_000, lingerMs: 0 })
+    let state = testState({ producers: [p] })
+    state = beginTransaction(state, { producerId: 'p1', at: 0 })
+    const txnId = state.producers['p1']?.currentTxnId
+
+    const enqueued = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'a', at: 100 })
+    const { state: flushed } = flushBatch(enqueued.state, { producer: p, topic: orders, partition: 0, at: 100 })
+    expect(flushed.partitions[key0]?.log[0]?.txnId).toBe(txnId)
+  })
+
+  it('commit xoá currentTxnId — record enqueue SAU commit không còn mang txnId cũ', () => {
+    const p = producer({ idempotent: true, transactionalId: 'tx-1', batchSize: 100_000, lingerMs: 10_000 })
+    let state = testState({ producers: [p] })
+    state = beginTransaction(state, { producerId: 'p1', at: 0 })
+    state = commitTransaction(state, { producerId: 'p1', at: 50 })
+    expect(state.producers['p1']?.currentTxnId).toBeUndefined()
+
+    const { state: after } = enqueueRecord(state, { producer: p, topic: orders, key: null, value: 'b', at: 100 })
+    expect(after.producers['p1']?.batches[key0]?.records[0]?.txnId).toBeUndefined()
   })
 })
