@@ -16,7 +16,7 @@ export function MobileTabBar() {
       role="tablist"
       // `pb-safe` là utility tự viết trong `src/index.css`: iPhone có home
       // indicator chiếm ~34px dưới đáy, thiếu padding này thì tab cuối bị nuốt.
-      className="flex shrink-0 border-t border-slate-800/80 bg-slate-950/95 pb-safe backdrop-blur"
+      className="flex shrink-0 border-t border-ink-800/80 bg-ink-950/95 pb-safe backdrop-blur"
       data-testid="mobile-tabbar"
     >
       {TABS.map(({ id, label, Icon }) => (
@@ -27,11 +27,11 @@ export function MobileTabBar() {
           onClick={() => setPane(id)}
           className={`flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 border-t-2 py-1 text-[11px] ${
             pane === id
-              ? 'border-sky-400 text-sky-300'
-              : 'border-transparent text-slate-500 active:bg-slate-900'
+              ? 'border-accent-400 text-accent-300'
+              : 'border-transparent text-ink-500 active:bg-ink-900'
           }`}
         >
-          <Icon className={`h-[18px] w-[18px] ${pane === id ? 'text-sky-300' : 'text-slate-500'}`} />
+          <Icon className={`h-[18px] w-[18px] ${pane === id ? 'text-accent-300' : 'text-ink-500'}`} />
           {label}
         </button>
       ))}
