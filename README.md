@@ -24,7 +24,7 @@ lệnh (Redis) định sẵn, dạy một khái niệm cụ thể:
   stampede, `maxmemory` & eviction policy, transactions, Lua atomicity,
   distributed lock, sliding-window rate limit, RDB vs AOF, replication &
   Sentinel & cluster hash slot.
-- **Kafka** — 24 lesson trên năm nhóm (`basics`/Cơ bản, `producer`/Producer,
+- **Kafka** — 25 lesson trên năm nhóm (`basics`/Cơ bản, `producer`/Producer,
   `consumer`/Consumer & Group, `durability`/Độ bền, `advanced`/Nâng cao):
   topic & partition & offset, broker & cluster & controller, key &
   partitioning, vòng đời record, offset vs position vs committed, `acks`,
@@ -34,7 +34,9 @@ lệnh (Redis) định sẵn, dạy một khái niệm cụ thể:
   lag, `max.poll.interval.ms`, replication & ISR & leader election,
   `min.insync.replicas`, retention, log compaction & tombstone,
   transaction & exactly-once (control record, last stable offset,
-  `read_committed`), retry topic & DLQ, sizing & tuning.
+  `read_committed`), retry topic & DLQ, sizing & tuning, zero-copy
+  (`sendfile`/`FileChannel.transferTo` so với đường đi bốn chặng qua user
+  space).
 
 RabbitMQ và Kafka có **Sandbox tự do** (`sandbox/`) — tự xây topology bằng
 cách kéo-thả node, publish message tay hoặc bằng generator, và xuất topology
