@@ -13,7 +13,7 @@ export function MobileLayout(props: LayoutProps) {
   const StatePanel = broker.StatePanel
 
   return (
-    <div className="flex h-full flex-col bg-slate-950 text-slate-100">
+    <div className="flex h-full flex-col bg-ink-950 text-ink-100">
       <TopBar title={inSandbox ? 'Sandbox' : (lesson?.title ?? '')} />
 
       <div className="min-h-0 flex-1">
@@ -31,7 +31,7 @@ export function MobileLayout(props: LayoutProps) {
                 editable={editable}
               />
             </div>
-            <div className="border-t border-slate-800/80">
+            <div className="border-t border-ink-800/80">
               <StatePanel state={state} dense />
             </div>
           </div>
@@ -39,7 +39,7 @@ export function MobileLayout(props: LayoutProps) {
 
         {pane === 'state' && (
           <div className="flex h-full flex-col overflow-y-auto">
-            <div className="border-b border-slate-800/80">
+            <div className="border-b border-ink-800/80">
               <StatePanel state={state} />
             </div>
             <div className="min-h-0 flex-1 p-3">
