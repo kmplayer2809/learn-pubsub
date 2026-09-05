@@ -1,0 +1,33 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`toKafkaJs > khớp snapshot 1`] = `
+"import { Kafka } from 'kafkajs'
+
+export async function setup() {
+  const kafka = new Kafka({ clientId: 'app', brokers: ['b1:9092', 'b2:9092'] })
+
+  const admin = kafka.admin()
+  await admin.connect()
+  await admin.createTopics({
+    topics: [
+      { topic: 'orders', numPartitions: 2, replicationFactor: 2 },
+    ],
+  })
+  await admin.disconnect()
+
+  const producer_p1 = kafka.producer({ idempotent: true, transactionalId: 'txn-1' })
+  await producer_p1.connect()
+  // await producer_p1.send({ topic: '<topic>', acks: -1, messages: [{ value: 'hello' }] })
+
+  const consumer_c1 = kafka.consumer({ groupId: 'group-1' })
+  await consumer_c1.connect()
+  await consumer_c1.subscribe({ topic: 'orders', fromBeginning: true })
+  await consumer_c1.run({
+    eachBatch: async ({ batch }) => {
+      // handle Consumer 1 — batch.messages, up to 100 records
+    },
+  })
+
+  return { kafka, producers: [producer_p1], consumers: [consumer_c1] }
+}"
+`;

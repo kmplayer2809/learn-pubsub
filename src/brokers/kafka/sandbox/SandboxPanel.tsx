@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import type { KafkaState, KafkaValidationIssue } from '../engine'
 import { EventLog, HaltedBanner, IssuesList, MetricsGrid } from '../../../shell/ui/Inspector/Inspector'
 import { issueText } from '../ui/issueText'
+import { ExportDialog } from './ExportDialog'
 import { useKafkaSandbox } from './kafkaStore'
 
 const BUTTON = 'min-h-11 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800 md:min-h-0'
@@ -184,17 +185,29 @@ export function SandboxPanel({ state, issues }: { state: KafkaState; issues: Kaf
   const addProducer = useKafkaSandbox((s) => s.addProducer)
   const addConsumer = useKafkaSandbox((s) => s.addConsumer)
   const reset = useKafkaSandbox((s) => s.reset)
+  const [exportOpen, setExportOpen] = useState(false)
 
   const nodeCount = topology.brokers.length + topology.producers.length + topology.consumers.length
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto" data-testid="sandbox-panel">
       <section>
-        <h2 className="mb-1 text-sm font-semibold text-slate-100">Sandbox</h2>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="mb-1 text-sm font-semibold text-slate-100">Sandbox</h2>
+          <button
+            onClick={() => setExportOpen(true)}
+            data-testid="export-button"
+            className={BUTTON}
+          >
+            Xuất code
+          </button>
+        </div>
         <p className="text-[11px] text-slate-500">
           Tự xây cluster Kafka của riêng bạn: thêm broker, topic, producer, consumer, rồi produce tay.
         </p>
       </section>
+
+      {exportOpen && <ExportDialog topology={topology} onClose={() => setExportOpen(false)} />}
 
       <IssuesList issues={issues} issueText={issueText} />
       <HaltedBanner halted={state.halted} />

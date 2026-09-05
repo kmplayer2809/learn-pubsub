@@ -7,6 +7,7 @@ import {
   type KafkaValidationIssue,
 } from './engine'
 import { KAFKA_LESSON_GROUPS, LESSONS } from './lessons/registry'
+import { ExportDialog } from './sandbox/ExportDialog'
 import { SandboxPanel } from './sandbox/SandboxPanel'
 import { getScript, getTopology, resetSandbox, subscribe } from './sandbox/kafkaStore'
 import { LogPanel } from './ui/LogPanel'
@@ -61,8 +62,7 @@ export const kafka: BrokerModule<KafkaState, KafkaTopology, KafkaScriptedCommand
   // ngầm, và tự nó không thoả `Record<string, number>` về mặt cấu trúc.
   metrics: (state) => ({ ...state.metrics }),
   NodeConfig,
-  // Chưa có `ExportDialog` — slot optional trong `BrokerModule`, để trống chứ không stub.
-  // Task 13 bổ sung.
+  ExportDialog,
   sandbox: {
     Panel: SandboxPanel,
     getTopology,

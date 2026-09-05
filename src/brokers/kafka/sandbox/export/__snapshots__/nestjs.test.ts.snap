@@ -1,0 +1,34 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`toNestJs > khớp snapshot 1`] = `
+"import { Module } from '@nestjs/common'
+import { ClientsModule, Transport } from '@nestjs/microservices'
+
+@Module({
+  imports: [
+    ClientsModule.register([
+      {
+        name: 'KAFKA_SERVICE',
+        transport: Transport.KAFKA,
+        options: {
+          client: { brokers: ['b1:9092', 'b2:9092'] },
+          consumer: { groupId: 'group-1' },
+        },
+      },
+    ]),
+  ],
+})
+export class MessagingModule {}
+
+import { Controller } from '@nestjs/common'
+import { EventPattern, Payload } from '@nestjs/microservices'
+
+@Controller()
+export class MessagingHandlers {
+  @EventPattern('orders')
+  async handleConsumer1Orders(@Payload() message: unknown): Promise<void> {
+    // Consumer 1 consumes orders (group group-1)
+  }
+
+}"
+`;
