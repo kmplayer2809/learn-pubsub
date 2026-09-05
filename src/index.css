@@ -19,7 +19,7 @@ body {
   /* Chặn bounce và pull-to-refresh của Safari iOS: canvas được pan bằng một
      ngón, và không có dòng này thì mỗi cú pan dọc lại kéo cả trang. */
   overscroll-behavior: none;
-  background: #020617;
+  background: #020617; /* ink-950 */
 }
 
 /* Bàn phím điều hướng cần thấy được đang ở đâu — mặc định trình duyệt outline
@@ -33,7 +33,7 @@ body {
   select:focus-visible,
   [role='tab']:focus-visible,
   [role='button']:focus-visible {
-    outline: 2px solid #38bdf8;
+    outline: 2px solid #38bdf8; /* accent-400 */
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -53,7 +53,7 @@ body {
    ở dưới, không có rule nào bị bỏ sót gây scrollbar to trở lại. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: #334155 transparent; /* ink-700 */
 }
 
 *::-webkit-scrollbar {
@@ -66,12 +66,12 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: #334155;
+  background-color: #334155; /* ink-700 */
   border-radius: 9999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: #475569;
+  background-color: #475569; /* ink-600 */
 }
 
 /*
@@ -85,7 +85,7 @@ input[type='range'] {
   -webkit-appearance: none;
   height: 4px;
   border-radius: 9999px;
-  background: #1e293b;
+  background: #1e293b; /* ink-800 */
 }
 
 input[type='range']::-webkit-slider-thumb {
@@ -93,8 +93,8 @@ input[type='range']::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   border-radius: 9999px;
-  background: #0ea5e9;
-  border: 2px solid #e0f2fe;
+  background: #0ea5e9; /* accent-500 */
+  border: 2px solid #e0f2fe; /* accent-100 */
   cursor: pointer;
   margin-top: 0;
 }
@@ -103,15 +103,15 @@ input[type='range']::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 9999px;
-  background: #0ea5e9;
-  border: 2px solid #e0f2fe;
+  background: #0ea5e9; /* accent-500 */
+  border: 2px solid #e0f2fe; /* accent-100 */
   cursor: pointer;
 }
 
 input[type='range']::-moz-range-track {
   height: 4px;
   border-radius: 9999px;
-  background: #1e293b;
+  background: #1e293b; /* ink-800 */
 }
 
 /* Tailwind không có utility cho safe area, và thêm hẳn một plugin chỉ vì hai
@@ -135,23 +135,23 @@ input[type='range']::-moz-range-track {
 }
 
 .react-flow__controls-button {
-  background: #1e293b !important;
-  border-bottom: 1px solid #334155 !important;
-  fill: #cbd5e1 !important;
+  background: #1e293b !important; /* ink-800 */
+  border-bottom: 1px solid #334155 !important; /* ink-700 */
+  fill: #cbd5e1 !important; /* ink-300 */
 }
 
 .react-flow__controls-button:hover {
-  background: #334155 !important;
-  fill: #f1f5f9 !important;
+  background: #334155 !important; /* ink-700 */
+  fill: #f1f5f9 !important; /* ink-100 */
 }
 
 .react-flow__controls-button:disabled {
-  fill: #475569 !important;
+  fill: #475569 !important; /* ink-600 */
 }
 
 .react-flow__attribution {
   background: transparent;
-  color: #475569;
+  color: #475569; /* ink-600 */
 }
 
 /*
@@ -161,11 +161,11 @@ input[type='range']::-moz-range-track {
  * controls above, hence `!important`.
  */
 .react-flow__edge-textbg {
-  fill: #0f172a !important;
+  fill: #0f172a !important; /* ink-900 */
 }
 
 .react-flow__edge-text {
-  fill: #7dd3fc !important;
+  fill: #7dd3fc !important; /* accent-300 */
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
 }
@@ -176,8 +176,8 @@ input[type='range']::-moz-range-track {
  * of the node it belongs to.
  */
 .react-flow__handle {
-  background: #0f172a !important;
-  border-color: #475569 !important;
+  background: #0f172a !important; /* ink-900 */
+  border-color: #475569 !important; /* ink-600 */
 }
 
 /*
