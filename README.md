@@ -24,18 +24,25 @@ lệnh (Redis) định sẵn, dạy một khái niệm cụ thể:
   stampede, `maxmemory` & eviction policy, transactions, Lua atomicity,
   distributed lock, sliding-window rate limit, RDB vs AOF, replication &
   Sentinel & cluster hash slot.
-- **Kafka** — 10 lesson trên hai nhóm (`basics`/Cơ bản, `producer`/Producer;
-  ba nhóm `consumer`/`durability`/`advanced` còn trống, để dành plan sau):
+- **Kafka** — 24 lesson trên năm nhóm (`basics`/Cơ bản, `producer`/Producer,
+  `consumer`/Consumer & Group, `durability`/Độ bền, `advanced`/Nâng cao):
   topic & partition & offset, broker & cluster & controller, key &
   partitioning, vòng đời record, offset vs position vs committed, `acks`,
   batching & `linger.ms`, partitioner & hot partition, idempotent producer,
-  thứ tự khi có retry.
+  thứ tự khi có retry, consumer group & rebalance, bốn assignor (range,
+  round-robin, sticky, cooperative-sticky), commit offset & auto-commit &
+  lag, `max.poll.interval.ms`, replication & ISR & leader election,
+  `min.insync.replicas`, retention, log compaction & tombstone,
+  transaction & exactly-once (control record, last stable offset,
+  `read_committed`), retry topic & DLQ, sizing & tuning.
 
-RabbitMQ còn có **Sandbox tự do** (`sandbox/`) — tự xây topology bằng cách
-kéo-thả node, publish message tay hoặc bằng generator, và xuất topology
-thành code chạy thật (amqplib hoặc NestJS `@golevelup/nestjs-rabbitmq`).
-**Redis và Kafka chưa có Sandbox và chưa có xuất code** — chỉ có lesson dẫn
-dắt; nút Sandbox ở sidebar chỉ hiện với broker nào khai báo nó.
+RabbitMQ và Kafka có **Sandbox tự do** (`sandbox/`) — tự xây topology bằng
+cách kéo-thả node, publish message tay hoặc bằng generator, và xuất topology
+thành code chạy thật (RabbitMQ: amqplib hoặc NestJS
+`@golevelup/nestjs-rabbitmq`; Kafka: KafkaJS hoặc NestJS
+`@nestjs/microservices` Transport.KAFKA). **Redis chưa có Sandbox và chưa có
+xuất code** — chỉ có lesson dẫn dắt; nút Sandbox ở sidebar chỉ hiện với
+broker nào khai báo nó.
 
 Bộ máy mô phỏng của mỗi broker (`src/brokers/<id>/engine/`) là một reducer
 thuần: nhận state hiện tại và một event, trả về state mới cộng các event mới
@@ -54,9 +61,9 @@ npm run dev
 `npm run dev` khởi động Vite dev server (mặc định `http://localhost:5173`,
 tự động dò cổng trống nếu cổng đó đang bận). Mở trình duyệt, chọn broker ở
 đầu sidebar, chọn một lesson bên dưới, bấm **Chạy** để phát mô phỏng, hoặc
-**Bước** để đi từng event một. Với RabbitMQ, bấm nút **Sandbox** ở cuối
-sidebar để vào chế độ tự xây topology — nút này không xuất hiện khi đang ở
-Redis hoặc Kafka, vì hai broker đó chưa có Sandbox.
+**Bước** để đi từng event một. Với RabbitMQ hoặc Kafka, bấm nút **Sandbox**
+ở cuối sidebar để vào chế độ tự xây topology — nút này không xuất hiện khi
+đang ở Redis, vì broker đó chưa có Sandbox.
 
 ## Màn hình nhỏ
 
@@ -151,8 +158,10 @@ persistent, durable, publisher confirms, RPC, quorum, classic, priority...;
 với Redis là key, value, TTL, `SCAN`/`KEYS`, cache, `maxmemory`, eviction,
 cache-aside, write-through, write-behind, stampede...; với Kafka là topic,
 partition, offset, broker, cluster, controller, producer, consumer, key,
-batch, `acks`, `linger.ms`, partitioner, hot partition, idempotent, ISR,
-high watermark, retention...
+batch, `acks`, `linger.ms`, partitioner, hot partition, idempotent, consumer
+group, rebalance, assignor, ISR, high watermark, `min.insync.replicas`,
+retention, tombstone, transaction, LSO (last stable offset), `read_committed`,
+DLQ...
 
 ## Thêm một broker mới
 
@@ -182,5 +191,5 @@ src/shell/ui/       App, broker switcher, sidebar, canvas, inspector, transport
 src/brokers/        registry.ts + mỗi broker một thư mục
 src/brokers/rabbitmq/  engine, lessons, sandbox, ui của RabbitMQ
 src/brokers/redis/     engine, lessons, ui của Redis — chưa có sandbox
-src/brokers/kafka/     engine, lessons, ui của Kafka — chưa có sandbox
+src/brokers/kafka/     engine, lessons, sandbox, ui của Kafka
 ```
