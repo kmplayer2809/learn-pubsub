@@ -74,7 +74,13 @@ export function toFlowNodes(topology: KafkaTopology, state: KafkaState, highligh
       id: key,
       type: 'partition',
       parentId: partition.leader,
-      extent: 'parent',
+      // Không đặt `extent: 'parent'`: `BrokerNode` tự co theo nội dung (nhãn + trạng thái),
+      // nhỏ hơn nhiều so với chiều cao cần cho các partition xếp dưới nó
+      // (`PARTITION_HEADER_Y + rank * PARTITION_ROW_HEIGHT`). Với `extent: 'parent'`, React
+      // Flow ghim vị trí con vào bên trong khung đo được của cha — khung đó chỉ cỡ ~50px
+      // trong khi partition thứ ba cần y=192, nên cả ba partition bị ghim chồng lên gần như
+      // cùng một điểm và chỉ cái vẽ sau cùng còn thấy được trên canvas. `parentId` một mình
+      // đã đủ để vị trí partition tính tương đối theo cha, không cần `extent` để làm việc đó.
       // Lệch theo THỨ HẠNG trong số các partition cùng leader — cố tình không dùng
       // `partition.index` trực tiếp: index đó là topic-cục-bộ, nên topic-a partition 0
       // và topic-b partition 0 cùng chung một leader sẽ đều là index 0 và đè lên nhau.
