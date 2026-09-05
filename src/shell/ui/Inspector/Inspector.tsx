@@ -62,11 +62,11 @@ export function HaltedBanner({ halted }: { halted?: { reason: string } }) {
  */
 export function MetricsGrid({ metrics }: { metrics: Record<string, number> }) {
   return (
-    <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg border border-slate-800/80 bg-slate-900/40 p-2.5 text-[11px] text-slate-400">
+    <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg border border-ink-800/80 bg-ink-900/40 p-2.5 text-[11px] text-ink-400">
       {Object.entries(metrics).map(([key, value]) => (
         <div key={key} className="contents">
           <dt className="truncate">{key}</dt>
-          <dd className="text-right font-mono font-medium text-slate-200">{value}</dd>
+          <dd className="text-right font-mono font-medium text-ink-200">{value}</dd>
         </div>
       ))}
     </dl>
@@ -76,13 +76,13 @@ export function MetricsGrid({ metrics }: { metrics: Record<string, number> }) {
 /** Shared with SandboxPanel: the last 40 journal entries, newest first. */
 export function EventLog({ journal }: { journal: JournalEntry[] }) {
   return (
-    <ul className="space-y-0.5 rounded-lg border border-slate-800/80 bg-slate-900/40 p-2.5 font-mono text-[10px] leading-relaxed text-slate-400">
+    <ul className="space-y-0.5 rounded-lg border border-ink-800/80 bg-ink-900/40 p-2.5 font-mono text-[10px] leading-relaxed text-ink-400">
       {journal
         .slice(-40)
         .reverse()
         .map((entry, i) => (
           <li key={i} className="truncate">
-            <span className="text-slate-600">{(entry.at / 1000).toFixed(1)}s </span>
+            <span className="text-ink-600">{(entry.at / 1000).toFixed(1)}s </span>
             {entry.text}
           </li>
         ))}
@@ -110,14 +110,14 @@ export function Inspector({
     <div className="flex h-full flex-col gap-4 overflow-y-auto" data-testid="inspector">
       <section>
         <div className="flex items-start justify-between gap-2">
-          <h2 className="mb-1 text-sm font-semibold leading-snug text-slate-100">
+          <h2 className="mb-1 text-sm font-semibold leading-snug text-ink-100">
             <MarkdownInline text={step?.title ?? lesson.title} />
           </h2>
           {ExportDialog && (
             <button
               onClick={() => setExportOpen(true)}
               data-testid="export-button"
-              className="min-h-11 shrink-0 rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-800 active:bg-slate-700 md:min-h-0"
+              className="min-h-11 shrink-0 rounded-lg border border-ink-700 px-2.5 py-1 text-[11px] font-medium text-ink-200 hover:bg-ink-800 active:bg-ink-700 md:min-h-0"
             >
               Xuất code
             </button>
@@ -139,7 +139,7 @@ export function Inspector({
       <HaltedBanner halted={state.halted} />
 
       <section>
-        <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
           {selectedNodeId ? `Cấu hình · ${selectedNodeId}` : 'Chỉ số'}
         </h3>
         {selectedNodeId ? (
@@ -150,7 +150,7 @@ export function Inspector({
       </section>
 
       <section className="min-h-0 flex-1">
-        <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Nhật ký sự kiện</h3>
+        <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Nhật ký sự kiện</h3>
         <EventLog journal={state.journal} />
       </section>
     </div>
