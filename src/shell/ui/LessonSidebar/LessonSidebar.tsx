@@ -22,12 +22,12 @@ export function LessonSidebar({
   const openSandbox = useAppStore((s) => s.openSandbox)
 
   return (
-    <nav className="flex h-full flex-col overflow-y-auto bg-slate-950" data-testid="lesson-sidebar">
+    <nav className="flex h-full flex-col overflow-y-auto bg-ink-950" data-testid="lesson-sidebar">
       {!hideBrokerSwitcher && <BrokerSwitcher />}
       <div className="flex-1 py-2">
         {broker.lessonGroups.map((group) => (
           <div key={group.id} className="mb-2">
-            <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
               {group.label}
             </div>
             {broker.lessons.filter((l) => l.group === group.id).map((lesson) => {
@@ -38,8 +38,8 @@ export function LessonSidebar({
                   onClick={() => setLesson(lesson.id)}
                   className={`block min-h-11 w-full border-l-2 px-3 py-1.5 text-left text-xs leading-snug md:min-h-0 ${
                     active
-                      ? 'border-sky-400 bg-sky-500/10 font-medium text-sky-300'
-                      : 'border-transparent text-slate-400 hover:border-slate-700 hover:bg-slate-900 hover:text-slate-200'
+                      ? 'border-accent-400 bg-accent-500/10 font-medium text-accent-300'
+                      : 'border-transparent text-ink-400 hover:border-ink-700 hover:bg-ink-900 hover:text-ink-200'
                   }`}
                 >
                   {lesson.title}
@@ -52,8 +52,8 @@ export function LessonSidebar({
       {broker.sandbox && (
         <button
           onClick={openSandbox}
-          className={`min-h-11 shrink-0 border-t border-slate-800/80 px-3 py-2 text-left text-xs font-medium md:min-h-0 ${
-            sandbox ? 'bg-sky-500/10 text-sky-300' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+          className={`min-h-11 shrink-0 border-t border-ink-800/80 px-3 py-2 text-left text-xs font-medium md:min-h-0 ${
+            sandbox ? 'bg-accent-500/10 text-accent-300' : 'text-ink-400 hover:bg-ink-900 hover:text-ink-200'
           }`}
           data-testid="open-sandbox"
         >
