@@ -199,6 +199,48 @@ ring-role-sky-ring`. Tên hue được giữ (không đổi thành `role-publish
 hue phục vụ nhiều vai trò ở nhiều broker — `violet` vừa là exchange của RabbitMQ
 vừa là sentinel của Redis.
 
+### Token trạng thái và token tone
+
+Hai nhóm nữa, phát hiện khi audit `CheckpointCard.tsx`, `Inspector.tsx` và
+`canvas/geometry.ts`.
+
+**Status** — `CheckpointCard` (đúng/sai), `IssuesList` (lỗi), `HaltedBanner`
+(cảnh báo). Ba trạng thái, mỗi trạng thái ba var:
+
+```css
+:root {
+  --ok-bg: 236 253 245;  --ok-line: 5 150 105;  --ok-fg: 6 95 70;      /* emerald 50/600/800 */
+  --danger-bg: 255 241 242; --danger-line: 225 29 72; --danger-fg: 159 18 57; /* rose */
+  --warn-bg: 255 251 235; --warn-line: 217 119 6;  --warn-fg: 146 64 14;      /* amber */
+}
+[data-theme='dark'] {
+  --ok-bg: 2 44 34;      --ok-line: 5 150 105;  --ok-fg: 167 243 208;  /* emerald 950/600/200 */
+  --danger-bg: 76 5 25;  --danger-line: 225 29 72; --danger-fg: 254 205 211;
+  --warn-bg: 69 26 3;    --warn-line: 217 119 6;  --warn-fg: 253 230 138;
+}
+```
+
+`line` giữ nguyên ở cả hai theme (giống `role-*-line`), nên viết hex thẳng trong
+config, không thành var.
+
+**Tone** — `TONE_FILL` trong `src/shell/ui/canvas/geometry.ts` là màu chấm message
+bay trên canvas, dùng làm giá trị `fill`/`stroke` của SVG chứ không phải class.
+Bốn hue hiện dùng `hue-400`. Trên nền canvas sáng `#e2e8f0`, `sky-400` chỉ đạt
+tương phản **1.71** — dưới ngưỡng 3:1 cho thành phần đồ hoạ phi văn bản. Nên phải
+đổi theo theme:
+
+```css
+:root               { --tone-sky: 2 132 199; --tone-emerald: 5 150 105; --tone-rose: 225 29 72; --tone-amber: 217 119 6; }  /* hue-600 */
+[data-theme='dark'] { --tone-sky: 56 189 248; --tone-emerald: 52 211 153; --tone-rose: 251 113 133; --tone-amber: 251 191 36; } /* hue-400 */
+```
+
+`TONE_FILL` đổi giá trị từ hex sang chuỗi `'rgb(var(--tone-sky))'`. SVG
+`fill`/`stroke` nhận được cú pháp này. `geometry.ts` nằm ở `src/shell/ui/`, ngoài
+vùng `purity.test.ts` soi, nên không vướng ràng buộc determinism.
+
+`stroke="#020617"` cứng trong `MessageLayer.tsx` (viền chữ nhãn message, cùng màu
+canvas dark) đổi sang `rgb(var(--canvas))`.
+
 ### Theme plumbing
 
 `data-theme` đặt trên `<html>`. Một script đồng bộ trong `<head>` của
@@ -562,7 +604,7 @@ Mỗi bước là một commit với suite xanh.
 |---|---|---|
 | 1 | Token infra: CSS var, `tailwind.config.js`, script inline `index.html`, `theme` + `setTheme` vào store | Gần như không đổi, trừ panel nhấc khỏi canvas |
 | 2 | Font `@fontsource-variable` + type scale | Đổi chữ toàn app |
-| 3 | Shell chrome: numeric → semantic token, 9 file dưới `src/shell/ui/` | Light mode chạy ở shell |
+| 3 | Shell chrome: numeric → semantic token, toàn bộ `src/shell/ui/**` (gồm `CheckpointCard`, `MessageLayer`, `geometry.ts`) | Light mode chạy ở shell |
 | 4 | Broker UI: `slate`/`sky`/hue → `role-*`, 13 file dưới `src/brokers/*/ui/` và `sandbox/` | Light mode chạy toàn bộ |
 | 5 | Layout: TopBar chung, Inspector hai vùng + tab, bề rộng cột, nhãn tab mobile | Đổi bố cục |
 | 6 | Canvas: `READABLE_ZOOM`, MiniMap, mũi tên edge, node shell | Node đọc được ở mobile |
