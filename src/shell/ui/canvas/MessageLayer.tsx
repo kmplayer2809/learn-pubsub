@@ -70,16 +70,16 @@ export function MessageLayer({ flights, now }: { flights: InFlight[]; now: numbe
       <g style={{ transform, transformOrigin: '0 0' }}>
         {particles.map((p) => (
           <g key={p.key}>
-            <circle cx={p.x} cy={p.y} r={9} fill={TONE_FILL[p.tone] ?? '#94a3b8'} opacity={0.25} />
+            <circle cx={p.x} cy={p.y} r={9} fill={TONE_FILL[p.tone] ?? 'rgb(var(--text-muted))'} opacity={0.25} />
             {p.solid ? (
-              <circle cx={p.x} cy={p.y} r={5} fill={TONE_FILL[p.tone] ?? '#94a3b8'} />
+              <circle cx={p.x} cy={p.y} r={5} fill={TONE_FILL[p.tone] ?? 'rgb(var(--text-muted))'} />
             ) : (
               <circle
                 cx={p.x}
                 cy={p.y}
                 r={5}
                 fill="none"
-                stroke={TONE_FILL[p.tone] ?? '#94a3b8'}
+                stroke={TONE_FILL[p.tone] ?? 'rgb(var(--text-muted))'}
                 strokeWidth={2}
               />
             )}
@@ -89,8 +89,8 @@ export function MessageLayer({ flights, now }: { flights: InFlight[]; now: numbe
               textAnchor="middle"
               className="font-mono"
               fontSize={10}
-              fill={TONE_FILL[p.tone] ?? '#94a3b8'}
-              stroke="#020617"
+              fill={TONE_FILL[p.tone] ?? 'rgb(var(--text-muted))'}
+              stroke="rgb(var(--canvas))"
               strokeWidth={3}
               paintOrder="stroke"
             >

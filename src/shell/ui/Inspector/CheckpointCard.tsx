@@ -17,8 +17,8 @@ export function CheckpointCard({ checkpoint }: { checkpoint: Checkpoint }) {
   const isCorrect = chosen === checkpoint.answerIndex
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3 shadow-sm shadow-black/20" data-testid="checkpoint-card">
-      <p className="mb-2 text-sm leading-relaxed text-slate-200">
+    <div className="rounded-lg border border-edge bg-surface-raised p-3 shadow-sm" data-testid="checkpoint-card">
+      <p className="mb-2 text-narrative leading-relaxed text-content">
         <MarkdownInline text={checkpoint.question} />
       </p>
 
@@ -33,19 +33,19 @@ export function CheckpointCard({ checkpoint }: { checkpoint: Checkpoint }) {
                 disabled={answered}
                 onClick={() => setChosen(i)}
                 data-testid={`checkpoint-option-${i}`}
-                className={`w-full rounded-md border px-2.5 py-1.5 text-left text-[11px] leading-relaxed transition-colors ${
+                className={`w-full rounded-md border px-2.5 py-1.5 text-left text-meta leading-relaxed transition-colors ${
                   answered
                     ? isAnswer
-                      ? 'border-emerald-600 bg-emerald-950 text-emerald-100'
+                      ? 'border-ok-line bg-ok-bg text-ok-fg'
                       : isChosen
-                        ? 'border-rose-600 bg-rose-950 text-rose-100'
-                        : 'border-slate-800 text-slate-500'
-                    : 'border-slate-700 text-slate-200 hover:border-slate-600 hover:bg-slate-800'
+                        ? 'border-danger-line bg-danger-bg text-danger-fg'
+                        : 'border-edge text-content-faint'
+                    : 'border-edge-strong text-content hover:border-edge-strong hover:bg-surface-hover'
                 }`}
               >
                 <MarkdownInline text={option} />
                 {answered && isAnswer && (
-                  <span className="ml-1 text-[10px] font-medium text-emerald-300">· Đáp án đúng</span>
+                  <span className="ml-1 text-meta font-medium text-ok-fg">· Đáp án đúng</span>
                 )}
               </button>
             </li>
@@ -54,14 +54,14 @@ export function CheckpointCard({ checkpoint }: { checkpoint: Checkpoint }) {
       </ul>
 
       {answered && (
-        <div className={`mt-2 rounded-md border-l-2 p-2 ${isCorrect ? 'border-emerald-500 bg-emerald-500/5' : 'border-rose-500 bg-rose-500/5'}`}>
+        <div className={`mt-2 rounded-md border-l-2 p-2 ${isCorrect ? 'border-ok-line bg-ok-bg' : 'border-danger-line bg-danger-bg'}`}>
           <p
             data-testid="checkpoint-verdict"
-            className={`mb-1 text-[11px] font-semibold ${isCorrect ? 'text-emerald-300' : 'text-rose-300'}`}
+            className={`mb-1 text-meta font-semibold ${isCorrect ? 'text-ok-fg' : 'text-danger-fg'}`}
           >
             {isCorrect ? 'Đúng' : 'Chưa đúng'}
           </p>
-          <div data-testid="checkpoint-explanation" className="text-slate-300">
+          <div data-testid="checkpoint-explanation" className="text-content">
             <Markdown text={checkpoint.explanation} />
           </div>
         </div>
@@ -102,7 +102,7 @@ export function CheckpointSection({
 
   return (
     <section className="space-y-2" data-testid="checkpoints">
-      <h3 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Câu hỏi kiểm tra</h3>
+      <h3 className="text-section font-semibold uppercase tracking-wider text-content-faint">Câu hỏi kiểm tra</h3>
       {visible.map(({ checkpoint, index }) => (
         <CheckpointCard key={`${lessonId}:${index}`} checkpoint={checkpoint} />
       ))}

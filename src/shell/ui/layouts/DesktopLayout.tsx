@@ -9,8 +9,8 @@ export function DesktopLayout(props: LayoutProps) {
   const StatePanel = broker.StatePanel
 
   return (
-    <div className="flex h-full bg-ink-950 text-ink-100">
-      <aside className="w-64 shrink-0 border-r border-ink-800/80 bg-ink-950">
+    <div className="flex h-full bg-canvas text-content-strong">
+      <aside className="w-64 shrink-0 border-r border-edge bg-surface">
         <LessonSidebar />
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
@@ -24,12 +24,12 @@ export function DesktopLayout(props: LayoutProps) {
             editable={editable}
           />
         </div>
-        <div className="border-t border-ink-800/80 bg-ink-950">
+        <div className="border-t border-edge bg-surface">
           <StatePanel state={state} />
         </div>
         <Transport durationMs={durationMs} onStep={onStep} />
       </main>
-      <aside className="w-80 shrink-0 overflow-y-auto border-l border-ink-800/80 bg-ink-950 p-3.5">
+      <aside className="w-80 shrink-0 overflow-y-auto border-l border-edge bg-surface p-3.5">
         <SidePanel {...props} />
       </aside>
     </div>

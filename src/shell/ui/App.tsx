@@ -21,7 +21,7 @@ export default function App() {
   const isTablet = useIsTablet()
   const inSandbox = sandbox && Boolean(broker.sandbox)
 
-  if (!inSandbox && !lesson) return <div className="p-4 text-ink-200">Không tìm thấy bài học.</div>
+  if (!inSandbox && !lesson) return <div className="p-4 text-content">Không tìm thấy bài học.</div>
 
   const topology = inSandbox ? simTopology : lesson!.topology
   const script = inSandbox ? simScript : lesson!.script

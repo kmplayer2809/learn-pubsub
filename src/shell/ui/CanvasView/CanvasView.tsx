@@ -142,7 +142,7 @@ export function CanvasView({
         onNodesChange={editable ? handleNodesChange : undefined}
         onConnect={editable ? handleConnect : undefined}
       >
-        <Background color="#1e293b" gap={20} />
+        <Background color="rgb(var(--border-subtle))" gap={20} />
         <Controls showInteractive={false} />
       </ReactFlow>
       <MessageLayer flights={flights} now={state.now} />
