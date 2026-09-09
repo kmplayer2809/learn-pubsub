@@ -47,7 +47,7 @@ export function TabletLayout(props: LayoutProps) {
           <div
             aria-hidden
             onClick={() => setDrawerOpen(false)}
-            className="fixed inset-0 z-10 bg-surface/70 backdrop-blur-sm"
+            className="fixed inset-0 z-10 bg-overlay/70 backdrop-blur-sm"
           />
           <aside className="fixed inset-y-0 left-0 z-20 w-64 border-r border-edge bg-surface shadow-sm">
             <LessonSidebar hideBrokerSwitcher />

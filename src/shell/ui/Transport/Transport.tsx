@@ -74,7 +74,7 @@ export function Transport({
       <select
         value={speed}
         onChange={(e) => setSpeed(Number(e.target.value) as Speed)}
-        className={`rounded-lg bg-surface-hover px-2 py-1.5 text-ui text-content hover:bg-surface-hover${compact ? ' shrink-0 min-h-11' : ''}`}
+        className={`rounded-lg bg-surface-raised px-2 py-1.5 text-ui text-content hover:bg-surface-hover${compact ? ' shrink-0 min-h-11' : ''}`}
         aria-label="speed"
       >
         {SPEEDS.map((s) => (

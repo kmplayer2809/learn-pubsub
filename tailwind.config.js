@@ -57,6 +57,10 @@ export default {
           soft: 'rgb(var(--accent-soft) / <alpha-value>)',
         },
         highlight: 'rgb(var(--highlight) / <alpha-value>)',
+        // Scrim behind an open drawer. Dark in both themes — a scrim's job is to
+        // push content back, and a light-theme white wash does the opposite. Literal
+        // hex, not a var: this value does not vary by theme.
+        overlay: '#020617',
         ok: {
           bg: 'rgb(var(--ok-bg) / <alpha-value>)',
           fg: 'rgb(var(--ok-fg) / <alpha-value>)',
