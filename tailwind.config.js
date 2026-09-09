@@ -81,6 +81,10 @@ export default {
         code: ['12px', { lineHeight: '1.5' }],
         section: ['10px', { lineHeight: '1', letterSpacing: '0.08em' }],
       },
+      fontFamily: {
+        sans: ['IBM Plex Sans Variable', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono Variable', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
       boxShadow: {
         node: 'var(--shadow-node)',
       },

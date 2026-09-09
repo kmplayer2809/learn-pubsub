@@ -123,6 +123,7 @@ body {
      ngón, và không có dòng này thì mỗi cú pan dọc lại kéo cả trang. */
   overscroll-behavior: none;
   background: rgb(var(--canvas));
+  font-family: theme('fontFamily.sans');
 }
 
 /* Bàn phím điều hướng cần thấy được đang ở đâu — mặc định trình duyệt outline
@@ -269,7 +270,7 @@ input[type='range']::-moz-range-track {
 
 .react-flow__edge-text {
   fill: #7dd3fc !important; /* accent-300 */
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: theme('fontFamily.mono');
   font-size: 10px;
 }
 
