@@ -14,7 +14,7 @@ import { consumerLag } from './toFlow'
 // reads a Kafka-lesson-only field, only `lesson.topology`.
 import type { Lesson } from '../../../shell/lesson/types'
 
-const GRID = 'grid grid-cols-1 gap-x-2 gap-y-1 text-[11px] text-slate-400 sm:grid-cols-2'
+const GRID = 'grid grid-cols-1 gap-x-2 gap-y-1 text-meta text-content-muted sm:grid-cols-2'
 
 export function NodeConfig({
   lesson,
@@ -43,17 +43,17 @@ export function NodeConfig({
     return (
       <dl className={GRID}>
         <dt>rack</dt>
-        <dd className="text-slate-200">{broker.rack ?? '—'}</dd>
+        <dd className="text-content">{broker.rack ?? '—'}</dd>
         <dt>trạng thái</dt>
-        <dd data-testid="broker-online" className={online ? 'text-slate-200' : 'text-rose-400'}>
+        <dd data-testid="broker-online" className={online ? 'text-content' : 'text-danger-fg'}>
           {online ? 'online' : 'offline'}
         </dd>
         <dt>controller</dt>
-        <dd className="text-slate-200">{isController ? `epoch ${state.controller.epoch}` : '—'}</dd>
+        <dd className="text-content">{isController ? `epoch ${state.controller.epoch}` : '—'}</dd>
         <dt>replica.fetch</dt>
-        <dd className="text-slate-200">{broker.replicaFetchEveryMs ?? 200}ms</dd>
+        <dd className="text-content">{broker.replicaFetchEveryMs ?? 200}ms</dd>
         <dt>replica.lag.time.max</dt>
-        <dd className="text-slate-200">{broker.replicaLagTimeMaxMs ?? 10_000}ms</dd>
+        <dd className="text-content">{broker.replicaLagTimeMaxMs ?? 10_000}ms</dd>
       </dl>
     )
   }
@@ -63,25 +63,25 @@ export function NodeConfig({
     return (
       <dl className={GRID}>
         <dt>topic</dt>
-        <dd className="truncate text-slate-200">{partition.topic}</dd>
+        <dd className="truncate text-content">{partition.topic}</dd>
         <dt>leader</dt>
-        <dd className="truncate text-slate-200">{partition.leader}</dd>
+        <dd className="truncate text-content">{partition.leader}</dd>
         <dt>replicas</dt>
-        <dd className="truncate text-slate-200">{partition.replicas.join(', ')}</dd>
+        <dd className="truncate text-content">{partition.replicas.join(', ')}</dd>
         <dt>isr</dt>
-        <dd className="truncate text-slate-200">{partition.isr.join(', ') || '—'}</dd>
+        <dd className="truncate text-content">{partition.isr.join(', ') || '—'}</dd>
         <dt>replicationFactor</dt>
-        <dd className="text-slate-200">{topic?.replicationFactor ?? partition.replicas.length}</dd>
+        <dd className="text-content">{topic?.replicationFactor ?? partition.replicas.length}</dd>
         <dt>min.insync.replicas</dt>
-        <dd className="text-slate-200">{topic?.config?.minInsyncReplicas ?? '—'}</dd>
+        <dd className="text-content">{topic?.config?.minInsyncReplicas ?? '—'}</dd>
         <dt>log start offset</dt>
-        <dd className="text-slate-200">{partition.logStartOffset}</dd>
+        <dd className="text-content">{partition.logStartOffset}</dd>
         <dt>high watermark</dt>
-        <dd className="text-emerald-300">{partition.highWatermark}</dd>
+        <dd className="text-ok-fg">{partition.highWatermark}</dd>
         <dt>LEO</dt>
-        <dd className="text-sky-300">{partition.leo}</dd>
+        <dd className="text-role-sky-fg">{partition.leo}</dd>
         <dt>leader epoch</dt>
-        <dd className="text-slate-200">{partition.leaderEpoch}</dd>
+        <dd className="text-content">{partition.leaderEpoch}</dd>
       </dl>
     )
   }
@@ -91,21 +91,21 @@ export function NodeConfig({
     return (
       <dl className={GRID}>
         <dt>acks</dt>
-        <dd className="text-slate-200">{producer.acks ?? 'all'}</dd>
+        <dd className="text-content">{producer.acks ?? 'all'}</dd>
         <dt>idempotent</dt>
-        <dd className="text-slate-200">{producer.idempotent ? 'true' : 'false'}</dd>
+        <dd className="text-content">{producer.idempotent ? 'true' : 'false'}</dd>
         <dt>transactional.id</dt>
-        <dd className="truncate text-slate-200">{producer.transactionalId ?? '—'}</dd>
+        <dd className="truncate text-content">{producer.transactionalId ?? '—'}</dd>
         <dt>retries</dt>
-        <dd className="text-slate-200">{producer.retries ?? '—'}</dd>
+        <dd className="text-content">{producer.retries ?? '—'}</dd>
         <dt>max.in.flight</dt>
-        <dd className="text-slate-200">{producer.maxInFlight ?? 5}</dd>
+        <dd className="text-content">{producer.maxInFlight ?? 5}</dd>
         <dt>linger.ms</dt>
-        <dd className="text-slate-200">{producer.lingerMs ?? '—'}</dd>
+        <dd className="text-content">{producer.lingerMs ?? '—'}</dd>
         <dt>partitioner</dt>
-        <dd className="text-slate-200">{producer.partitioner ?? 'default'}</dd>
+        <dd className="text-content">{producer.partitioner ?? 'default'}</dd>
         <dt>in-flight requests</dt>
-        <dd className="text-slate-200">{runtime?.inFlightRequests ?? 0}</dd>
+        <dd className="text-content">{runtime?.inFlightRequests ?? 0}</dd>
       </dl>
     )
   }
@@ -116,30 +116,30 @@ export function NodeConfig({
     return (
       <dl className={GRID}>
         <dt>group.id</dt>
-        <dd className="truncate text-slate-200">{consumer.groupId}</dd>
+        <dd className="truncate text-content">{consumer.groupId}</dd>
         <dt>subscriptions</dt>
-        <dd className="truncate text-slate-200">{consumer.subscriptions.join(', ')}</dd>
+        <dd className="truncate text-content">{consumer.subscriptions.join(', ')}</dd>
         <dt>auto.offset.reset</dt>
-        <dd className="text-slate-200">{consumer.autoOffsetReset ?? 'latest'}</dd>
+        <dd className="text-content">{consumer.autoOffsetReset ?? 'latest'}</dd>
         <dt>isolation.level</dt>
-        <dd className="text-slate-200">{consumer.isolationLevel ?? 'read_uncommitted'}</dd>
+        <dd className="text-content">{consumer.isolationLevel ?? 'read_uncommitted'}</dd>
         <dt>trạng thái</dt>
-        <dd className={joined ? 'text-slate-200' : 'text-slate-500'}>
+        <dd className={joined ? 'text-content' : 'text-content-faint'}>
           {joined ? 'đã tham gia' : 'chưa tham gia'}
         </dd>
         {joined && (
           <>
             <dt>lag</dt>
-            <dd data-testid="consumer-lag" className="text-amber-300">
+            <dd data-testid="consumer-lag" className="text-warn-fg">
               {consumerLag(topology, state, consumer, runtime)}
             </dd>
             <dt>paused</dt>
-            <dd className="truncate text-slate-200">{runtime.paused.join(', ') || '—'}</dd>
+            <dd className="truncate text-content">{runtime.paused.join(', ') || '—'}</dd>
           </>
         )}
       </dl>
     )
   }
 
-  return <p className="text-[11px] text-slate-500">Node này không có cấu hình.</p>
+  return <p className="text-meta text-content-faint">Node này không có cấu hình.</p>
 }

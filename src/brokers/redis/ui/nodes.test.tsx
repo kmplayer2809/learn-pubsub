@@ -14,8 +14,8 @@ function shellOf(container: HTMLElement): HTMLElement {
 }
 
 const KINDS = [
-  ['client', ClientNode, 'ring-cyan-300', { label: 'c1' }],
-  ['server', ServerNode, 'ring-rose-300', { label: 'redis', keysCount: 0, memoryUsed: 0 }],
+  ['client', ClientNode, 'ring-role-cyan-ring', { label: 'c1' }],
+  ['server', ServerNode, 'ring-role-rose-ring', { label: 'redis', keysCount: 0, memoryUsed: 0 }],
 ] as const
 
 function renderNode(
@@ -34,30 +34,30 @@ function renderNode(
 describe.each(KINDS)('%s node emphasis', (_kind, Component, ring, baseData) => {
   it('renders no highlight outline when data.highlighted is false', () => {
     const shell = renderNode(Component, { ...baseData, highlighted: false }, false)
-    expect(shell.className).not.toContain('outline-fuchsia-400')
+    expect(shell.className).not.toContain('outline-highlight')
   })
 
   it('renders the dashed offset outline when data.highlighted is true', () => {
     const shell = renderNode(Component, { ...baseData, highlighted: true }, false)
     expect(shell.className).toContain('outline-dashed')
     expect(shell.className).toContain('outline-offset-4')
-    expect(shell.className).toContain('outline-fuchsia-400')
+    expect(shell.className).toContain('outline-highlight')
   })
 
   it('keeps the highlight visually separate from selection', () => {
     const selectedOnly = renderNode(Component, { ...baseData, highlighted: false }, true)
     expect(selectedOnly.className).toContain(ring)
-    expect(selectedOnly.className).not.toContain('outline-fuchsia-400')
+    expect(selectedOnly.className).not.toContain('outline-highlight')
 
     const highlightedOnly = renderNode(Component, { ...baseData, highlighted: true }, false)
     expect(highlightedOnly.className).not.toContain(ring)
-    expect(highlightedOnly.className).toContain('outline-fuchsia-400')
+    expect(highlightedOnly.className).toContain('outline-highlight')
   })
 
   it('reads as both when a node is selected and highlighted at once', () => {
     const shell = renderNode(Component, { ...baseData, highlighted: true }, true)
     expect(shell.className).toContain(ring)
-    expect(shell.className).toContain('outline-fuchsia-400')
+    expect(shell.className).toContain('outline-highlight')
   })
 })
 

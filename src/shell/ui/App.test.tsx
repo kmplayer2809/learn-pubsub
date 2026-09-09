@@ -17,7 +17,7 @@ beforeEach(() => {
 
 /** Ids of the canvas nodes currently wearing the narrative-highlight outline. */
 function highlightedNodeIds(): string[] {
-  return [...document.querySelectorAll('.outline-fuchsia-400')]
+  return [...document.querySelectorAll('.outline-highlight')]
     .map((el) => el.closest('.react-flow__node')?.getAttribute('data-id') ?? '')
     .sort()
 }

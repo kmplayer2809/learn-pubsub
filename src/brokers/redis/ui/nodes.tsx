@@ -1,12 +1,12 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 
-const SHELL = 'rounded-lg border px-3 py-2 text-xs shadow-lg'
+const SHELL = 'min-w-[124px] rounded-xl border px-3.5 py-2.5 shadow-node'
 
 // Same convention as RabbitMQ's `nodes.tsx` (src/brokers/rabbitmq/ui/nodes.tsx): a dashed,
 // offset, fuchsia outline for the narrative highlight, kept visually separate from the
 // solid same-hue `ring-2` used for `selected`. `App.test.tsx` finds highlighted nodes by
 // this exact class, so it is not free to drift between brokers.
-const HIGHLIGHT = 'outline-dashed outline-2 outline-offset-4 outline-fuchsia-400'
+const HIGHLIGHT = 'outline-dashed outline-2 outline-offset-4 outline-highlight'
 
 function highlightClass(data: NodeProps['data']): string {
   return data.highlighted ? HIGHLIGHT : ''
@@ -18,11 +18,11 @@ function highlightClass(data: NodeProps['data']): string {
 export function ClientNode({ data, selected }: NodeProps) {
   return (
     <div
-      className={`${SHELL} border-cyan-500 bg-cyan-950 ${selected ? 'ring-2 ring-cyan-300' : ''} ${highlightClass(data)}`}
+      className={`${SHELL} border-role-cyan-line bg-role-cyan ${selected ? 'ring-2 ring-role-cyan-ring' : ''} ${highlightClass(data)}`}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="max-w-[200px] truncate font-semibold text-cyan-200">{String(data.label)}</div>
-      <div className="text-[10px] text-cyan-400">client</div>
+      <div className="max-w-[200px] truncate text-ui font-semibold text-role-cyan-fg">{String(data.label)}</div>
+      <div className="font-mono text-meta text-role-cyan-fg/70">client</div>
       <Handle type="source" position={Position.Right} />
     </div>
   )
@@ -36,12 +36,12 @@ export function ServerNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`${SHELL} border-rose-500 bg-rose-950 ${selected ? 'ring-2 ring-rose-300' : ''} ${highlightClass(data)}`}
+      className={`${SHELL} border-role-rose-line bg-role-rose ${selected ? 'ring-2 ring-role-rose-ring' : ''} ${highlightClass(data)}`}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="max-w-[200px] truncate font-semibold text-rose-200">{String(data.label)}</div>
-      <div className="text-[10px] text-rose-400">{keysCount} keys</div>
-      <div className="text-[10px] text-rose-400">
+      <div className="max-w-[200px] truncate text-ui font-semibold text-role-rose-fg">{String(data.label)}</div>
+      <div className="font-mono text-meta text-role-rose-fg/70">{keysCount} keys</div>
+      <div className="font-mono text-meta text-role-rose-fg/70">
         {/* No limit set: say so explicitly rather than rendering `memoryUsed / undefined`. */}
         {maxmemoryBytes === undefined
           ? `${memoryUsed}B · không giới hạn`
@@ -63,16 +63,18 @@ export function ReplicaNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`${SHELL} border-amber-500 bg-amber-950 ${selected ? 'ring-2 ring-amber-300' : ''} ${highlightClass(data)}`}
+      className={`${SHELL} border-role-amber-line bg-role-amber ${selected ? 'ring-2 ring-role-amber-ring' : ''} ${highlightClass(data)}`}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="max-w-[200px] truncate font-semibold text-amber-200">{String(data.label)}</div>
+      <div className="max-w-[200px] truncate text-ui font-semibold text-role-amber-fg">{String(data.label)}</div>
       {isPromotedPrimary ? (
-        <div className="text-[10px] text-amber-400">primary (đã được promote)</div>
+        <div className="font-mono text-meta text-role-amber-fg/70">primary (đã được promote)</div>
       ) : (
         <>
-          <div className="text-[10px] text-amber-400">lag {String(data.lagMs)}ms</div>
-          <div className="text-[10px] text-amber-400">{behind === 0 ? 'đã bắt kịp' : `chậm ${behind} ghi`}</div>
+          <div className="font-mono text-meta text-role-amber-fg/70">lag {String(data.lagMs)}ms</div>
+          <div className="font-mono text-meta text-role-amber-fg/70">
+            {behind === 0 ? 'đã bắt kịp' : `chậm ${behind} ghi`}
+          </div>
         </>
       )}
     </div>
@@ -82,11 +84,11 @@ export function ReplicaNode({ data, selected }: NodeProps) {
 export function SentinelNode({ data, selected }: NodeProps) {
   return (
     <div
-      className={`${SHELL} border-violet-500 bg-violet-950 ${selected ? 'ring-2 ring-violet-300' : ''} ${highlightClass(data)}`}
+      className={`${SHELL} border-role-violet-line bg-role-violet ${selected ? 'ring-2 ring-role-violet-ring' : ''} ${highlightClass(data)}`}
     >
       <Handle type="source" position={Position.Left} />
-      <div className="max-w-[200px] truncate font-semibold text-violet-200">{String(data.label)}</div>
-      <div className="text-[10px] text-violet-400">sentinel</div>
+      <div className="max-w-[200px] truncate text-ui font-semibold text-role-violet-fg">{String(data.label)}</div>
+      <div className="font-mono text-meta text-role-violet-fg/70">sentinel</div>
     </div>
   )
 }

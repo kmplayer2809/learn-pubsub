@@ -1,4 +1,4 @@
-import type { Edge, Node } from '@xyflow/react'
+import { MarkerType, type Edge, type Node } from '@xyflow/react'
 import {
   partitionKey,
   sortedPartitionKeys,
@@ -189,7 +189,14 @@ export function consumerLag(
 }
 
 function edge(source: string, target: string): Edge {
-  return { id: `${source}->${target}`, source, target, animated: false, style: { stroke: '#475569' } }
+  return {
+    id: `${source}->${target}`,
+    source,
+    target,
+    animated: false,
+    style: { stroke: 'rgb(var(--border-strong))' },
+    markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: 'rgb(var(--border-strong))' },
+  }
 }
 
 /**

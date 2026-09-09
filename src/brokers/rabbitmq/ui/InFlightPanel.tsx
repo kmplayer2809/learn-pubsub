@@ -16,12 +16,12 @@ export function InFlightPanel({ state, dense = false }: { state: EngineState; de
   return (
     <div className={`overflow-y-auto px-3 py-2 ${dense ? 'max-h-24' : 'max-h-32'}`} data-testid="inflight-panel">
       <div className="mb-1 flex items-baseline gap-2">
-        <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Message đang bay</h3>
-        <span className="font-mono text-[10px] text-slate-600">{flights.length}</span>
+        <h3 className="text-section text-content-faint">Message đang bay</h3>
+        <span className="font-mono text-code text-content-faint">{flights.length}</span>
       </div>
 
       {flights.length === 0 ? (
-        <p className="text-[11px] text-slate-600" data-testid="inflight-empty">
+        <p className="text-meta text-content-faint" data-testid="inflight-empty">
           Không có message nào trên đường truyền.
         </p>
       ) : (
@@ -29,23 +29,28 @@ export function InFlightPanel({ state, dense = false }: { state: EngineState; de
           {flights.map((f) => {
             const [from, to] = routeOf(f.edgeId)
             const pct = Math.round(progressOf(f, state.now) * 100)
-            const colour = TONE_FILL[f.tone] ?? '#94a3b8'
+            // `TONE_FILL` returns `undefined` for a tone it doesn't carry a mapping for — the
+            // fallback has to be the same `rgb(var(--x))` shape as every other entry (see
+            // `geometry.ts`), not a hex literal, or it would be the one color on this canvas
+            // that doesn't move with the theme. Matches the identical fallback in the shell's
+            // `MessageLayer.tsx`.
+            const colour = TONE_FILL[f.tone] ?? 'rgb(var(--text-muted))'
             return (
               <li
                 key={`${f.message.id}@${f.edgeId}`}
                 data-testid="inflight-row"
                 data-message-id={f.message.id}
-                className="flex items-center gap-2 text-[11px]"
+                className="flex items-center gap-2 text-meta"
               >
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
                   style={{ backgroundColor: colour }}
                 />
-                <span className="w-8 shrink-0 font-mono text-slate-200">{f.message.id}</span>
-                <span className="w-40 shrink-0 truncate font-mono text-slate-400">
-                  {from} <span className="text-slate-600">{'->'}</span> {to}
+                <span className="w-8 shrink-0 font-mono text-content">{f.message.id}</span>
+                <span className="w-40 shrink-0 truncate font-mono text-content-muted">
+                  {from} <span className="text-content-faint">{'->'}</span> {to}
                 </span>
-                <span className="w-36 shrink-0 truncate font-mono text-sky-300">
+                <span className="w-36 shrink-0 truncate font-mono text-role-sky-fg">
                   {f.message.routingKey || '—'}
                 </span>
                 <span
@@ -54,26 +59,26 @@ export function InFlightPanel({ state, dense = false }: { state: EngineState; de
                   aria-valuemin={0}
                   aria-valuemax={100}
                   data-testid="inflight-progress"
-                  className="h-1.5 min-w-16 flex-1 overflow-hidden rounded bg-slate-800"
+                  className="h-1.5 min-w-16 flex-1 overflow-hidden rounded bg-surface-hover"
                 >
                   <span
                     className="block h-full rounded"
                     style={{ width: `${pct}%`, backgroundColor: colour }}
                   />
                 </span>
-                <span className="flex shrink-0 gap-1 text-[10px] text-slate-500">
+                <span className="flex shrink-0 gap-1 text-code text-content-faint">
                   {f.message.redeliveryCount > 0 && (
-                    <span className="rounded bg-amber-950 px-1 text-amber-300">
+                    <span className="rounded bg-warn-bg px-1 text-warn-fg">
                       redelivery {f.message.redeliveryCount}
                     </span>
                   )}
                   {f.message.priority > 0 && (
-                    <span className="rounded bg-slate-800 px-1 text-slate-300">
+                    <span className="rounded bg-surface-hover px-1 text-content">
                       priority {f.message.priority}
                     </span>
                   )}
                   {f.message.persistent && (
-                    <span className="rounded bg-emerald-950 px-1 text-emerald-300">persistent</span>
+                    <span className="rounded bg-ok-bg px-1 text-ok-fg">persistent</span>
                   )}
                 </span>
               </li>
