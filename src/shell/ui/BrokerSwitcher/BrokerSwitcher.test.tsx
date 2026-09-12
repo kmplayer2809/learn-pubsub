@@ -43,7 +43,7 @@ describe('BrokerSwitcher', () => {
     render(<BrokerSwitcher />)
     for (const tab of screen.getAllByTestId('broker-tab')) {
       expect(tab.className).toContain('min-h-11')
-      expect(tab.className).toContain('md:min-h-0')
+      expect(tab.className).toContain('md:min-h-8')
     }
   })
 })

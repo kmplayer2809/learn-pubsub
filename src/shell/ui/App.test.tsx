@@ -28,7 +28,9 @@ describe('App', () => {
     expect(screen.getByTestId('lesson-sidebar')).toBeTruthy()
     expect(screen.getByTestId('canvas')).toBeTruthy()
     expect(screen.getByTestId('inspector')).toBeTruthy()
-    expect(screen.getByText('Hello world')).toBeTruthy()
+    // Desktop's TopBar now also shows the lesson title, alongside the sidebar row —
+    // "Hello world" legitimately appears twice.
+    expect(screen.getAllByText('Hello world').length).toBeGreaterThan(0)
   })
 
   it('shows a play button in the transport bar', () => {
@@ -256,7 +258,7 @@ describe('layout responsive', () => {
     expect(screen.getByTestId('canvas')).toBeInTheDocument()
     expect(screen.getByTestId('inspector')).toBeInTheDocument()
     expect(screen.queryByTestId('mobile-tabbar')).toBeNull()
-    expect(screen.queryByTestId('top-bar')).toBeNull()
+    expect(screen.getByTestId('top-bar')).toBeInTheDocument()
   })
 
   it('mobile chỉ dựng đúng một pane, cộng top bar và tab bar', () => {
@@ -277,7 +279,7 @@ describe('layout responsive', () => {
     expect(screen.getByTestId('lesson-sidebar')).toBeInTheDocument()
     expect(screen.queryByTestId('canvas')).toBeNull()
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Trạng thái' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Diễn giải' }))
     expect(screen.getByTestId('inspector')).toBeInTheDocument()
     expect(screen.queryByTestId('lesson-sidebar')).toBeNull()
   })
@@ -285,7 +287,7 @@ describe('layout responsive', () => {
   it('mobile giữ Transport ở cả ba tab', async () => {
     setViewportWidth(393)
     render(<App />)
-    for (const name of ['Bài học', 'Canvas', 'Trạng thái']) {
+    for (const name of ['Bài học', 'Canvas', 'Diễn giải']) {
       await userEvent.click(screen.getByRole('tab', { name }))
       expect(screen.getByTestId('transport')).toBeInTheDocument()
     }

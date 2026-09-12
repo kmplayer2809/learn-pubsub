@@ -4,7 +4,11 @@ import { BookIcon, GaugeIcon, LayoutGridIcon } from '../icons'
 const TABS: { id: MobilePane; label: string; Icon: typeof BookIcon }[] = [
   { id: 'lessons', label: 'Bài học', Icon: BookIcon },
   { id: 'canvas', label: 'Canvas', Icon: LayoutGridIcon },
-  { id: 'state', label: 'Trạng thái', Icon: GaugeIcon },
+  // Nhãn là "Diễn giải" chứ không phải "Trạng thái": pane này chứa narrative — nội
+  // dung chính của bài học. Chỉ số và nhật ký nằm trong tab strip con của Inspector.
+  // Định danh `'state'` trong store giữ nguyên; đổi nó chỉ làm hỏng mọi
+  // `setMobilePane('state')` mà không đem lại gì.
+  { id: 'state', label: 'Diễn giải', Icon: GaugeIcon },
 ]
 
 export function MobileTabBar() {

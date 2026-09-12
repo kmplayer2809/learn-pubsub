@@ -18,11 +18,20 @@ describe('LessonSidebar', () => {
 
   it('lesson rows meet the 44px mobile tap target and shrink back down from md', () => {
     render(<LessonSidebar />)
-    const rows = screen.getAllByRole('button').filter((el) => el.getAttribute('data-testid') !== 'open-sandbox')
+    const rows = screen
+      .getAllByRole('button')
+      .filter((el) => !['open-sandbox', 'broker-tab'].includes(el.getAttribute('data-testid') ?? ''))
     expect(rows.length).toBeGreaterThan(0)
     for (const row of rows) {
       expect(row.className).toContain('min-h-11')
       expect(row.className).toContain('md:min-h-0')
     }
+  })
+
+  it('đánh số lesson liên tục toàn broker, không reset theo nhóm', () => {
+    render(<LessonSidebar hideBrokerSwitcher />)
+    expect(screen.getByText('01')).toBeInTheDocument()
+    // RabbitMQ có 17 lesson; số cuối phải là 17, không phải số nhỏ hơn do reset theo nhóm.
+    expect(screen.getByText('17')).toBeInTheDocument()
   })
 })
