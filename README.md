@@ -73,7 +73,7 @@ Shell chạy được từ 375px trở lên. Ba layout, chọn bằng `useMediaQ
 (`src/shell/ui/useMediaQuery.ts`) và render bởi `src/shell/ui/layouts/`:
 
 - **mobile** (`< 768px`) — một pane tại một thời điểm, chọn bằng tab bar dưới đáy
-  (`Bài học` / `Canvas` / `Trạng thái`). Transport hiện ở cả ba tab.
+  (`Bài học` / `Canvas` / `Diễn giải`). Transport hiện ở cả ba tab.
 - **tablet** (`768–1023px`) — canvas và inspector cạnh nhau, sidebar nằm sau drawer
   mở bằng nút hamburger.
 - **desktop** (`≥ 1024px`) — ba cột như cũ.
