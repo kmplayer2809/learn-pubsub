@@ -86,10 +86,24 @@ nào render, class nào có mặt). Phần "trông có đúng không" kiểm th�
 ở 393×852, 430×932 và 375×667. Sandbox kéo-thả trên điện thoại vẫn là trải nghiệm
 kém — mục tiêu của mobile là xem lesson, không phải xây topology.
 
+## Giao diện sáng/tối
+
+Toàn bộ màu đi qua CSS variable đặt trên `<html data-theme>`; `tailwind.config.js`
+chỉ bọc chúng thành tên ngữ nghĩa (`surface`, `content`, `edge`, `accent`,
+`role-*`). Không có hex nào trong component. Đổi bảng màu là sửa `src/index.css`,
+không phải grep 20 file.
+
+Theme lần đầu theo `prefers-color-scheme`; bấm nút ở `TopBar` thì lựa chọn được
+lưu vào `localStorage` và thắng. Script đồng bộ trong `<head>` của `index.html`
+set `data-theme` **trước khi React mount** — thiếu nó thì trang chớp một frame ở
+theme sai.
+
+Kiểm tương phản: `node scripts/contrast-audit.mjs` (phải exit 0).
+
 ## Kiểm thử và build
 
 ```bash
-npm test          # vitest run — 1213 test trên 90 file
+npm test          # vitest run — 1507 test trên 110 file
 npm run typecheck  # tsc -b --noEmit — BẮT BUỘC dùng script này, không dùng `npx tsc --noEmit` trực tiếp
 npm run build      # tsc -b && vite build — xuất ra dist/
 npm run lint       # oxlint

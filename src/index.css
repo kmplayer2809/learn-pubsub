@@ -21,13 +21,22 @@
   --border-strong: 203 213 225;
   --text-strong: 15 23 42;
   --text-body: 51 65 85;
-  --text-muted: 100 116 139;
+  /* slate-600, không phải slate-500 (#64748b): audit Task 10 (`node
+     scripts/contrast-audit.mjs`) đo được slate-500 trên `--surface-hover` chỉ
+     3.86:1/4.34:1 — dưới ngưỡng AA 4.5:1 — mà cặp đó có thật (nút mở drawer ở
+     `TopBar`, tab không active ở `MobileTabBar` khi nhấn). Đẩy tối thêm một bậc
+     để đạt AA, không đổi cỡ chữ. */
+  --text-muted: 71 85 105;
   /* Bằng --text-muted, không nhạt hơn: mọi chỗ dùng `faint` đều là chữ 10-11px,
      không được hưởng ngoại lệ "large text" của WCAG, và mức nhạt hơn (#64748b
      trên nền tối) chỉ đạt 3.95:1. Giữ tên riêng để chỗ dùng vẫn nói đúng ý đồ. */
-  --text-faint: 100 116 139;
-  --accent: 2 132 199;
-  --accent-hover: 3 105 161;
+  --text-faint: 71 85 105;
+  /* sky-700, không phải sky-600 (#0284c7): audit Task 10 đo `accent` trên
+     `surface`/`surface-hover`/`accent-soft` chỉ 3.57–4.10:1 ở theme sáng — cặp
+     có thật (tab active ở `MobileTabBar`, code trích dẫn ở `Markdown`, badge ở
+     `InspectorTabs`/`LessonSidebar`). sky-700 đạt ≥ 4.5:1 ở cả ba nền. */
+  --accent: 3 105 161;
+  --accent-hover: 7 89 133;
   --accent-fg: 255 255 255;
   --accent-soft: 224 242 254;
   --highlight: 192 38 211;
@@ -73,7 +82,10 @@
   --accent: 56 189 248;
   --accent-hover: 125 211 252;
   --accent-fg: 2 6 23;
-  --accent-soft: 12 74 110;
+  /* sky-950, không phải sky-900: audit Task 10 đo `accent` trên `accent-soft`
+     chỉ 4.42:1 ở theme tối — dưới AA — mà cặp này có thật (badge active ở
+     `InspectorTabs`/`LessonSidebar`). sky-950 đạt 6.48:1. */
+  --accent-soft: 8 47 73;
   --highlight: 232 121 249;
 
   --ok-bg: 2 44 34;

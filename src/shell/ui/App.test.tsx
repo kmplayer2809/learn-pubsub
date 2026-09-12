@@ -30,7 +30,7 @@ describe('App', () => {
     expect(screen.getByTestId('inspector')).toBeTruthy()
     // Desktop's TopBar now also shows the lesson title, alongside the sidebar row —
     // "Hello world" legitimately appears twice.
-    expect(screen.getAllByText('Hello world').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Hello world')).toHaveLength(2)
   })
 
   it('shows a play button in the transport bar', () => {
