@@ -3,7 +3,7 @@ import type { ReactFlowInstance } from '@xyflow/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { rabbitmq } from '../../../brokers/rabbitmq'
 import { useAppStore } from '../../store'
-import { CanvasView, FIT_VIEW_OPTIONS, MIN_ZOOM } from './CanvasView'
+import { CanvasView, FIT_VIEW_OPTIONS, MIN_ZOOM, READABLE_ZOOM } from './CanvasView'
 
 const lesson = rabbitmq.lessons[0]!
 const otherLesson = rabbitmq.lessons[1]!
@@ -49,6 +49,17 @@ describe('CanvasView', () => {
     // trên iPhone. Giá trị này là hợp đồng, nên nó được khẳng định tường minh.
     expect(MIN_ZOOM).toBeLessThanOrEqual(0.25)
     expect(FIT_VIEW_OPTIONS.padding).toBeGreaterThan(0)
+  })
+
+  it('fitView không co xuống dưới ngưỡng đọc được', () => {
+    // jsdom không có layout thật nên không kiểm được zoom thực tế; khẳng định cấu hình
+    // là thứ duy nhất kiểm được ở đây, và nó chính là thứ hay bị sửa nhầm.
+    expect(FIT_VIEW_OPTIONS.minZoom).toBe(READABLE_ZOOM)
+    expect(READABLE_ZOOM).toBeGreaterThan(MIN_ZOOM)
+  })
+
+  it('người dùng vẫn tự zoom xa hơn ngưỡng fitView được', () => {
+    expect(MIN_ZOOM).toBe(0.25)
   })
 
   it('theo dõi kích thước container để fit lại khi xoay máy hoặc đổi tab', () => {
