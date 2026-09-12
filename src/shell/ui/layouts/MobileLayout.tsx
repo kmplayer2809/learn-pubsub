@@ -8,7 +8,7 @@ import { SidePanel } from './SidePanel'
 import type { LayoutProps } from './types'
 
 export function MobileLayout(props: LayoutProps) {
-  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox } = props
+  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox, marks } = props
   const pane = useAppStore((s) => s.mobilePane)
   const StatePanel = broker.StatePanel
 
@@ -52,7 +52,7 @@ export function MobileLayout(props: LayoutProps) {
       {/* Transport nằm ngoài khối pane: tua thời gian ảo là hành động xuyên suốt,
           ẩn nó ở tab `lessons`/`state` là lấy mất khả năng điều khiển mô phỏng
           đang xem. */}
-      <Transport durationMs={durationMs} onStep={onStep} compact />
+      <Transport durationMs={durationMs} onStep={onStep} marks={marks} compact />
       <MobileTabBar />
     </div>
   )

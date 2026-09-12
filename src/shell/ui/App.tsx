@@ -33,6 +33,8 @@ export default function App() {
     ? undefined
     : lesson!.narrative[activeStepIndex(lesson!.narrative, state.now)]?.highlight
 
+  const marks = state.journal.map((entry) => entry.at)
+
   const props: LayoutProps = {
     broker,
     lesson,
@@ -45,6 +47,7 @@ export default function App() {
     editable: inSandbox,
     inSandbox,
     onStep: stepOnce,
+    marks,
   }
 
   if (isMobile) return <MobileLayout {...props} />

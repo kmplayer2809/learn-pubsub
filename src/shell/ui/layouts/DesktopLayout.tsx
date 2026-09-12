@@ -6,7 +6,7 @@ import { SidePanel } from './SidePanel'
 import type { LayoutProps } from './types'
 
 export function DesktopLayout(props: LayoutProps) {
-  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox } = props
+  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox, marks } = props
   const StatePanel = broker.StatePanel
 
   return (
@@ -30,7 +30,7 @@ export function DesktopLayout(props: LayoutProps) {
           <div className="border-t border-edge bg-surface">
             <StatePanel state={state} />
           </div>
-          <Transport durationMs={durationMs} onStep={onStep} />
+          <Transport durationMs={durationMs} onStep={onStep} marks={marks} />
         </main>
         <aside className="w-96 shrink-0 border-l border-edge bg-surface p-3.5">
           <SidePanel {...props} />

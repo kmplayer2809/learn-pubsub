@@ -7,7 +7,7 @@ import { SidePanel } from './SidePanel'
 import type { LayoutProps } from './types'
 
 export function TabletLayout(props: LayoutProps) {
-  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox } = props
+  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox, marks } = props
   const drawerOpen = useAppStore((s) => s.drawerOpen)
   const setDrawerOpen = useAppStore((s) => s.setDrawerOpen)
   const StatePanel = broker.StatePanel
@@ -33,7 +33,7 @@ export function TabletLayout(props: LayoutProps) {
           <div className="border-t border-edge">
             <StatePanel state={state} dense />
           </div>
-          <Transport durationMs={durationMs} onStep={onStep} />
+          <Transport durationMs={durationMs} onStep={onStep} marks={marks} />
         </main>
         <aside className="w-80 shrink-0 border-l border-edge bg-surface p-3">
           <SidePanel {...props} />

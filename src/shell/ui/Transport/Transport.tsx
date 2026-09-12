@@ -1,13 +1,16 @@
 import { SPEEDS, useAppStore, type Speed } from '../../store'
 import { PauseIcon, PlayIcon, ReplayIcon, StepForwardIcon } from '../icons'
+import { ScrubTrack } from './ScrubTrack'
 
 export function Transport({
   durationMs,
   onStep,
+  marks,
   compact = false,
 }: {
   durationMs: number
   onStep(): void
+  marks: number[]
   /** Bật ở mobile: nút thu về icon, tap target nâng lên 44px. Prop chứ không phải
    *  `useIsMobile()` bên trong — giữ component thuần và test được cả hai chế độ
    *  mà không phải giả lập viewport. */
@@ -38,7 +41,7 @@ export function Transport({
       </button>
       <button
         onClick={() => (playing ? pause() : play())}
-        className={`flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-ui font-medium text-accent-fg shadow-sm hover:bg-accent-hover active:bg-accent ${tap}`}
+        className={`flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-ui font-medium text-accent-fg shadow-sm hover:bg-accent-hover ${tap}`}
         data-testid="play-pause"
       >
         {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
@@ -55,20 +58,17 @@ export function Transport({
         {compact ? <StepForwardIcon /> : <><StepForwardIcon className="h-4 w-4" /> Bước</>}
       </button>
 
-      <input
-        type="range"
-        min={0}
+      <ScrubTrack
+        value={virtualTime}
         max={max}
-        step={50}
-        value={Math.min(virtualTime, max)}
-        onChange={(e) => seek(Number(e.target.value))}
+        marks={marks}
+        onSeek={seek}
         className={`${compact ? 'min-w-0 ' : ''}flex-1`}
-        aria-label="scrub"
       />
       <span
-        className={`${compact ? 'w-11' : 'w-16'} text-right font-mono text-meta text-content-muted${compact ? ' shrink-0' : ''}`}
+        className={`${compact ? 'w-16' : 'w-24'} shrink-0 text-right font-mono text-meta text-content-muted`}
       >
-        {(virtualTime / 1000).toFixed(1)}s
+        {(virtualTime / 1000).toFixed(1)}s / {(durationMs / 1000).toFixed(1)}s
       </span>
 
       <select
