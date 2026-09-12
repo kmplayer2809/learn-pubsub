@@ -1,13 +1,16 @@
 import { SPEEDS, useAppStore, type Speed } from '../../store'
 import { PauseIcon, PlayIcon, ReplayIcon, StepForwardIcon } from '../icons'
+import { ScrubTrack } from './ScrubTrack'
 
 export function Transport({
   durationMs,
   onStep,
+  marks,
   compact = false,
 }: {
   durationMs: number
   onStep(): void
+  marks: number[]
   /** Bật ở mobile: nút thu về icon, tap target nâng lên 44px. Prop chứ không phải
    *  `useIsMobile()` bên trong — giữ component thuần và test được cả hai chế độ
    *  mà không phải giả lập viewport. */
@@ -26,19 +29,19 @@ export function Transport({
 
   return (
     <div
-      className={`flex shrink-0 items-center border-t border-ink-800/80 bg-ink-950/95 px-3 py-2 ${compact ? 'gap-2' : 'gap-3'}`}
+      className={`flex shrink-0 items-center border-t border-edge bg-surface/95 px-3 py-2 ${compact ? 'gap-2' : 'gap-3'}`}
       data-testid="transport"
     >
       <button
         onClick={() => seek(0)}
         aria-label="Chạy lại"
-        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-ink-300 hover:bg-ink-800 active:bg-ink-700 ${tap}`}
+        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-ui text-content hover:bg-surface-hover active:bg-surface-hover ${tap}`}
       >
         {compact ? <ReplayIcon /> : <><ReplayIcon className="h-4 w-4" /> Chạy lại</>}
       </button>
       <button
         onClick={() => (playing ? pause() : play())}
-        className={`flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-accent-950/50 hover:bg-accent-500 active:bg-accent-600 ${tap}`}
+        className={`flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-ui font-medium text-accent-fg shadow-sm hover:bg-accent-hover ${tap}`}
         data-testid="play-pause"
       >
         {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
@@ -50,31 +53,28 @@ export function Transport({
           onStep()
         }}
         aria-label="Bước"
-        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-ink-300 hover:bg-ink-800 active:bg-ink-700 ${tap}`}
+        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-ui text-content hover:bg-surface-hover active:bg-surface-hover ${tap}`}
       >
         {compact ? <StepForwardIcon /> : <><StepForwardIcon className="h-4 w-4" /> Bước</>}
       </button>
 
-      <input
-        type="range"
-        min={0}
+      <ScrubTrack
+        value={virtualTime}
         max={max}
-        step={50}
-        value={Math.min(virtualTime, max)}
-        onChange={(e) => seek(Number(e.target.value))}
+        marks={marks}
+        onSeek={seek}
         className={`${compact ? 'min-w-0 ' : ''}flex-1`}
-        aria-label="scrub"
       />
       <span
-        className={`${compact ? 'w-11' : 'w-16'} text-right font-mono text-[11px] text-ink-400${compact ? ' shrink-0' : ''}`}
+        className={`${compact ? 'w-16' : 'w-24'} shrink-0 text-right font-mono text-meta text-content-muted`}
       >
-        {(virtualTime / 1000).toFixed(1)}s
+        {(virtualTime / 1000).toFixed(1)}s / {(durationMs / 1000).toFixed(1)}s
       </span>
 
       <select
         value={speed}
         onChange={(e) => setSpeed(Number(e.target.value) as Speed)}
-        className={`rounded-lg bg-ink-800 px-2 py-1.5 text-xs text-ink-200 hover:bg-ink-700${compact ? ' shrink-0 min-h-11' : ''}`}
+        className={`rounded-lg bg-surface-raised px-2 py-1.5 text-ui text-content hover:bg-surface-hover${compact ? ' shrink-0 min-h-11' : ''}`}
         aria-label="speed"
       >
         {SPEEDS.map((s) => (

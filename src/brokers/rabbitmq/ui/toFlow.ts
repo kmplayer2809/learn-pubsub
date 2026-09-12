@@ -1,4 +1,4 @@
-import type { Edge, Node } from '@xyflow/react'
+import { MarkerType, type Edge, type Node } from '@xyflow/react'
 import type { EngineState, ScriptedAction, Topology } from '../engine'
 
 /**
@@ -65,8 +65,9 @@ function edge(source: string, target: string, label?: string, dashed = false): E
     label,
     animated: false,
     style: dashed
-      ? { stroke: '#f43f5e', strokeDasharray: '6 4' }
-      : { stroke: '#475569' },
+      ? { stroke: '#e11d48', strokeDasharray: '6 4' }
+      : { stroke: 'rgb(var(--border-strong))' },
+    markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: 'rgb(var(--border-strong))' },
   }
 }
 

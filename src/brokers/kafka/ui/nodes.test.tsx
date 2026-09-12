@@ -28,45 +28,45 @@ function renderNode(
 }
 
 const KINDS = [
-  ['broker', BrokerNode, 'ring-blue-300', { label: 'b1', offline: false, isController: false }],
+  ['broker', BrokerNode, 'ring-role-blue-ring', { label: 'b1', offline: false, isController: false }],
   [
     'partition',
     PartitionNode,
-    'ring-teal-300',
+    'ring-role-teal-ring',
     { label: 'orders-0', leo: 0, highWatermark: 0, isrCount: 1, replicaCount: 1 },
   ],
-  ['consumerGroup', ConsumerGroupNode, 'ring-orange-300', { label: 'g1' }],
-  ['consumer', ConsumerNode, 'ring-pink-300', { label: 'c1', lag: 0, joined: true }],
-  ['producer', ProducerNode, 'ring-lime-300', { label: 'p1' }],
+  ['consumerGroup', ConsumerGroupNode, 'ring-role-orange-ring', { label: 'g1' }],
+  ['consumer', ConsumerNode, 'ring-role-pink-ring', { label: 'c1', lag: 0, joined: true }],
+  ['producer', ProducerNode, 'ring-role-lime-ring', { label: 'p1' }],
 ] as const
 
 describe.each(KINDS)('%s node emphasis', (_kind, Component, ring, baseData) => {
   it('renders no highlight outline when data.highlighted is false', () => {
     const shell = renderNode(Component, { ...baseData, highlighted: false })
-    expect(shell.className).not.toContain('outline-fuchsia-400')
+    expect(shell.className).not.toContain('outline-highlight')
   })
 
   it('renders the dashed offset outline when data.highlighted is true', () => {
     const shell = renderNode(Component, { ...baseData, highlighted: true })
     expect(shell.className).toContain('outline-dashed')
     expect(shell.className).toContain('outline-offset-4')
-    expect(shell.className).toContain('outline-fuchsia-400')
+    expect(shell.className).toContain('outline-highlight')
   })
 
   it('keeps the highlight visually separate from selection', () => {
     const selectedOnly = renderNode(Component, { ...baseData, highlighted: false }, true)
     expect(selectedOnly.className).toContain(ring)
-    expect(selectedOnly.className).not.toContain('outline-fuchsia-400')
+    expect(selectedOnly.className).not.toContain('outline-highlight')
 
     const highlightedOnly = renderNode(Component, { ...baseData, highlighted: true }, false)
     expect(highlightedOnly.className).not.toContain(ring)
-    expect(highlightedOnly.className).toContain('outline-fuchsia-400')
+    expect(highlightedOnly.className).toContain('outline-highlight')
   })
 
   it('reads as both when a node is selected and highlighted at once', () => {
     const shell = renderNode(Component, { ...baseData, highlighted: true }, true)
     expect(shell.className).toContain(ring)
-    expect(shell.className).toContain('outline-fuchsia-400')
+    expect(shell.className).toContain('outline-highlight')
   })
 
   // Ràng buộc từ plan responsive-shell: mọi node có nhãn tự do phải mang cả hai class

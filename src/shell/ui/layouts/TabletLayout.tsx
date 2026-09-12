@@ -7,13 +7,13 @@ import { SidePanel } from './SidePanel'
 import type { LayoutProps } from './types'
 
 export function TabletLayout(props: LayoutProps) {
-  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox } = props
+  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox, marks } = props
   const drawerOpen = useAppStore((s) => s.drawerOpen)
   const setDrawerOpen = useAppStore((s) => s.setDrawerOpen)
   const StatePanel = broker.StatePanel
 
   return (
-    <div className="flex h-full flex-col bg-ink-950 text-ink-100">
+    <div className="flex h-full flex-col bg-canvas text-content-strong">
       <TopBar
         title={inSandbox ? 'Sandbox' : (lesson?.title ?? '')}
         onOpenDrawer={() => setDrawerOpen(true)}
@@ -30,12 +30,12 @@ export function TabletLayout(props: LayoutProps) {
               editable={editable}
             />
           </div>
-          <div className="border-t border-ink-800/80">
+          <div className="border-t border-edge">
             <StatePanel state={state} dense />
           </div>
-          <Transport durationMs={durationMs} onStep={onStep} />
+          <Transport durationMs={durationMs} onStep={onStep} marks={marks} />
         </main>
-        <aside className="w-72 shrink-0 overflow-y-auto border-l border-ink-800/80 bg-ink-950 p-3">
+        <aside className="w-80 shrink-0 border-l border-edge bg-surface p-3">
           <SidePanel {...props} />
         </aside>
       </div>
@@ -47,9 +47,9 @@ export function TabletLayout(props: LayoutProps) {
           <div
             aria-hidden
             onClick={() => setDrawerOpen(false)}
-            className="fixed inset-0 z-10 bg-ink-950/70 backdrop-blur-sm"
+            className="fixed inset-0 z-10 bg-overlay/70 backdrop-blur-sm"
           />
-          <aside className="fixed inset-y-0 left-0 z-20 w-64 border-r border-ink-800 bg-ink-950 shadow-2xl shadow-black/50">
+          <aside className="fixed inset-y-0 left-0 z-20 w-64 border-r border-edge bg-surface shadow-sm">
             <LessonSidebar hideBrokerSwitcher />
           </aside>
         </>

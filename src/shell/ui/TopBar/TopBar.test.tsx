@@ -20,4 +20,24 @@ describe('TopBar', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Mở danh sách bài học' }))
     expect(onOpenDrawer).toHaveBeenCalledOnce()
   })
+
+  it('hiện brand khi showBrand bật', () => {
+    render(<TopBar title="Hello world" showBrand />)
+    expect(screen.getByText('Broker Visualizer')).toBeInTheDocument()
+  })
+
+  it('không hiện brand mặc định', () => {
+    render(<TopBar title="Hello world" />)
+    expect(screen.queryByText('Broker Visualizer')).not.toBeInTheDocument()
+  })
+
+  it('luôn có theme toggle', () => {
+    render(<TopBar title="Hello world" />)
+    expect(screen.getByTestId('theme-toggle')).toBeInTheDocument()
+  })
+
+  it('luôn có broker switcher', () => {
+    render(<TopBar title="Hello world" />)
+    expect(screen.getByTestId('broker-switcher')).toBeInTheDocument()
+  })
 })

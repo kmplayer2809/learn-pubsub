@@ -1,6 +1,6 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 
-const SHELL = 'rounded-lg border px-3 py-2 text-xs shadow-lg'
+const SHELL = 'min-w-[124px] rounded-xl border px-3.5 py-2.5 shadow-node'
 
 /**
  * The narrative highlight has to read as a different *kind* of state from `selected`,
@@ -17,7 +17,7 @@ const SHELL = 'rounded-lg border px-3 py-2 text-xs shadow-lg'
  * These are plain utility classes on the node's own div, not React Flow's own elements,
  * so no `!important` cascade fight (see the note in `src/index.css`).
  */
-const HIGHLIGHT = 'outline-dashed outline-2 outline-offset-4 outline-fuchsia-400'
+const HIGHLIGHT = 'outline-dashed outline-2 outline-offset-4 outline-highlight'
 
 function highlightClass(data: NodeProps['data']): string {
   return data.highlighted ? HIGHLIGHT : ''
@@ -26,10 +26,10 @@ function highlightClass(data: NodeProps['data']): string {
 export function PublisherNode({ data, selected }: NodeProps) {
   return (
     <div
-      className={`${SHELL} border-sky-500 bg-sky-950 ${selected ? 'ring-2 ring-sky-300' : ''} ${highlightClass(data)}`}
+      className={`${SHELL} border-role-sky-line bg-role-sky ${selected ? 'ring-2 ring-role-sky-ring' : ''} ${highlightClass(data)}`}
     >
-      <div className="max-w-[200px] truncate font-semibold text-sky-200">{String(data.label)}</div>
-      <div className="text-[10px] text-sky-400">publisher</div>
+      <div className="max-w-[200px] truncate text-ui font-semibold text-role-sky-fg">{String(data.label)}</div>
+      <div className="font-mono text-meta text-role-sky-fg/70">publisher</div>
       <Handle type="source" position={Position.Right} />
     </div>
   )
@@ -38,14 +38,14 @@ export function PublisherNode({ data, selected }: NodeProps) {
 export function ExchangeNode({ data, selected }: NodeProps) {
   return (
     <div
-      className={`${SHELL} border-violet-500 bg-violet-950 ${
-        selected ? 'ring-2 ring-violet-300' : ''
+      className={`${SHELL} border-role-violet-line bg-role-violet ${
+        selected ? 'ring-2 ring-role-violet-ring' : ''
       } ${highlightClass(data)}`}
       style={{ borderRadius: 999 }}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="max-w-[200px] truncate font-semibold text-violet-200">{String(data.label)}</div>
-      <div className="text-[10px] text-violet-400">{String(data.exchangeType)} exchange</div>
+      <div className="max-w-[200px] truncate text-ui font-semibold text-role-violet-fg">{String(data.label)}</div>
+      <div className="font-mono text-meta text-role-violet-fg/70">{String(data.exchangeType)} exchange</div>
       <Handle type="source" position={Position.Right} />
     </div>
   )
@@ -56,28 +56,28 @@ export function QueueNode({ data, selected }: NodeProps) {
   const messages = (data.messages as string[]) ?? []
   return (
     <div
-      className={`${SHELL} border-emerald-500 bg-emerald-950 ${
-        selected ? 'ring-2 ring-emerald-300' : ''
+      className={`${SHELL} border-role-emerald-line bg-role-emerald ${
+        selected ? 'ring-2 ring-role-emerald-ring' : ''
       } ${highlightClass(data)}`}
     >
       <Handle type="target" position={Position.Left} />
       <div className="flex items-center gap-2">
-        <span className="max-w-[200px] truncate font-semibold text-emerald-200">{String(data.label)}</span>
-        <span className="rounded bg-emerald-800 px-1 text-[10px] text-emerald-100">{depth}</span>
+        <span className="max-w-[200px] truncate text-ui font-semibold text-role-emerald-fg">
+          {String(data.label)}
+        </span>
+        <span className="rounded bg-surface px-1 text-meta text-role-emerald-fg">{depth}</span>
       </div>
       <div className="mt-1 flex gap-[2px]">
         {messages.map((id) => (
-          <span key={id} className="h-3 w-2 rounded-sm bg-emerald-400" title={id} />
+          <span key={id} className="h-3 w-2 rounded-sm bg-role-emerald-fg" title={id} />
         ))}
         {depth > messages.length && (
-          <span className="ml-1 text-[10px] text-emerald-300">+{depth - messages.length}</span>
+          <span className="ml-1 text-meta text-role-emerald-fg/70">+{depth - messages.length}</span>
         )}
       </div>
-      {data.ttlMs !== undefined && (
-        <div className="text-[10px] text-amber-300">ttl {String(data.ttlMs)}ms</div>
-      )}
+      {data.ttlMs !== undefined && <div className="text-meta text-warn-fg">ttl {String(data.ttlMs)}ms</div>}
       {data.maxLength !== undefined && (
-        <div className="text-[10px] text-amber-300">max-length {String(data.maxLength)}</div>
+        <div className="text-meta text-warn-fg">max-length {String(data.maxLength)}</div>
       )}
       <Handle type="source" position={Position.Right} />
     </div>
@@ -88,13 +88,13 @@ export function ConsumerNode({ data, selected }: NodeProps) {
   const crashed = Boolean(data.crashed)
   return (
     <div
-      className={`${SHELL} border-amber-500 bg-amber-950 ${selected ? 'ring-2 ring-amber-300' : ''} ${
+      className={`${SHELL} border-role-amber-line bg-role-amber ${selected ? 'ring-2 ring-role-amber-ring' : ''} ${
         crashed ? 'opacity-40 line-through' : ''
       } ${highlightClass(data)}`}
     >
       <Handle type="target" position={Position.Left} />
-      <div className="max-w-[200px] truncate font-semibold text-amber-200">{String(data.label)}</div>
-      <div className="text-[10px] text-amber-400">
+      <div className="max-w-[200px] truncate text-ui font-semibold text-role-amber-fg">{String(data.label)}</div>
+      <div className="font-mono text-meta text-role-amber-fg/70">
         prefetch {String(data.prefetch)} · unacked {String(data.unacked)}
         {data.autoAck ? ' · auto-ack' : ''}
       </div>

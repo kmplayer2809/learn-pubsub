@@ -24,7 +24,7 @@ function nextPosition(topology: Topology): { x: number; y: number } {
 }
 
 const fieldRow = 'flex items-center justify-between gap-2'
-const selectClass = 'rounded bg-slate-800 px-1.5 py-0.5 text-slate-200'
+const selectClass = 'rounded bg-surface-hover px-1.5 py-0.5 text-content'
 
 function SelectedNodeConfig() {
   const selectedNodeId = useAppStore((s) => s.selectedNodeId)
@@ -42,7 +42,7 @@ function SelectedNodeConfig() {
 
   // Also covers a stale selection left over from a node that was just removed.
   if (!exchange && !queue && !consumer && !publisher) {
-    return <p className="text-[11px] text-slate-500">Chọn một node trên canvas để cấu hình.</p>
+    return <p className="text-meta text-content-faint">Chọn một node trên canvas để cấu hình.</p>
   }
 
   const remove = () => {
@@ -51,7 +51,7 @@ function SelectedNodeConfig() {
   }
 
   return (
-    <div className="space-y-1.5 text-[11px] text-slate-300">
+    <div className="space-y-1.5 text-meta text-content">
       {exchange && (
         <>
           <label className={fieldRow}>
@@ -69,9 +69,9 @@ function SelectedNodeConfig() {
             </select>
           </label>
           <div className="space-y-1 pt-1">
-            <p className="text-slate-500">bindings</p>
+            <p className="text-content-faint">bindings</p>
             {topology.bindings.filter((b) => b.exchangeId === exchange.id).length === 0 && (
-              <p className="text-slate-500">
+              <p className="text-content-faint">
                 Chưa có binding nào. Kéo từ handle của exchange này tới một queue để tạo binding.
               </p>
             )}
@@ -79,7 +79,7 @@ function SelectedNodeConfig() {
               .filter((b) => b.exchangeId === exchange.id)
               .map((b) => (
                 <div key={b.id} className="flex items-center gap-1.5" data-testid={`binding-${b.id}`}>
-                  <span className="w-16 shrink-0 truncate text-slate-500" title={b.destinationId}>
+                  <span className="w-16 shrink-0 truncate text-content-faint" title={b.destinationId}>
                     → {b.destinationId}
                   </span>
                   <input
@@ -87,12 +87,12 @@ function SelectedNodeConfig() {
                     onChange={(e) => updateBinding(b.id, { routingKey: e.target.value })}
                     placeholder="routing key"
                     aria-label={`routing key cho binding tới ${b.destinationId}`}
-                    className="w-24 flex-1 rounded bg-slate-800 px-1.5 py-0.5 text-slate-200"
+                    className="w-24 flex-1 rounded bg-surface-hover px-1.5 py-0.5 text-content"
                   />
                   <button
                     onClick={() => removeBinding(b.id)}
                     aria-label={`xóa binding tới ${b.destinationId}`}
-                    className="min-h-11 shrink-0 rounded border border-rose-800 px-1.5 text-rose-300 hover:bg-rose-950 md:min-h-0"
+                    className="min-h-11 shrink-0 rounded border border-danger-line px-1.5 text-danger-fg hover:bg-danger-bg md:min-h-0"
                   >
                     ×
                   </button>
@@ -137,7 +137,7 @@ function SelectedNodeConfig() {
                   messageTtlMs: e.target.value === '' ? undefined : Number(e.target.value),
                 })
               }
-              className="w-20 rounded bg-slate-800 px-1.5 py-0.5 text-slate-200"
+              className="w-20 rounded bg-surface-hover px-1.5 py-0.5 text-content"
             />
           </label>
           <label className={fieldRow}>
@@ -182,7 +182,7 @@ function SelectedNodeConfig() {
               min={0}
               value={consumer.prefetch}
               onChange={(e) => updateNode(consumer.id, { prefetch: Number(e.target.value) })}
-              className="w-16 rounded bg-slate-800 px-1.5 py-0.5 text-slate-200"
+              className="w-16 rounded bg-surface-hover px-1.5 py-0.5 text-content"
             />
           </label>
           <label className={fieldRow}>
@@ -196,11 +196,11 @@ function SelectedNodeConfig() {
         </>
       )}
 
-      {publisher && <p className="text-slate-500">Publisher không có cấu hình bổ sung.</p>}
+      {publisher && <p className="text-content-faint">Publisher không có cấu hình bổ sung.</p>}
 
       <button
         onClick={remove}
-        className="mt-1 min-h-11 w-full rounded border border-rose-800 px-2 py-1 text-rose-300 hover:bg-rose-950 md:min-h-0"
+        className="mt-1 min-h-11 w-full rounded border border-danger-line px-2 py-1 text-danger-fg hover:bg-danger-bg md:min-h-0"
       >
         Xóa node
       </button>
@@ -265,16 +265,16 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
     <div className="flex h-full flex-col gap-4 overflow-y-auto" data-testid="sandbox-panel">
       <section>
         <div className="flex items-start justify-between gap-2">
-          <h2 className="mb-1 text-sm font-semibold text-slate-100">Sandbox</h2>
+          <h2 className="mb-1 text-ui font-semibold text-content-strong">Sandbox</h2>
           <button
             onClick={() => setExportOpen(true)}
             data-testid="export-button"
-            className="min-h-11 shrink-0 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800 md:min-h-0"
+            className="min-h-11 shrink-0 rounded border border-edge-strong px-2 py-1 text-meta text-content hover:bg-surface-hover md:min-h-0"
           >
             Xuất code
           </button>
         </div>
-        <p className="text-[11px] text-slate-500">
+        <p className="text-meta text-content-faint">
           Tự xây topology của riêng bạn: thêm node, kéo để connect, rồi publish message.
         </p>
       </section>
@@ -285,13 +285,13 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
       <HaltedBanner halted={state.halted} />
 
       <section>
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Thêm node</h3>
+        <h3 className="mb-1 text-section text-content-faint">Thêm node</h3>
         <div className="flex flex-wrap gap-1.5">
           {PALETTE.map(({ kind, label }) => (
             <button
               key={kind}
               onClick={() => addNode(kind, nextPosition(topology))}
-              className="min-h-11 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800 md:min-h-0"
+              className="min-h-11 rounded border border-edge-strong px-2 py-1 text-meta text-content hover:bg-surface-hover md:min-h-0"
             >
               + {label}
             </button>
@@ -300,12 +300,12 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
       </section>
 
       <section>
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Cấu hình node đã chọn</h3>
+        <h3 className="mb-1 text-section text-content-faint">Cấu hình node đã chọn</h3>
         <SelectedNodeConfig />
       </section>
 
       <section>
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Chỉ số</h3>
+        <h3 className="mb-1 text-section text-content-faint">Chỉ số</h3>
         {/* Spread, not `state.metrics` directly: `Metrics` is an `interface`, which never
             gets an implicit index signature (only type aliases/anonymous object types do),
             so it doesn't itself satisfy `MetricsGrid`'s `Record<string, number>` prop. The
@@ -315,11 +315,11 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
       </section>
 
       <section>
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Publish message</h3>
+        <h3 className="mb-1 text-section text-content-faint">Publish message</h3>
         {!activePublisherId && (
-          <p className="mb-1 text-[11px] text-slate-500">Thêm một publisher trước khi publish.</p>
+          <p className="mb-1 text-meta text-content-faint">Thêm một publisher trước khi publish.</p>
         )}
-        <form onSubmit={handlePublish} className="space-y-1.5 text-[11px]">
+        <form onSubmit={handlePublish} className="space-y-1.5 text-meta">
           <label className={fieldRow}>
             <span>exchange</span>
             <select value={activeExchangeId} onChange={(e) => setExchangeId(e.target.value)} className={selectClass}>
@@ -336,7 +336,7 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
             <input
               value={routingKey}
               onChange={(e) => setRoutingKey(e.target.value)}
-              className="w-28 rounded bg-slate-800 px-1.5 py-0.5 text-slate-200"
+              className="w-28 rounded bg-surface-hover px-1.5 py-0.5 text-content"
             />
           </label>
           <label className={fieldRow}>
@@ -345,13 +345,13 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="hello"
-              className="w-28 rounded bg-slate-800 px-1.5 py-0.5 text-slate-200"
+              className="w-28 rounded bg-surface-hover px-1.5 py-0.5 text-content"
             />
           </label>
           <button
             type="submit"
             disabled={!canPublish}
-            className="min-h-11 w-full rounded bg-sky-600 px-2 py-1 font-medium text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 md:min-h-0"
+            className="min-h-11 w-full rounded bg-accent px-2 py-1 font-medium text-accent-fg hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-content-faint md:min-h-0"
           >
             Publish
           </button>
@@ -359,9 +359,7 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
       </section>
 
       <section>
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
-          Generator ({rate} msg/s trong 60s)
-        </h3>
+        <h3 className="mb-1 text-section text-content-faint">Generator ({rate} msg/s trong 60s)</h3>
         <input
           type="range"
           min={0}
@@ -370,26 +368,26 @@ export function SandboxPanel({ state, issues }: { state: EngineState; issues: Va
           value={rate}
           onChange={(e) => handleRate(Number(e.target.value))}
           disabled={!canPublish}
-          className="w-full accent-sky-500"
+          className="w-full accent-accent"
           aria-label="generator rate"
         />
       </section>
 
       <section className="min-h-0 flex-1">
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Nhật ký sự kiện</h3>
+        <h3 className="mb-1 text-section text-content-faint">Nhật ký sự kiện</h3>
         <EventLog journal={state.journal} />
       </section>
 
-      <section className="mt-auto flex gap-2 border-t border-slate-800 pt-3">
+      <section className="mt-auto flex gap-2 border-t border-edge pt-3">
         <button
           onClick={save}
-          className="min-h-11 flex-1 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800 md:min-h-0"
+          className="min-h-11 flex-1 rounded border border-edge-strong px-2 py-1 text-meta text-content hover:bg-surface-hover md:min-h-0"
         >
           Lưu
         </button>
         <button
           onClick={reset}
-          className="min-h-11 flex-1 rounded border border-rose-800 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-950 md:min-h-0"
+          className="min-h-11 flex-1 rounded border border-danger-line px-2 py-1 text-meta text-danger-fg hover:bg-danger-bg md:min-h-0"
         >
           Đặt lại
         </button>

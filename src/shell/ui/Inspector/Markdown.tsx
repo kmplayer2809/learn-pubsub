@@ -9,7 +9,7 @@ export function Markdown({ text }: { text: string }) {
   return (
     <>
       {text.split("\n\n").map((paragraph, pIndex) => (
-        <p key={pIndex} className="mb-2 text-sm leading-relaxed text-ink-300">
+        <p key={pIndex} className="mb-2 text-narrative leading-relaxed text-content">
           {renderInline(paragraph)}
         </p>
       ))}
@@ -33,14 +33,14 @@ function renderInline(paragraph: string) {
     .map((chunk, cIndex) => {
       if (chunk.startsWith("**") && chunk.endsWith("**")) {
         return (
-          <strong key={cIndex} className="font-semibold text-ink-100">
+          <strong key={cIndex} className="font-semibold text-content-strong">
             {chunk.slice(2, -2)}
           </strong>
         );
       }
       if (chunk.startsWith("*") && chunk.endsWith("*") && chunk.length > 2) {
         return (
-          <em key={cIndex} className="italic text-ink-200">
+          <em key={cIndex} className="italic text-content">
             {chunk.slice(1, -1)}
           </em>
         );
@@ -49,7 +49,7 @@ function renderInline(paragraph: string) {
         return (
           <code
             key={cIndex}
-            className="rounded bg-ink-800 px-1 font-mono text-[12px] text-accent-300"
+            className="rounded bg-surface-hover px-1 font-mono text-code text-accent"
           >
             {chunk.slice(1, -1)}
           </code>

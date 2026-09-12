@@ -5,11 +5,12 @@ import { issueText } from '../ui/issueText'
 import { ExportDialog } from './ExportDialog'
 import { useKafkaSandbox } from './kafkaStore'
 
-const BUTTON = 'min-h-11 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800 md:min-h-0'
+const BUTTON =
+  'min-h-11 rounded border border-edge-strong px-2 py-1 text-meta text-content hover:bg-surface-hover md:min-h-0'
 const DANGER_BUTTON =
-  'min-h-11 rounded border border-rose-800 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-950 md:min-h-0'
+  'min-h-11 rounded border border-danger-line px-2 py-1 text-meta text-danger-fg hover:bg-danger-bg md:min-h-0'
 const fieldRow = 'flex items-center justify-between gap-2'
-const inputClass = 'w-24 rounded bg-slate-800 px-1.5 py-0.5 text-slate-200'
+const inputClass = 'w-24 rounded bg-surface-hover px-1.5 py-0.5 text-content'
 
 /** Spreads new nodes out in a simple grid so they don't all land on top of each other. */
 function nextPosition(count: number): { x: number; y: number } {
@@ -34,12 +35,12 @@ function TopicsSection() {
 
   return (
     <section>
-      <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Topic</h3>
+      <h3 className="mb-1 text-section text-content-faint">Topic</h3>
       <div className="space-y-1.5">
         {topology.topics.map((topic) => (
-          <div key={topic.name} className="flex items-center gap-1.5 text-[11px]" data-testid={`topic-${topic.name}`}>
-            <span className="w-16 shrink-0 truncate text-slate-300">{topic.name}</span>
-            <label className="flex items-center gap-1 text-slate-500">
+          <div key={topic.name} className="flex items-center gap-1.5 text-meta" data-testid={`topic-${topic.name}`}>
+            <span className="w-16 shrink-0 truncate text-content">{topic.name}</span>
+            <label className="flex items-center gap-1 text-content-faint">
               partitions
               <input
                 type="number"
@@ -47,10 +48,10 @@ function TopicsSection() {
                 value={topic.partitions}
                 onChange={(e) => setPartitionCount(topic.name, Number(e.target.value))}
                 aria-label={`số partition của ${topic.name}`}
-                className="w-14 rounded bg-slate-800 px-1 py-0.5 text-slate-200"
+                className="w-14 rounded bg-surface-hover px-1 py-0.5 text-content"
               />
             </label>
-            <label className="flex items-center gap-1 text-slate-500">
+            <label className="flex items-center gap-1 text-content-faint">
               rf
               <input
                 type="number"
@@ -58,13 +59,13 @@ function TopicsSection() {
                 value={topic.replicationFactor}
                 onChange={(e) => setReplicationFactor(topic.name, Number(e.target.value))}
                 aria-label={`replicationFactor của ${topic.name}`}
-                className="w-14 rounded bg-slate-800 px-1 py-0.5 text-slate-200"
+                className="w-14 rounded bg-surface-hover px-1 py-0.5 text-content"
               />
             </label>
           </div>
         ))}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-meta">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -72,7 +73,7 @@ function TopicsSection() {
           aria-label="tên topic"
           className={inputClass}
         />
-        <label className="flex items-center gap-1 text-slate-500">
+        <label className="flex items-center gap-1 text-content-faint">
           partitions
           <input
             type="number"
@@ -80,10 +81,10 @@ function TopicsSection() {
             value={partitions}
             onChange={(e) => setPartitions(Number(e.target.value))}
             aria-label="số partition"
-            className="w-14 rounded bg-slate-800 px-1 py-0.5 text-slate-200"
+            className="w-14 rounded bg-surface-hover px-1 py-0.5 text-content"
           />
         </label>
-        <label className="flex items-center gap-1 text-slate-500">
+        <label className="flex items-center gap-1 text-content-faint">
           rf
           <input
             type="number"
@@ -91,7 +92,7 @@ function TopicsSection() {
             value={replicationFactor}
             onChange={(e) => setReplicationFactorInput(Number(e.target.value))}
             aria-label="replicationFactor"
-            className="w-14 rounded bg-slate-800 px-1 py-0.5 text-slate-200"
+            className="w-14 rounded bg-surface-hover px-1 py-0.5 text-content"
           />
         </label>
         <button onClick={handleAdd} className={BUTTON}>
@@ -122,17 +123,17 @@ function ProduceSection() {
 
   return (
     <section>
-      <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Produce tay</h3>
+      <h3 className="mb-1 text-section text-content-faint">Produce tay</h3>
       {topology.producers.length === 0 && (
-        <p className="mb-1 text-[11px] text-slate-500">Thêm một producer trước khi publish.</p>
+        <p className="mb-1 text-meta text-content-faint">Thêm một producer trước khi publish.</p>
       )}
-      <form onSubmit={handlePublish} className="space-y-1.5 text-[11px]">
+      <form onSubmit={handlePublish} className="space-y-1.5 text-meta">
         <label className={fieldRow}>
           <span>producer</span>
           <select
             value={activeProducerId}
             onChange={(e) => setProducerId(e.target.value)}
-            className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-200"
+            className="rounded bg-surface-hover px-1.5 py-0.5 text-content"
           >
             <option value="">— chọn producer —</option>
             {topology.producers.map((p) => (
@@ -147,7 +148,7 @@ function ProduceSection() {
           <select
             value={activeTopic}
             onChange={(e) => setTopic(e.target.value)}
-            className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-200"
+            className="rounded bg-surface-hover px-1.5 py-0.5 text-content"
           >
             <option value="">— chọn topic —</option>
             {topology.topics.map((t) => (
@@ -170,7 +171,7 @@ function ProduceSection() {
         <button
           type="submit"
           disabled={!canPublish}
-          className="min-h-11 w-full rounded bg-sky-600 px-2 py-1 font-medium text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 md:min-h-0"
+          className="min-h-11 w-full rounded bg-accent px-2 py-1 font-medium text-accent-fg hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-content-faint md:min-h-0"
         >
           Publish
         </button>
@@ -193,7 +194,7 @@ export function SandboxPanel({ state, issues }: { state: KafkaState; issues: Kaf
     <div className="flex h-full flex-col gap-4 overflow-y-auto" data-testid="sandbox-panel">
       <section>
         <div className="flex items-start justify-between gap-2">
-          <h2 className="mb-1 text-sm font-semibold text-slate-100">Sandbox</h2>
+          <h2 className="mb-1 text-ui font-semibold text-content-strong">Sandbox</h2>
           <button
             onClick={() => setExportOpen(true)}
             data-testid="export-button"
@@ -202,7 +203,7 @@ export function SandboxPanel({ state, issues }: { state: KafkaState; issues: Kaf
             Xuất code
           </button>
         </div>
-        <p className="text-[11px] text-slate-500">
+        <p className="text-meta text-content-faint">
           Tự xây cluster Kafka của riêng bạn: thêm broker, topic, producer, consumer, rồi produce tay.
         </p>
       </section>
@@ -213,7 +214,7 @@ export function SandboxPanel({ state, issues }: { state: KafkaState; issues: Kaf
       <HaltedBanner halted={state.halted} />
 
       <section>
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Thêm node</h3>
+        <h3 className="mb-1 text-section text-content-faint">Thêm node</h3>
         <div className="flex flex-wrap gap-1.5">
           <button onClick={() => addBroker(nextPosition(nodeCount))} className={BUTTON}>
             + Broker
@@ -230,18 +231,18 @@ export function SandboxPanel({ state, issues }: { state: KafkaState; issues: Kaf
       <TopicsSection />
 
       <section>
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Chỉ số</h3>
+        <h3 className="mb-1 text-section text-content-faint">Chỉ số</h3>
         <MetricsGrid metrics={{ ...state.metrics }} />
       </section>
 
       <ProduceSection />
 
       <section className="min-h-0 flex-1">
-        <h3 className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Nhật ký sự kiện</h3>
+        <h3 className="mb-1 text-section text-content-faint">Nhật ký sự kiện</h3>
         <EventLog journal={state.journal} />
       </section>
 
-      <section className="mt-auto border-t border-slate-800 pt-3">
+      <section className="mt-auto border-t border-edge pt-3">
         <button onClick={reset} className={`${DANGER_BUTTON} w-full`}>
           Đặt lại
         </button>

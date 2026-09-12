@@ -21,7 +21,7 @@ export default function App() {
   const isTablet = useIsTablet()
   const inSandbox = sandbox && Boolean(broker.sandbox)
 
-  if (!inSandbox && !lesson) return <div className="p-4 text-ink-200">Không tìm thấy bài học.</div>
+  if (!inSandbox && !lesson) return <div className="p-4 text-content">Không tìm thấy bài học.</div>
 
   const topology = inSandbox ? simTopology : lesson!.topology
   const script = inSandbox ? simScript : lesson!.script
@@ -32,6 +32,8 @@ export default function App() {
   const highlight = inSandbox
     ? undefined
     : lesson!.narrative[activeStepIndex(lesson!.narrative, state.now)]?.highlight
+
+  const marks = state.journal.map((entry) => entry.at)
 
   const props: LayoutProps = {
     broker,
@@ -45,6 +47,7 @@ export default function App() {
     editable: inSandbox,
     inSandbox,
     onStep: stepOnce,
+    marks,
   }
 
   if (isMobile) return <MobileLayout {...props} />

@@ -10,7 +10,7 @@ describe('MobileTabBar', () => {
   it('có ba tab tiếng Việt', () => {
     render(<MobileTabBar />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Bài học', 'Canvas', 'Trạng thái'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Bài học', 'Canvas', 'Diễn giải'])
   })
 
   it('đánh dấu tab đang chọn bằng aria-selected', () => {
@@ -21,7 +21,7 @@ describe('MobileTabBar', () => {
 
   it('bấm tab đổi mobilePane trong store', async () => {
     render(<MobileTabBar />)
-    await userEvent.click(screen.getByRole('tab', { name: 'Trạng thái' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Diễn giải' }))
     expect(useAppStore.getState().mobilePane).toBe('state')
   })
 

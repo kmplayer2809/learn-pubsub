@@ -19,9 +19,15 @@ export function pointOnPath(path: SVGPathElement, progress: number): { x: number
   return { x: point.x, y: point.y }
 }
 
+/**
+ * Màu chấm message bay. Là giá trị `fill`/`stroke` của SVG chứ không phải class
+ * Tailwind, nên phải tự tham chiếu CSS var. Đổi theo theme là bắt buộc, không
+ * phải trang trí: `sky-400` trên nền canvas sáng `#e2e8f0` chỉ đạt tương phản
+ * 1.71, dưới ngưỡng 3:1 cho thành phần đồ hoạ phi văn bản.
+ */
 export const TONE_FILL: Record<string, string> = {
-  sky: '#38bdf8',
-  emerald: '#34d399',
-  rose: '#fb7185',
-  amber: '#fbbf24',
+  sky: 'rgb(var(--tone-sky))',
+  emerald: 'rgb(var(--tone-emerald))',
+  rose: 'rgb(var(--tone-rose))',
+  amber: 'rgb(var(--tone-amber))',
 }

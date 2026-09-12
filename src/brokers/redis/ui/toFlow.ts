@@ -1,4 +1,4 @@
-import type { Edge, Node } from '@xyflow/react'
+import { MarkerType, type Edge, type Node } from '@xyflow/react'
 import type { RedisState, RedisTopology } from '../engine'
 
 /**
@@ -65,7 +65,14 @@ export function toFlowNodes(topology: RedisTopology, state: RedisState, highligh
 }
 
 function edge(source: string, target: string): Edge {
-  return { id: `${source}->${target}`, source, target, animated: false, style: { stroke: '#475569' } }
+  return {
+    id: `${source}->${target}`,
+    source,
+    target,
+    animated: false,
+    style: { stroke: 'rgb(var(--border-strong))' },
+    markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: 'rgb(var(--border-strong))' },
+  }
 }
 
 /**
@@ -90,7 +97,10 @@ export function toFlowEdges(topology: RedisTopology): Edge[] {
     edges.push(edge(serverId, client.id))
   }
   for (const replica of topology.replicas ?? []) {
-    edges.push({ ...edge(serverId, replica.id), style: { stroke: '#475569', strokeDasharray: '4 4' } })
+    edges.push({
+      ...edge(serverId, replica.id),
+      style: { stroke: 'rgb(var(--border-strong))', strokeDasharray: '4 4' },
+    })
   }
   for (const sentinel of topology.sentinels ?? []) {
     edges.push(edge(sentinel.id, serverId))

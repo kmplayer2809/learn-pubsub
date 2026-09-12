@@ -21,4 +21,7 @@ export interface LayoutProps {
   editable: boolean
   inSandbox: boolean
   onStep(): void
+  /** Mốc thời gian ảo có sự kiện, cho thanh tua. Tính ở `App` từ `state.journal`
+   *  — `Transport` vẫn là component thuần theo prop, không đọc store để lấy journal. */
+  marks: number[]
 }

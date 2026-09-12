@@ -14,10 +14,10 @@ function shellOf(container: HTMLElement): HTMLElement {
 }
 
 const KINDS = [
-  ['publisher', PublisherNode, 'ring-sky-300', { label: 'p1' }],
-  ['exchange', ExchangeNode, 'ring-violet-300', { label: 'ex', exchangeType: 'direct' }],
-  ['queue', QueueNode, 'ring-emerald-300', { label: 'q', depth: 0, messages: [] }],
-  ['consumer', ConsumerNode, 'ring-amber-300', { label: 'c1', prefetch: 1, unacked: 0 }],
+  ['publisher', PublisherNode, 'ring-role-sky-ring', { label: 'p1' }],
+  ['exchange', ExchangeNode, 'ring-role-violet-ring', { label: 'ex', exchangeType: 'direct' }],
+  ['queue', QueueNode, 'ring-role-emerald-ring', { label: 'q', depth: 0, messages: [] }],
+  ['consumer', ConsumerNode, 'ring-role-amber-ring', { label: 'c1', prefetch: 1, unacked: 0 }],
 ] as const
 
 function renderNode(
@@ -36,14 +36,14 @@ function renderNode(
 describe.each(KINDS)('%s node emphasis', (_kind, Component, ring, baseData) => {
   it('renders no highlight outline when data.highlighted is false', () => {
     const shell = renderNode(Component, { ...baseData, highlighted: false }, false)
-    expect(shell.className).not.toContain('outline-fuchsia-400')
+    expect(shell.className).not.toContain('outline-highlight')
   })
 
   it('renders the dashed offset outline when data.highlighted is true', () => {
     const shell = renderNode(Component, { ...baseData, highlighted: true }, false)
     expect(shell.className).toContain('outline-dashed')
     expect(shell.className).toContain('outline-offset-4')
-    expect(shell.className).toContain('outline-fuchsia-400')
+    expect(shell.className).toContain('outline-highlight')
   })
 
   it('keeps the highlight visually separate from selection', () => {
@@ -51,18 +51,18 @@ describe.each(KINDS)('%s node emphasis', (_kind, Component, ring, baseData) => {
     // cannot tell "the prose is about this" from "I clicked this".
     const selectedOnly = renderNode(Component, { ...baseData, highlighted: false }, true)
     expect(selectedOnly.className).toContain(ring)
-    expect(selectedOnly.className).not.toContain('outline-fuchsia-400')
+    expect(selectedOnly.className).not.toContain('outline-highlight')
 
     const highlightedOnly = renderNode(Component, { ...baseData, highlighted: true }, false)
     expect(highlightedOnly.className).not.toContain(ring)
-    expect(highlightedOnly.className).toContain('outline-fuchsia-400')
+    expect(highlightedOnly.className).toContain('outline-highlight')
   })
 
   it('reads as both when a node is selected and highlighted at once', () => {
     // The common case: the reader clicks the node the narrative is pointing at.
     const shell = renderNode(Component, { ...baseData, highlighted: true }, true)
     expect(shell.className).toContain(ring)
-    expect(shell.className).toContain('outline-fuchsia-400')
+    expect(shell.className).toContain('outline-highlight')
   })
 })
 
@@ -74,6 +74,6 @@ describe('consumer node emphasis composes with crashed', () => {
       false,
     )
     expect(shell.className).toContain('line-through')
-    expect(shell.className).toContain('outline-fuchsia-400')
+    expect(shell.className).toContain('outline-highlight')
   })
 })

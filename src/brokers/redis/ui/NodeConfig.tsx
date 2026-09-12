@@ -19,17 +19,17 @@ export function NodeConfig({
 
   if (server) {
     return (
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 text-meta text-content-muted">
         <dt>maxmemory</dt>
-        <dd className="text-slate-200">{server.maxmemoryBytes ?? '—'}</dd>
+        <dd className="text-content">{server.maxmemoryBytes ?? '—'}</dd>
         <dt>eviction policy</dt>
-        <dd className="text-slate-200">{server.evictionPolicy ?? 'noeviction'}</dd>
+        <dd className="text-content">{server.evictionPolicy ?? 'noeviction'}</dd>
         <dt>active-expire every</dt>
-        <dd className="text-slate-200">{server.activeExpireEveryMs ?? '—'}</dd>
+        <dd className="text-content">{server.activeExpireEveryMs ?? '—'}</dd>
         <dt>keys</dt>
-        <dd className="text-slate-200">{state.metrics.keysCount}</dd>
+        <dd className="text-content">{state.metrics.keysCount}</dd>
         <dt>memory used</dt>
-        <dd className="text-slate-200">{state.metrics.memoryUsed}</dd>
+        <dd className="text-content">{state.metrics.memoryUsed}</dd>
       </dl>
     )
   }
@@ -56,20 +56,20 @@ export function NodeConfig({
     // client would mean parsing an edge id back apart.
     const parked = state.blocked.find((entry) => entry.clientId === client.id)
     return (
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-400">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 text-meta text-content-muted">
         <dt>client</dt>
-        <dd className="text-slate-200">{client.label}</dd>
+        <dd className="text-content">{client.label}</dd>
         <dt>commands</dt>
-        <dd className="text-slate-200">{commandCount}</dd>
+        <dd className="text-content">{commandCount}</dd>
         {parked && (
           <>
             <dt>đang chờ</dt>
-            <dd className="text-amber-400">BLPOP {parked.keys.join(' ')}</dd>
+            <dd className="text-warn-fg">BLPOP {parked.keys.join(' ')}</dd>
           </>
         )}
       </dl>
     )
   }
 
-  return <p className="text-[11px] text-slate-500">Node này không có cấu hình.</p>
+  return <p className="text-meta text-content-faint">Node này không có cấu hình.</p>
 }

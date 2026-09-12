@@ -5,6 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>RabbitMQ Visualizer</title>
+    <script>
+      /*
+       * Phải chạy đồng bộ trong <head>, trước khi React mount. Không có nó, trang
+       * vẽ một frame ở theme mặc định rồi mới nhảy sang theme thật — chớp trắng
+       * vào mắt người dùng dark mode.
+       *
+       * try/catch bắt buộc: localStorage ném SecurityError ở Safari private mode
+       * và một exception chưa bắt ở đây làm trắng cả trang.
+       */
+      ;(function () {
+        var saved = null
+        try {
+          saved = localStorage.getItem('theme')
+        } catch (e) {
+          /* private mode — rơi về prefers-color-scheme */
+        }
+        var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

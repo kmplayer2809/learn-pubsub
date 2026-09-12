@@ -1,4 +1,4 @@
-import { Background, Controls, ReactFlow, type Connection, type Node, type NodeChange } from '@xyflow/react'
+import { Background, Controls, MiniMap, ReactFlow, type Connection, type Node, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ReactFlowInstance } from '@xyflow/react'
@@ -6,6 +6,7 @@ import type { AnyBrokerModule } from '../../../brokers/types'
 import type { KernelState } from '../../kernel/types'
 import { useAppStore } from '../../store'
 import { MessageLayer } from '../canvas/MessageLayer'
+import { useIsMobile } from '../useMediaQuery'
 
 // Hoisted so the default lands in `toEdges`'s `useMemo` dependency list (below) as the
 // same reference on every render. A fresh `[]` literal as a default parameter value is
@@ -20,9 +21,24 @@ const EMPTY_SCRIPT: never[] = []
  * và không zoom ra xa hơn được.
  */
 export const MIN_ZOOM = 0.25
+
+/**
+ * Sàn zoom cho `fitView`. Không có nó, `fitView` co bao nhiêu cũng được miễn vừa
+ * khung: ở 390px, topology bốn node bị co về ~0.4, chữ 13px hiển thị còn ~5px và
+ * không ai đọc nổi. Thà tràn khung phải pan còn hơn vừa khung mà mù.
+ *
+ * Khác `MIN_ZOOM`: đây chỉ chặn `fitView`. Người dùng vẫn tự zoom xa tới 0.25 được.
+ */
+export const READABLE_ZOOM = 0.75
+
 /** Chừa mép để node ngoài cùng không dính sát viền — hằng số vì cả `fitView` lúc
  *  mount lẫn hai effect fit lại bên dưới đều phải dùng đúng một giá trị. */
-export const FIT_VIEW_OPTIONS = { padding: 0.15 }
+export const FIT_VIEW_OPTIONS = {
+  padding: 0.15,
+  minZoom: READABLE_ZOOM,
+  // Lesson hai node không được phóng to lố tới mức mỗi node chiếm nửa màn.
+  maxZoom: 1.2,
+}
 
 export function CanvasView({
   broker,
@@ -79,6 +95,10 @@ export function CanvasView({
     (connection: Connection) => broker.sandbox?.editing.onConnect(topology, connection),
     [broker, topology],
   )
+
+  // Sàn zoom ở trên cố ý cho phép topology tràn khung. Người dùng phải biết còn nội
+  // dung ngoài mép, nếu không họ tưởng đó là tất cả.
+  const isMobile = useIsMobile()
 
   const containerRef = useRef<HTMLDivElement>(null)
   // Typed to the exact node/edge shapes React Flow infers from `nodes`/`edges` below
@@ -142,10 +162,34 @@ export function CanvasView({
         onNodesChange={editable ? handleNodesChange : undefined}
         onConnect={editable ? handleConnect : undefined}
       >
-        <Background color="#1e293b" gap={20} />
+        <Background color="rgb(var(--border-subtle))" gap={24} />
         <Controls showInteractive={false} />
+        {!isMobile && (
+          <MiniMap
+            // `aria-hidden`: nó nhân bản canvas, screen reader đọc hai lần là nhiễu.
+            // Không đặt ở mobile — 390px không có chỗ, và fade mép làm đúng việc đó rồi.
+            aria-hidden
+            pannable
+            zoomable
+            className="!bg-surface-raised"
+            maskColor="rgb(var(--canvas) / 0.6)"
+            nodeColor={() => 'rgb(var(--border-strong))'}
+          />
+        )}
       </ReactFlow>
       <MessageLayer flights={flights} now={state.now} />
+      {isMobile && (
+        <>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-canvas to-transparent"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-canvas to-transparent"
+          />
+        </>
+      )}
     </div>
   )
 }

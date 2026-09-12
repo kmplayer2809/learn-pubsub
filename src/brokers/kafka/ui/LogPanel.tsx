@@ -31,7 +31,7 @@ function LogTab({ state }: { state: KafkaState }) {
   const keys = sortedPartitionKeys(state)
   if (keys.length === 0) {
     return (
-      <p className="text-[11px] text-slate-600" data-testid="log-panel-empty">
+      <p className="text-meta text-content-faint" data-testid="log-panel-empty">
         Chưa có partition nào.
       </p>
     )
@@ -42,21 +42,21 @@ function LogTab({ state }: { state: KafkaState }) {
         const partition = state.partitions[key]!
         return (
           <div key={key} data-testid="partition-block" data-partition={key} className="space-y-1">
-            <span className="font-mono text-[11px] text-teal-300">{key}</span>
-            <dl className="grid grid-cols-1 gap-x-2 gap-y-0.5 text-[10px] text-slate-400 sm:grid-cols-2">
+            <span className="font-mono text-meta text-role-teal-fg">{key}</span>
+            <dl className="grid grid-cols-1 gap-x-2 gap-y-0.5 text-code text-content-muted sm:grid-cols-2">
               <dt>leader</dt>
-              <dd className="truncate text-slate-200">{partition.leader}</dd>
+              <dd className="truncate text-content">{partition.leader}</dd>
               <dt>isr</dt>
-              <dd className="truncate text-slate-200">{partition.isr.join(', ') || '—'}</dd>
+              <dd className="truncate text-content">{partition.isr.join(', ') || '—'}</dd>
               <dt>log start offset</dt>
-              <dd className="text-slate-200">{partition.logStartOffset}</dd>
+              <dd className="text-content">{partition.logStartOffset}</dd>
               <dt>high watermark</dt>
-              <dd className="text-emerald-300">{partition.highWatermark}</dd>
+              <dd className="text-ok-fg">{partition.highWatermark}</dd>
               <dt>LEO</dt>
-              <dd className="text-sky-300">{partition.leo}</dd>
+              <dd className="text-role-sky-fg">{partition.leo}</dd>
             </dl>
             {partition.log.length === 0 ? (
-              <p className="text-[10px] text-slate-600">chưa có record nào</p>
+              <p className="text-code text-content-faint">chưa có record nào</p>
             ) : (
               <ul className="space-y-0.5">
                 {partition.log.map((entry) => {
@@ -69,16 +69,16 @@ function LogTab({ state }: { state: KafkaState }) {
                       data-offset={entry.offset}
                       data-reclaimed={reclaimed ? 'true' : undefined}
                       data-uncommitted={uncommitted ? 'true' : undefined}
-                      className={`flex items-center gap-2 font-mono text-[10px] ${
-                        reclaimed ? 'opacity-40 text-slate-500' : uncommitted ? 'text-amber-300' : 'text-slate-300'
+                      className={`flex items-center gap-2 font-mono text-code ${
+                        reclaimed ? 'opacity-40 text-content-faint' : uncommitted ? 'text-warn-fg' : 'text-content'
                       }`}
                     >
                       <span className="w-6 shrink-0">{entry.offset}</span>
                       <span className="w-16 shrink-0 truncate">{entry.key ?? '—'}</span>
                       <span className="flex-1 truncate">{entry.value === null ? '(tombstone)' : entry.value}</span>
-                      {reclaimed && <span className="shrink-0 text-slate-500">đã bị retention xoá</span>}
+                      {reclaimed && <span className="shrink-0 text-content-faint">đã bị retention xoá</span>}
                       {!reclaimed && uncommitted && (
-                        <span className="shrink-0 text-amber-500/80">chưa qua high watermark</span>
+                        <span className="shrink-0 text-warn-fg/80">chưa qua high watermark</span>
                       )}
                     </li>
                   )
@@ -125,7 +125,7 @@ function GroupTab({ state }: { state: KafkaState }) {
   const groupIds = Object.keys(state.groups).sort()
   if (groupIds.length === 0) {
     return (
-      <p className="text-[11px] text-slate-600" data-testid="group-panel-empty">
+      <p className="text-meta text-content-faint" data-testid="group-panel-empty">
         Chưa có consumer group nào.
       </p>
     )
@@ -137,9 +137,9 @@ function GroupTab({ state }: { state: KafkaState }) {
         const lagRows = committedLagRows(state, group)
         return (
           <div key={groupId} data-testid="group-block" data-group={groupId} className="space-y-1">
-            <div className="flex items-center gap-2 text-[11px]">
-              <span className="font-mono text-orange-300">{groupId}</span>
-              <span className="text-slate-500">
+            <div className="flex items-center gap-2 text-meta">
+              <span className="font-mono text-role-orange-fg">{groupId}</span>
+              <span className="text-content-faint">
                 {group.state} · gen {group.generationId}
               </span>
             </div>
@@ -149,22 +149,22 @@ function GroupTab({ state }: { state: KafkaState }) {
                   key={member.memberId}
                   data-testid="group-member"
                   data-member={member.memberId}
-                  className="flex items-center gap-2 text-[10px] text-slate-400"
+                  className="flex items-center gap-2 text-code text-content-muted"
                 >
-                  <span className="w-16 shrink-0 truncate font-mono text-slate-200">{member.memberId}</span>
+                  <span className="w-16 shrink-0 truncate font-mono text-content">{member.memberId}</span>
                   <span className="flex-1 truncate">{member.subscriptions.join(', ') || '—'}</span>
-                  <span data-testid="member-assignment" className="shrink-0 text-slate-500">
+                  <span data-testid="member-assignment" className="shrink-0 text-content-faint">
                     chưa gán
                   </span>
                 </li>
               ))}
             </ul>
             {lagRows.length === 0 ? (
-              <p className="text-[10px] text-slate-600" data-testid="group-lag-empty">
+              <p className="text-code text-content-faint" data-testid="group-lag-empty">
                 chưa commit offset nào
               </p>
             ) : (
-              <ul className="space-y-0.5 text-[10px] text-slate-400">
+              <ul className="space-y-0.5 text-code text-content-muted">
                 {lagRows.map((row) => (
                   <li key={row.key} data-testid="group-lag-row" data-partition={row.key}>
                     {/* Qualified "lag đã commit", not bare "lag": this is
@@ -177,7 +177,7 @@ function GroupTab({ state }: { state: KafkaState }) {
                         the misreading lesson 05 exists to correct — so this label stays
                         qualified even though it reads slightly redundant on its own. */}
                     <span className="font-mono">{row.key}</span>: lag đã commit{' '}
-                    <span className="text-amber-300">{row.lag}</span>
+                    <span className="text-warn-fg">{row.lag}</span>
                   </li>
                 ))}
               </ul>
@@ -189,7 +189,7 @@ function GroupTab({ state }: { state: KafkaState }) {
   )
 }
 
-const TAB_BUTTON = 'rounded px-1.5 py-0.5 text-[10px]'
+const TAB_BUTTON = 'rounded px-1.5 py-0.5 text-code'
 
 /**
  * Kafka's `StatePanel`, chiếm slot RabbitMQ's `InFlightPanel`/Redis' `KeyspacePanel`
@@ -202,13 +202,13 @@ export function LogPanel({ state, dense = false }: { state: KafkaState; dense?: 
   return (
     <div className={`overflow-y-auto px-3 py-2 ${dense ? 'max-h-24' : 'max-h-32'}`} data-testid="log-panel">
       <div className="mb-1 flex items-center gap-2">
-        <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Kafka</h3>
+        <h3 className="text-section text-content-faint">Kafka</h3>
         <div className="flex gap-1">
           <button
             type="button"
             data-testid="log-panel-tab-log"
             onClick={() => setTab('log')}
-            className={`${TAB_BUTTON} ${tab === 'log' ? 'bg-slate-700 text-slate-100' : 'text-slate-500'}`}
+            className={`${TAB_BUTTON} ${tab === 'log' ? 'bg-surface-hover text-content-strong' : 'text-content-faint'}`}
           >
             Log
           </button>
@@ -216,7 +216,7 @@ export function LogPanel({ state, dense = false }: { state: KafkaState; dense?: 
             type="button"
             data-testid="log-panel-tab-group"
             onClick={() => setTab('group')}
-            className={`${TAB_BUTTON} ${tab === 'group' ? 'bg-slate-700 text-slate-100' : 'text-slate-500'}`}
+            className={`${TAB_BUTTON} ${tab === 'group' ? 'bg-surface-hover text-content-strong' : 'text-content-faint'}`}
           >
             Group
           </button>

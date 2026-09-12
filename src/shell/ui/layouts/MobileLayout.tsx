@@ -8,12 +8,12 @@ import { SidePanel } from './SidePanel'
 import type { LayoutProps } from './types'
 
 export function MobileLayout(props: LayoutProps) {
-  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox } = props
+  const { broker, lesson, topology, state, script, highlight, editable, durationMs, onStep, inSandbox, marks } = props
   const pane = useAppStore((s) => s.mobilePane)
   const StatePanel = broker.StatePanel
 
   return (
-    <div className="flex h-full flex-col bg-ink-950 text-ink-100">
+    <div className="flex h-full flex-col bg-canvas text-content-strong">
       <TopBar title={inSandbox ? 'Sandbox' : (lesson?.title ?? '')} />
 
       <div className="min-h-0 flex-1">
@@ -31,15 +31,15 @@ export function MobileLayout(props: LayoutProps) {
                 editable={editable}
               />
             </div>
-            <div className="border-t border-ink-800/80">
+            <div className="border-t border-edge">
               <StatePanel state={state} dense />
             </div>
           </div>
         )}
 
         {pane === 'state' && (
-          <div className="flex h-full flex-col overflow-y-auto">
-            <div className="border-b border-ink-800/80">
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="shrink-0 border-b border-edge">
               <StatePanel state={state} />
             </div>
             <div className="min-h-0 flex-1 p-3">
@@ -52,7 +52,7 @@ export function MobileLayout(props: LayoutProps) {
       {/* Transport nằm ngoài khối pane: tua thời gian ảo là hành động xuyên suốt,
           ẩn nó ở tab `lessons`/`state` là lấy mất khả năng điều khiển mô phỏng
           đang xem. */}
-      <Transport durationMs={durationMs} onStep={onStep} compact />
+      <Transport durationMs={durationMs} onStep={onStep} marks={marks} compact />
       <MobileTabBar />
     </div>
   )

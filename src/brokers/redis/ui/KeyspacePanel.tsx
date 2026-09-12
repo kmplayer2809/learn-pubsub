@@ -52,18 +52,18 @@ export function KeyspacePanel({ state, dense = false }: { state: RedisState; den
   return (
     <div className={`overflow-y-auto px-3 py-2 ${dense ? 'max-h-24' : 'max-h-32'}`} data-testid="keyspace-panel">
       <div className="mb-1 flex items-baseline gap-2" data-testid="keyspace-header">
-        <h3 className="text-[10px] uppercase tracking-wider text-slate-500">Keyspace</h3>
-        <span className="font-mono text-[10px] text-slate-600">
+        <h3 className="text-section text-content-faint">Keyspace</h3>
+        <span className="font-mono text-code text-content-faint">
           {unreclaimed > 0 ? `${liveKeys.length}/${state.metrics.keysCount}` : state.metrics.keysCount} keys ·{' '}
           {state.metrics.memoryUsed}B
         </span>
         {unreclaimed > 0 && (
-          <span className="text-[10px] text-amber-500/80">{unreclaimed} hết hạn chưa thu hồi</span>
+          <span className="text-code text-warn-fg/80">{unreclaimed} hết hạn chưa thu hồi</span>
         )}
       </div>
 
       {liveKeys.length === 0 ? (
-        <p className="text-[11px] text-slate-600" data-testid="keyspace-empty">
+        <p className="text-meta text-content-faint" data-testid="keyspace-empty">
           Keyspace đang trống.
         </p>
       ) : (
@@ -78,13 +78,13 @@ export function KeyspacePanel({ state, dense = false }: { state: RedisState; den
                 data-testid="keyspace-row"
                 data-key={key}
                 data-expiring={expiring ? 'true' : undefined}
-                className={`flex items-center gap-2 text-[11px] ${expiring ? 'animate-pulse' : ''}`}
+                className={`flex items-center gap-2 text-meta ${expiring ? 'animate-pulse' : ''}`}
               >
-                <span className="w-24 shrink-0 truncate font-mono text-slate-200">{key}</span>
-                <span className="w-10 shrink-0 font-mono text-slate-500">
+                <span className="w-24 shrink-0 truncate font-mono text-content">{key}</span>
+                <span className="w-10 shrink-0 font-mono text-content-faint">
                   {ttlText(record.expiresAt, state.now)}
                 </span>
-                <span className="flex-1 truncate font-mono text-sky-300">
+                <span className="flex-1 truncate font-mono text-role-sky-fg">
                   {summariseValue(record.value)}
                 </span>
               </li>
