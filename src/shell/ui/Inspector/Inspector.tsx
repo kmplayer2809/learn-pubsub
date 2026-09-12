@@ -2,9 +2,9 @@ import { useState } from 'react'
 import type { AnyBrokerModule } from '../../../brokers/types'
 import type { JournalEntry, KernelState, ValidationIssueBase } from '../../kernel/types'
 import type { Lesson } from '../../lesson/types'
-import { useAppStore } from '../../store'
 import { activeStepIndex } from '../../lesson/activeStep'
 import { CheckpointSection } from './CheckpointCard'
+import { InspectorTabs } from './InspectorTabs'
 import { Markdown, MarkdownInline } from './Markdown'
 
 /** Vietnamese label for a severity shared by every broker's `ValidationIssueBase`. */
@@ -101,58 +101,48 @@ export function Inspector({
   state: KernelState
   issues: ValidationIssueBase[]
 }) {
-  const selectedNodeId = useAppStore((s) => s.selectedNodeId)
   const step = lesson.narrative[activeStepIndex(lesson.narrative, state.now)]
   const [exportOpen, setExportOpen] = useState(false)
-  const { NodeConfig, ExportDialog } = broker
+  const { ExportDialog } = broker
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto" data-testid="inspector">
-      <section>
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="mb-1 text-narrative font-semibold leading-snug text-content-strong">
-            <MarkdownInline text={step?.title ?? lesson.title} />
-          </h2>
-          {ExportDialog && (
-            <button
-              onClick={() => setExportOpen(true)}
-              data-testid="export-button"
-              className="min-h-11 shrink-0 rounded-lg border border-edge-strong px-2.5 py-1 text-meta font-medium text-content hover:bg-surface-hover active:bg-surface-hover md:min-h-0"
-            >
-              Xuất code
-            </button>
-          )}
-        </div>
-        <Markdown text={step?.body ?? lesson.summary} />
-      </section>
+    <div className="flex h-full min-h-0 flex-col" data-testid="inspector">
+      {/* Vùng 1: narrative, cuộn riêng. Tách khỏi vùng dữ liệu bên dưới để đọc
+          narrative không làm mất dấu nhật ký đang chạy. */}
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
+        <section className="max-w-[68ch]">
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="mb-1 text-ui font-semibold leading-snug text-content-strong">
+              <MarkdownInline text={step?.title ?? lesson.title} />
+            </h2>
+            {ExportDialog && (
+              <button
+                onClick={() => setExportOpen(true)}
+                data-testid="export-button"
+                className="min-h-11 shrink-0 rounded-lg border border-edge-strong px-2.5 py-1 text-meta font-medium text-content hover:bg-surface-hover active:bg-surface-hover md:min-h-0"
+              >
+                Xuất code
+              </button>
+            )}
+          </div>
+          <Markdown text={step?.body ?? lesson.summary} />
+        </section>
 
-      {exportOpen && ExportDialog && (
-        <ExportDialog topology={lesson.topology} onClose={() => setExportOpen(false)} />
-      )}
-
-      {/* Lesson-only: the sandbox has no narrative and no checkpoints, so SandboxPanel
-          deliberately does not render this the way it shares IssuesList/MetricsGrid. */}
-      <CheckpointSection lessonId={lesson.id} checkpoints={lesson.checkpoints} now={state.now} />
-
-      <IssuesList issues={issues} issueText={broker.issueText} />
-
-      <HaltedBanner halted={state.halted} />
-
-      <section>
-        <h3 className="mb-1.5 text-section font-semibold uppercase tracking-wider text-content-faint">
-          {selectedNodeId ? `Cấu hình · ${selectedNodeId}` : 'Chỉ số'}
-        </h3>
-        {selectedNodeId ? (
-          <NodeConfig lesson={lesson} state={state} nodeId={selectedNodeId} />
-        ) : (
-          <MetricsGrid metrics={broker.metrics(state)} />
+        {exportOpen && ExportDialog && (
+          <ExportDialog topology={lesson.topology} onClose={() => setExportOpen(false)} />
         )}
-      </section>
 
-      <section className="min-h-0 flex-1">
-        <h3 className="mb-1.5 text-section font-semibold uppercase tracking-wider text-content-faint">Nhật ký sự kiện</h3>
-        <EventLog journal={state.journal} />
-      </section>
+        {/* Lesson-only: the sandbox has no narrative and no checkpoints, so SandboxPanel
+            deliberately does not render this the way it shares IssuesList/MetricsGrid. */}
+        <CheckpointSection lessonId={lesson.id} checkpoints={lesson.checkpoints} now={state.now} />
+
+        <IssuesList issues={issues} issueText={broker.issueText} />
+
+        <HaltedBanner halted={state.halted} />
+      </div>
+
+      {/* Vùng 2: chỉ số / nhật ký / cấu hình, cuộn riêng, chiều cao cố định. */}
+      <InspectorTabs broker={broker} lesson={lesson} state={state} />
     </div>
   )
 }

@@ -35,7 +35,7 @@ export function TabletLayout(props: LayoutProps) {
           </div>
           <Transport durationMs={durationMs} onStep={onStep} />
         </main>
-        <aside className="w-72 shrink-0 overflow-y-auto border-l border-edge bg-surface p-3">
+        <aside className="w-80 shrink-0 border-l border-edge bg-surface p-3">
           <SidePanel {...props} />
         </aside>
       </div>
