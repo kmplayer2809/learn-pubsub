@@ -183,3 +183,64 @@ describe('CheckpointSection answer reset', () => {
     expect(screen.queryByTestId('checkpoints')).toBeNull()
   })
 })
+
+describe('CheckpointSection scoring and retry', () => {
+  it('shows no score before anything is answered', () => {
+    render(<CheckpointSection lessonId="08-prefetch" checkpoints={[prefetch]} now={6000} />)
+    expect(screen.queryByTestId('checkpoint-score')).toBeNull()
+  })
+
+  it('counts a right answer against the questions revealed so far', () => {
+    render(<CheckpointSection lessonId="03-dlx" checkpoints={[prefetch, later]} now={9000} />)
+
+    fireEvent.click(screen.getAllByTestId('checkpoint-option-1')[0]!)
+
+    expect(screen.getByTestId('checkpoint-score').textContent).toBe('Đúng 1/2')
+  })
+
+  it('offers a retry only on a wrong answer', () => {
+    render(<CheckpointSection lessonId="08-prefetch" checkpoints={[prefetch]} now={6000} />)
+
+    fireEvent.click(optionButton(0))
+    expect(screen.getByTestId('checkpoint-retry')).toBeTruthy()
+    expect(screen.getByTestId('checkpoint-score').textContent).toBe('Đúng 0/1')
+  })
+
+  it('has no retry after a right answer', () => {
+    render(<CheckpointSection lessonId="08-prefetch" checkpoints={[prefetch]} now={6000} />)
+
+    fireEvent.click(optionButton(1))
+    expect(screen.queryByTestId('checkpoint-retry')).toBeNull()
+  })
+
+  it('re-enables the options and drops the score when retry is clicked', () => {
+    render(<CheckpointSection lessonId="08-prefetch" checkpoints={[prefetch]} now={6000} />)
+
+    fireEvent.click(optionButton(0))
+    fireEvent.click(screen.getByTestId('checkpoint-retry'))
+
+    expect(optionButton(0).disabled).toBe(false)
+    expect(screen.queryByTestId('checkpoint-verdict')).toBeNull()
+    expect(screen.queryByTestId('checkpoint-score')).toBeNull()
+
+    fireEvent.click(optionButton(1))
+    expect(screen.getByTestId('checkpoint-score').textContent).toBe('Đúng 1/1')
+  })
+
+  // Scrubbing back past a checkpoint's `at` unmounts its card. The answer has to leave
+  // the score with it, or the section keeps counting a card that is no longer on screen.
+  it('forgets the answer of a checkpoint that scrolled out of the run', () => {
+    const { rerender } = render(
+      <CheckpointSection lessonId="03-dlx" checkpoints={[prefetch, later]} now={9000} />,
+    )
+    fireEvent.click(screen.getAllByTestId('checkpoint-option-1')[0]!)
+    expect(screen.getByTestId('checkpoint-score').textContent).toBe('Đúng 1/2')
+
+    rerender(<CheckpointSection lessonId="03-dlx" checkpoints={[prefetch, later]} now={5999} />)
+    expect(screen.queryByTestId('checkpoint-score')).toBeNull()
+
+    rerender(<CheckpointSection lessonId="03-dlx" checkpoints={[prefetch, later]} now={9000} />)
+    expect(screen.queryByTestId('checkpoint-score')).toBeNull()
+    expect(screen.getAllByTestId('checkpoint-option-1')[0]!).toHaveProperty('disabled', false)
+  })
+})
