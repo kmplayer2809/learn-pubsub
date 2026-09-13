@@ -18,19 +18,42 @@ const questions: QuizQuestion[] = [
   },
 ]
 
-/** The dialog shuffles, so tests locate an option by its text, never by its position. */
-function clickOption(questionIndex: number, text: string | RegExp) {
-  const card = screen.getByTestId(`quiz-question-${questionIndex}`)
-  const match = [...card.querySelectorAll('button')].find((b) =>
-    typeof text === 'string' ? b.textContent?.includes(text) : text.test(b.textContent ?? ''),
-  )
-  if (!match) throw new Error(`no option matching ${text} in question ${questionIndex}`)
+// The dialog shuffles *question order* (`shuffle(questions, seed)` in
+// LessonQuizDialog), so "question 0" is not reliably the Fanout question across
+// renders — it is a coin flip with only two questions. Tests therefore locate a
+// question by a distinctive text fragment, never by its rendered `quiz-question-<i>`
+// index, and only read the index back off the DOM once a card has already been found
+// by content (for the explanation test id).
+
+/** Finds the `quiz-question-<i>` card whose text contains `fragment`, wherever the
+ *  shuffle put it. */
+function findQuestionCard(fragment: string) {
+  const card = screen.getAllByTestId(/^quiz-question-/).find((c) => c.textContent?.includes(fragment))
+  if (!card) throw new Error(`no question card matching ${fragment}`)
+  return card
+}
+
+/** The `<i>` a card actually rendered at, read off its own test id — used only to
+ *  address that same card's `quiz-explanation-<i>`, never to predict layout. */
+function questionIndexOf(card: HTMLElement) {
+  const testId = card.getAttribute('data-testid') ?? ''
+  const match = /^quiz-question-(\d+)$/.exec(testId)
+  if (!match?.[1]) throw new Error(`unexpected question test id "${testId}"`)
+  return Number(match[1])
+}
+
+/** The dialog shuffles, so tests locate a question (by a text fragment) and then an
+ *  option within it (by its text), never by position. */
+function clickOption(questionFragment: string, optionText: string) {
+  const card = findQuestionCard(questionFragment)
+  const match = [...card.querySelectorAll('button')].find((b) => b.textContent?.includes(optionText))
+  if (!match) throw new Error(`no option matching ${optionText} in question "${questionFragment}"`)
   fireEvent.click(match)
 }
 
 function answerAll(correct: boolean) {
-  clickOption(0, correct ? 'mọi queue đã bind' : 'Header')
-  clickOption(1, correct ? 'chưa ack' : 'đã ack')
+  clickOption('Fanout', correct ? 'mọi queue đã bind' : 'Header')
+  clickOption('prefetch', correct ? 'chưa ack' : 'đã ack')
 }
 
 describe('LessonQuizDialog', () => {
@@ -52,10 +75,10 @@ describe('LessonQuizDialog', () => {
     const submit = screen.getByTestId('quiz-submit') as HTMLButtonElement
     expect(submit.disabled).toBe(true)
 
-    clickOption(0, 'mọi queue đã bind')
+    clickOption('Fanout', 'mọi queue đã bind')
     expect(submit.disabled).toBe(true)
 
-    clickOption(1, 'chưa ack')
+    clickOption('prefetch', 'chưa ack')
     expect(submit.disabled).toBe(false)
   })
 
@@ -64,9 +87,9 @@ describe('LessonQuizDialog', () => {
       <LessonQuizDialog title="08 · Prefetch" questions={questions} onSubmit={() => {}} onClose={() => {}} />,
     )
 
-    clickOption(0, 'Header')
-    clickOption(0, 'mọi queue đã bind')
-    clickOption(1, 'chưa ack')
+    clickOption('Fanout', 'Header')
+    clickOption('Fanout', 'mọi queue đã bind')
+    clickOption('prefetch', 'chưa ack')
 
     fireEvent.click(screen.getByTestId('quiz-submit'))
     expect(screen.getByTestId('quiz-score').textContent).toContain('2/2')
@@ -77,13 +100,18 @@ describe('LessonQuizDialog', () => {
       <LessonQuizDialog title="08 · Prefetch" questions={questions} onSubmit={() => {}} onClose={() => {}} />,
     )
 
-    clickOption(0, 'mọi queue đã bind')
-    clickOption(1, 'đã ack')
+    clickOption('Fanout', 'mọi queue đã bind')
+    clickOption('prefetch', 'đã ack')
     fireEvent.click(screen.getByTestId('quiz-submit'))
 
     expect(screen.getByTestId('quiz-score').textContent).toContain('1/2')
-    expect(screen.queryByTestId('quiz-explanation-0')).toBeNull()
-    expect(screen.getByTestId('quiz-explanation-1').textContent).toContain('chưa ack')
+
+    // Resolve each card's *own* index after the fact — grading doesn't move cards
+    // around, but the shuffle already placed them somewhere the test can't predict.
+    const rightIndex = questionIndexOf(findQuestionCard('Fanout'))
+    const wrongIndex = questionIndexOf(findQuestionCard('prefetch'))
+    expect(screen.queryByTestId(`quiz-explanation-${rightIndex}`)).toBeNull()
+    expect(screen.getByTestId(`quiz-explanation-${wrongIndex}`).textContent).toContain('chưa ack')
   })
 
   it('passes the result to onSubmit', () => {

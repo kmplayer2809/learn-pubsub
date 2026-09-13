@@ -32,25 +32,7 @@ export function LessonQuizDialog({
   const [answers, setAnswers] = useState<(number | undefined)[]>([])
   const [result, setResult] = useState<QuizResult | undefined>(undefined)
 
-  // Shuffle each question's *options*, not the question order: question 0 stays the
-  // lesson author's question 0 (its `data-testid` and position on screen are stable),
-  // only which option sits first changes, so the correct answer can't be memorised by
-  // position. `answerIndex` is remapped to follow the option it pointed at.
-  const ordered = useMemo(
-    () =>
-      questions.map((q, i) => {
-        const optionOrder = shuffle(
-          q.options.map((_, j) => j),
-          seed + i,
-        )
-        return {
-          ...q,
-          options: optionOrder.map((j) => q.options[j]!),
-          answerIndex: optionOrder.indexOf(q.answerIndex),
-        }
-      }),
-    [questions, seed],
-  )
+  const ordered = useMemo(() => shuffle(questions, seed), [questions, seed])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
