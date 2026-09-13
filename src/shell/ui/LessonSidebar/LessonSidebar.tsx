@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { getBroker } from '../../../brokers/registry'
+import { lessonKey } from '../../quiz/progress'
 import { useAppStore } from '../../store'
 import { BrokerSwitcher } from '../BrokerSwitcher/BrokerSwitcher'
 import { LayoutGridIcon } from '../icons'
+import { ExamDialog } from '../Quiz/ExamDialog'
 
 export function LessonSidebar({
   hideBrokerSwitcher = false,
@@ -16,11 +19,15 @@ export function LessonSidebar({
    */
   hideBrokerSwitcher?: boolean
 } = {}) {
-  const broker = getBroker(useAppStore((s) => s.brokerId))
+  const brokerId = useAppStore((s) => s.brokerId)
+  const broker = getBroker(brokerId)
   const lessonId = useAppStore((s) => s.lessonId)
   const sandbox = useAppStore((s) => s.sandbox)
   const setLesson = useAppStore((s) => s.setLesson)
   const openSandbox = useAppStore((s) => s.openSandbox)
+  const progress = useAppStore((s) => s.progress)
+  const recordExam = useAppStore((s) => s.recordExam)
+  const [examOpen, setExamOpen] = useState(false)
 
   return (
     <nav className="flex h-full flex-col overflow-y-auto bg-surface" data-testid="lesson-sidebar">
@@ -43,6 +50,7 @@ export function LessonSidebar({
               // người học nói "bài 12", không nói "bài 3 của nhóm reliability".
               // Suy ra từ mảng, không phải field mới trong `Lesson` — không đụng contract.
               const ordinal = String(broker.lessons.indexOf(lesson) + 1).padStart(2, '0')
+              const score = progress.lessons[lessonKey(brokerId, lesson.id)]
               return (
                 <button
                   key={lesson.id}
@@ -55,12 +63,30 @@ export function LessonSidebar({
                 >
                   <span className="w-6 shrink-0 font-mono text-meta text-content-faint">{ordinal}</span>
                   <span className="min-w-0 flex-1 leading-snug">{lesson.title}</span>
+                  {score && (
+                    <span
+                      data-testid={`lesson-score-${lesson.id}`}
+                      className={`shrink-0 font-mono text-meta ${
+                        score.best === score.total ? 'text-ok-fg' : 'text-content-faint'
+                      }`}
+                    >
+                      {score.best === score.total ? '✓' : `${score.best}/${score.total}`}
+                    </span>
+                  )}
                 </button>
               )
             })}
           </div>
         ))}
       </div>
+      <button
+        onClick={() => setExamOpen(true)}
+        data-testid="open-exam"
+        className="flex min-h-11 shrink-0 items-center gap-2 border-t border-edge px-3 py-2 text-left text-ui font-medium text-content-muted hover:bg-surface-hover hover:text-content md:min-h-0"
+      >
+        Thi tổng kết
+      </button>
+
       {broker.sandbox && (
         <button
           onClick={openSandbox}
@@ -72,6 +98,19 @@ export function LessonSidebar({
           <LayoutGridIcon className="h-4 w-4" />
           Sandbox
         </button>
+      )}
+
+      {examOpen && (
+        <ExamDialog
+          // Keyed by broker: switching broker with the dialog open must redraw the exam
+          // from the new broker's bank rather than keep the old one's questions.
+          key={brokerId}
+          brokerLabel={broker.label}
+          lessons={broker.lessons}
+          onSubmit={recordExam}
+          onJumpToLesson={setLesson}
+          onClose={() => setExamOpen(false)}
+        />
       )}
     </nav>
   )
