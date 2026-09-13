@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { BROKER_CATALOG, DEFAULT_BROKER_ID, catalogEntry } from '../brokers/catalog'
+import { readProgress, recordScore, writeProgress, type Progress } from './quiz/progress'
 import { applyTheme, resolveInitialTheme, type Theme } from './ui/theme'
 
 export const SPEEDS = [0.25, 0.5, 1, 2, 4] as const
@@ -27,6 +28,10 @@ export interface AppState {
   /** Giao diện sáng/tối. `applyTheme` là nơi duy nhất chạm vào `data-theme` và
    *  `localStorage`; store chỉ giữ giá trị để component render lại. */
   theme: Theme
+  /** Điểm quiz tốt nhất, đọc từ `localStorage` lúc dựng store. Sống trong store chứ
+   *  không phải trong dialog vì badge ở `LessonSidebar` nằm ở nhánh cây khác và phải
+   *  vẽ lại ngay khi người học vừa nộp bài. */
+  progress: Progress
   setBroker(id: string): void
   setLesson(id: string): void
   openSandbox(): void
@@ -40,6 +45,8 @@ export interface AppState {
   setDrawerOpen(open: boolean): void
   setTheme(theme: Theme): void
   toggleTheme(): void
+  recordLessonQuiz(lessonId: string, result: { correct: number; total: number }): void
+  recordExam(result: { correct: number; total: number }): void
 }
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -58,6 +65,7 @@ export const useAppStore = create<AppState>((set, get) => {
     mobilePane: 'canvas',
     drawerOpen: false,
     theme,
+    progress: readProgress(),
 
     setBroker(id) {
       // An unknown id would leave the shell rendering a module that does not exist.
@@ -144,6 +152,22 @@ export const useAppStore = create<AppState>((set, get) => {
 
     toggleTheme() {
       get().setTheme(get().theme === 'dark' ? 'light' : 'dark')
+    },
+
+    recordLessonQuiz(lessonId, result) {
+      // brokerId comes from state, not from the caller: a dialog that is open while the
+      // broker switches must not file its score under the broker now on screen.
+      const { brokerId, progress } = get()
+      const next = recordScore(progress, { kind: 'lesson', brokerId, lessonId }, result)
+      writeProgress(next)
+      set({ progress: next })
+    },
+
+    recordExam(result) {
+      const { brokerId, progress } = get()
+      const next = recordScore(progress, { kind: 'exam', brokerId }, result)
+      writeProgress(next)
+      set({ progress: next })
     },
   }
 })

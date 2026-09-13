@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { lessonKey, readProgress } from './quiz/progress'
 import { SPEEDS, useAppStore } from './store'
 
 describe('app store', () => {
   beforeEach(() => {
+    // Progress is read out of localStorage when the store is created, so a leftover
+    // entry from a previous test would seed the next one's "best" score.
+    localStorage.clear()
     useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
@@ -42,6 +46,37 @@ describe('app store', () => {
   it('exposes an ascending speed ladder including 1x', () => {
     expect(SPEEDS).toContain(1)
     expect([...SPEEDS].sort((a, b) => a - b)).toEqual(SPEEDS)
+  })
+
+  it('records a lesson quiz score under the active broker and persists it', () => {
+    useAppStore.getState().recordLessonQuiz('08-prefetch', { correct: 3, total: 4 })
+
+    const record = useAppStore.getState().progress.lessons[lessonKey('rabbitmq', '08-prefetch')]
+    expect(record).toEqual({ best: 3, total: 4, attempts: 1 })
+    expect(readProgress().lessons[lessonKey('rabbitmq', '08-prefetch')]).toEqual(record)
+  })
+
+  it('keeps the best lesson score across attempts', () => {
+    useAppStore.getState().recordLessonQuiz('08-prefetch', { correct: 4, total: 4 })
+    useAppStore.getState().recordLessonQuiz('08-prefetch', { correct: 1, total: 4 })
+
+    expect(useAppStore.getState().progress.lessons[lessonKey('rabbitmq', '08-prefetch')]).toEqual({
+      best: 4,
+      total: 4,
+      attempts: 2,
+    })
+  })
+
+  it('records an exam score under the active broker', () => {
+    useAppStore.getState().setBroker('redis')
+    useAppStore.getState().recordExam({ correct: 16, total: 20 })
+
+    expect(useAppStore.getState().progress.exams['redis']).toEqual({
+      best: 16,
+      total: 20,
+      attempts: 1,
+    })
+    expect(useAppStore.getState().progress.exams['rabbitmq']).toBeUndefined()
   })
 })
 
