@@ -3,11 +3,19 @@ import { describe, expect, it, vi } from 'vitest'
 import type { QuizQuestion } from '../../lesson/types'
 import { LessonQuizDialog } from './LessonQuizDialog'
 
+// The two questions deliberately have *different* `answerIndex` values (0 and 1).
+// If they matched, `gradeQuiz(ordered, answers)` (correct — grades against the shuffled
+// array the learner actually saw) and `gradeQuiz(questions, answers)` (a real bug this
+// suite caught during review — grades against the original, unshuffled array) would be
+// mathematically indistinguishable: a question-order swap only changes the result of
+// scoring when it moves a rendered answer next to a *different* threshold to compare
+// against. Same reasoning for pinning the shuffle seed in the grading tests below —
+// the bug is invisible whenever the shuffle happens not to move anything.
 const questions: QuizQuestion[] = [
   {
     question: 'Fanout exchange định tuyến theo gì?',
-    options: ['Routing key', 'Không theo gì, gửi tới mọi queue đã bind', 'Header'],
-    answerIndex: 1,
+    options: ['Không theo gì, gửi tới mọi queue đã bind', 'Routing key', 'Header'],
+    answerIndex: 0,
     explanation: 'Fanout bỏ qua routing key, mọi queue đã bind đều nhận bản sao.',
   },
   {
@@ -17,6 +25,14 @@ const questions: QuizQuestion[] = [
     explanation: 'Prefetch giới hạn số message chưa ack mà broker đẩy cho một consumer.',
   },
 ]
+
+// Seeds verified against the real `shuffle` (mulberry32 via `createRng`/`nextInt` in
+// `src/shell/kernel/rng.ts`) for this exact two-question fixture: seed 1 keeps the
+// authored order [Fanout, prefetch]; seed 7 swaps it to [prefetch, Fanout]. Recompute
+// if the fixture's question count or order ever changes — these are not "any two
+// different numbers", they are the specific values that produce those two orders.
+const SEED_AUTHORED_ORDER = 1
+const SEED_SWAPPED_ORDER = 7
 
 // The dialog shuffles *question order* (`shuffle(questions, seed)` in
 // LessonQuizDialog), so "question 0" is not reliably the Fanout question across
@@ -96,34 +112,87 @@ describe('LessonQuizDialog', () => {
   })
 
   it('reports the score and explains only the wrong answers', () => {
-    render(
-      <LessonQuizDialog title="08 · Prefetch" questions={questions} onSubmit={() => {}} onClose={() => {}} />,
-    )
+    // Pinned to the swapping seed: with the authored (unswapped) order, `ordered[i]`
+    // and `questions[i]` are the same question, so a grader that accidentally reads
+    // `questions` instead of `ordered` would score exactly the same and this test
+    // would not catch it. See the comment above `questions`.
+    const dateSpy = vi.spyOn(Date, 'now').mockReturnValue(SEED_SWAPPED_ORDER)
+    try {
+      render(
+        <LessonQuizDialog title="08 · Prefetch" questions={questions} onSubmit={() => {}} onClose={() => {}} />,
+      )
 
-    clickOption('Fanout', 'mọi queue đã bind')
-    clickOption('prefetch', 'đã ack')
-    fireEvent.click(screen.getByTestId('quiz-submit'))
+      clickOption('Fanout', 'mọi queue đã bind')
+      clickOption('prefetch', 'đã ack')
+      fireEvent.click(screen.getByTestId('quiz-submit'))
 
-    expect(screen.getByTestId('quiz-score').textContent).toContain('1/2')
+      expect(screen.getByTestId('quiz-score').textContent).toContain('1/2')
 
-    // Resolve each card's *own* index after the fact — grading doesn't move cards
-    // around, but the shuffle already placed them somewhere the test can't predict.
-    const rightIndex = questionIndexOf(findQuestionCard('Fanout'))
-    const wrongIndex = questionIndexOf(findQuestionCard('prefetch'))
-    expect(screen.queryByTestId(`quiz-explanation-${rightIndex}`)).toBeNull()
-    expect(screen.getByTestId(`quiz-explanation-${wrongIndex}`).textContent).toContain('chưa ack')
+      // Resolve each card's *own* index after the fact — grading doesn't move cards
+      // around, but the shuffle already placed them somewhere the test can't predict.
+      const rightIndex = questionIndexOf(findQuestionCard('Fanout'))
+      const wrongIndex = questionIndexOf(findQuestionCard('prefetch'))
+      expect(screen.queryByTestId(`quiz-explanation-${rightIndex}`)).toBeNull()
+      expect(screen.getByTestId(`quiz-explanation-${wrongIndex}`).textContent).toContain('chưa ack')
+    } finally {
+      dateSpy.mockRestore()
+    }
   })
 
   it('passes the result to onSubmit', () => {
-    const onSubmit = vi.fn()
-    render(
-      <LessonQuizDialog title="08 · Prefetch" questions={questions} onSubmit={onSubmit} onClose={() => {}} />,
-    )
+    // Same reasoning as above: pin to the swapping seed so a grader reading the
+    // wrong (unshuffled) array is guaranteed to score this wrong, not just sometimes.
+    const dateSpy = vi.spyOn(Date, 'now').mockReturnValue(SEED_SWAPPED_ORDER)
+    try {
+      const onSubmit = vi.fn()
+      render(
+        <LessonQuizDialog title="08 · Prefetch" questions={questions} onSubmit={onSubmit} onClose={() => {}} />,
+      )
 
-    answerAll(true)
-    fireEvent.click(screen.getByTestId('quiz-submit'))
+      answerAll(true)
+      fireEvent.click(screen.getByTestId('quiz-submit'))
 
-    expect(onSubmit).toHaveBeenCalledWith({ correct: 2, total: 2 })
+      expect(onSubmit).toHaveBeenCalledWith({ correct: 2, total: 2 })
+    } finally {
+      dateSpy.mockRestore()
+    }
+  })
+
+  it('reshuffles the question order on retry', () => {
+    // The spec requires "Làm lại" to reshuffle *question order* by drawing a new
+    // seed — this is the one test that would notice if that shuffle were ever
+    // deleted (`const ordered = questions`), which otherwise passes every other
+    // test in this file unchanged.
+    //
+    // `mockReturnValueOnce` chained twice does NOT reliably give "call 1 = mount,
+    // call 2 = retry": React's own internals call `Date.now()` an unpredictable
+    // number of times per render (observed 1-3+ calls just for the initial mount
+    // in this suite), so the two queued once-values get consumed by that noise
+    // before the component's own `useState`/`retry` calls ever see them — flaky
+    // in a way that isn't about timing, it reproduces every run once triggered.
+    // A *persistent* `mockReturnValue` per phase sidesteps this: React can call
+    // `Date.now()` as many times as it wants during mount and the answer/submit
+    // interactions and every call still sees the same seed, because the seed is
+    // only switched (not "consumed") right before the retry click — the one call
+    // that matters (`setSeed(Date.now())` inside `retry`) reads whatever the
+    // mock currently returns, regardless of how many other calls came before it.
+    const dateSpy = vi.spyOn(Date, 'now').mockReturnValue(SEED_AUTHORED_ORDER)
+    try {
+      render(
+        <LessonQuizDialog title="08 · Prefetch" questions={questions} onSubmit={() => {}} onClose={() => {}} />,
+      )
+
+      const before = screen.getAllByTestId(/^quiz-question-/).map((c) => c.textContent)
+      answerAll(true)
+      fireEvent.click(screen.getByTestId('quiz-submit'))
+
+      dateSpy.mockReturnValue(SEED_SWAPPED_ORDER)
+      fireEvent.click(screen.getByTestId('quiz-retry'))
+
+      expect(screen.getAllByTestId(/^quiz-question-/).map((c) => c.textContent)).not.toEqual(before)
+    } finally {
+      dateSpy.mockRestore()
+    }
   })
 
   it('clears every answer on retry', () => {
