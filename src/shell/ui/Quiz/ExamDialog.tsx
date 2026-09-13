@@ -24,6 +24,11 @@ export function ExamDialog({
   onJumpToLesson(lessonId: string): void
   onClose(): void
 }) {
+  // `Date.now()` seeds the first draw so different sittings differ, but retry cannot
+  // reuse the clock: two retries inside the same millisecond would leave `seed`
+  // unchanged, and `useMemo` would hand back the identical twenty questions in the
+  // identical order with no sign anything happened. Incrementing is monotonic and
+  // clock-independent, so every retry is guaranteed a different seed.
   const [seed, setSeed] = useState(() => Date.now())
   const [answers, setAnswers] = useState<(number | undefined)[]>([])
   const [result, setResult] = useState<QuizResult | undefined>(undefined)
@@ -57,7 +62,7 @@ export function ExamDialog({
   }
 
   const retry = () => {
-    setSeed(Date.now())
+    setSeed((previous) => previous + 1)
     setAnswers([])
     setResult(undefined)
   }
