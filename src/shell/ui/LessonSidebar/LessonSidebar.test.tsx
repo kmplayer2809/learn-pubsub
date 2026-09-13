@@ -65,4 +65,11 @@ describe('LessonSidebar quiz progress', () => {
     fireEvent.click(screen.getByTestId('open-exam'))
     expect(screen.getByTestId('exam')).toBeTruthy()
   })
+
+  it('offers the exam on a broker without a sandbox', () => {
+    useAppStore.getState().setBroker('redis')
+    render(<LessonSidebar />)
+    expect(screen.getByTestId('open-exam')).toBeTruthy()
+    expect(screen.queryByTestId('open-sandbox')).toBeNull()
+  })
 })
