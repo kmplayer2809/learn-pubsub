@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AnyBrokerModule } from '../../../brokers/types'
 import type { JournalEntry, KernelState, ValidationIssueBase } from '../../kernel/types'
 import type { Lesson } from '../../lesson/types'
@@ -114,6 +114,14 @@ export function Inspector({
   // lesson has played out — the same reason the wrap-up checkpoint sits exactly there.
   const lessonFinished = state.now >= lesson.durationMs
 
+  // A new lesson must not inherit the previous lesson's open dialog: nothing else here
+  // resets `quizOpen`, so without this a dialog left open through `setLesson`/`setBroker`
+  // either reopens ungraded at `virtualTime: 0` (via the dialog's own `key={lesson.id}`
+  // remount) or, if the new lesson has no quiz, pops open unclicked the next time one does.
+  useEffect(() => {
+    setQuizOpen(false)
+  }, [lesson.id])
+
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="inspector">
       {/* Vùng 1: narrative, cuộn riêng. Tách khỏi vùng dữ liệu bên dưới để đọc
@@ -165,7 +173,7 @@ export function Inspector({
           </section>
         )}
 
-        {quizOpen && quiz.length > 0 && (
+        {quizOpen && quiz.length > 0 && lessonFinished && (
           <LessonQuizDialog
             // Keyed by lesson: switching lesson while the dialog is open must not carry
             // the previous lesson's answers into the new one's questions.

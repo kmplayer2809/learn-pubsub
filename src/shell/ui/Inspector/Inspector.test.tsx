@@ -30,9 +30,12 @@ const lesson = {
   durationMs: 10_000,
 } as unknown as Lesson<unknown, unknown>
 
-function renderAt(now: number) {
-  const state = { now, seq: 0, rng: { s: 1 }, journal: [] } as never
-  return render(<Inspector broker={broker} lesson={lesson} state={state} issues={[]} />)
+function stateAt(now: number) {
+  return { now, seq: 0, rng: { s: 1 }, journal: [] } as never
+}
+
+function renderAt(now: number, l: Lesson<unknown, unknown> = lesson) {
+  return render(<Inspector broker={broker} lesson={l} state={stateAt(now)} issues={[]} />)
 }
 
 describe('Inspector end-of-lesson quiz', () => {
@@ -48,7 +51,15 @@ describe('Inspector end-of-lesson quiz', () => {
 
   it('offers the quiz once the run reaches durationMs', () => {
     renderAt(10_000)
+    expect(screen.getByTestId('lesson-quiz-prompt').textContent).toContain('Bài test cuối bài')
     expect(screen.getByTestId('lesson-quiz-prompt').textContent).toContain('1 câu')
+    expect(screen.getByTestId('lesson-quiz-start').textContent).toBe('Bắt đầu')
+  })
+
+  it('hides the prompt when the lesson has no quiz', () => {
+    const lessonWithoutQuiz = { ...lesson, quiz: undefined } as unknown as Lesson<unknown, unknown>
+    renderAt(10_000, lessonWithoutQuiz)
+    expect(screen.queryByTestId('lesson-quiz-prompt')).toBeNull()
   })
 
   it('opens the dialog and files the score under the lesson', () => {
@@ -66,5 +77,36 @@ describe('Inspector end-of-lesson quiz', () => {
       total: 1,
       attempts: 1,
     })
+  })
+
+  // SidePanel renders <Inspector> with no key, so a lesson switch does not remount this
+  // component — `quizOpen` is component-local state that must be reset by hand or it
+  // survives `setLesson`/`setBroker` and reopens on the next lesson.
+  it('closes the dialog instead of reopening it when switching directly to another quiz-bearing lesson', () => {
+    const lessonB = { ...lesson, id: '99b-quiz-fixture' } as unknown as Lesson<unknown, unknown>
+    const { rerender } = renderAt(10_000)
+
+    fireEvent.click(screen.getByTestId('lesson-quiz-start'))
+    expect(screen.getByTestId('lesson-quiz')).toBeTruthy()
+
+    rerender(<Inspector broker={broker} lesson={lessonB} state={stateAt(10_000)} issues={[]} />)
+    expect(screen.queryByTestId('lesson-quiz')).toBeNull()
+  })
+
+  it('does not silently pop the dialog open after passing through a lesson with no quiz', () => {
+    const lessonWithoutQuiz = { ...lesson, id: '99c-no-quiz', quiz: undefined } as unknown as Lesson<unknown, unknown>
+    const { rerender } = renderAt(10_000)
+
+    fireEvent.click(screen.getByTestId('lesson-quiz-start'))
+    expect(screen.getByTestId('lesson-quiz')).toBeTruthy()
+
+    rerender(<Inspector broker={broker} lesson={lessonWithoutQuiz} state={stateAt(10_000)} issues={[]} />)
+    expect(screen.queryByTestId('lesson-quiz')).toBeNull()
+    expect(screen.queryByTestId('lesson-quiz-prompt')).toBeNull()
+
+    // Back onto a quiz-bearing lesson: the dialog must stay closed until clicked again.
+    rerender(<Inspector broker={broker} lesson={lesson} state={stateAt(10_000)} issues={[]} />)
+    expect(screen.queryByTestId('lesson-quiz')).toBeNull()
+    expect(screen.getByTestId('lesson-quiz-prompt')).toBeTruthy()
   })
 })
