@@ -2,11 +2,16 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { lessonKey, readProgress } from './quiz/progress'
 import { SPEEDS, useAppStore } from './store'
 
+// Progress is read out of localStorage when the store is created, so a leftover entry
+// from a previous test — in this file or any earlier one — would seed the next one's
+// "best" score. Every describe block below creates the store fresh, so every one needs
+// a clean localStorage, not just the first.
+beforeEach(() => {
+  localStorage.clear()
+})
+
 describe('app store', () => {
   beforeEach(() => {
-    // Progress is read out of localStorage when the store is created, so a leftover
-    // entry from a previous test would seed the next one's "best" score.
-    localStorage.clear()
     useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
@@ -49,11 +54,13 @@ describe('app store', () => {
   })
 
   it('records a lesson quiz score under the active broker and persists it', () => {
+    useAppStore.getState().setBroker('redis')
     useAppStore.getState().recordLessonQuiz('08-prefetch', { correct: 3, total: 4 })
 
-    const record = useAppStore.getState().progress.lessons[lessonKey('rabbitmq', '08-prefetch')]
+    const record = useAppStore.getState().progress.lessons[lessonKey('redis', '08-prefetch')]
     expect(record).toEqual({ best: 3, total: 4, attempts: 1 })
-    expect(readProgress().lessons[lessonKey('rabbitmq', '08-prefetch')]).toEqual(record)
+    expect(readProgress().lessons[lessonKey('redis', '08-prefetch')]).toEqual(record)
+    expect(useAppStore.getState().progress.lessons[lessonKey('rabbitmq', '08-prefetch')]).toBeUndefined()
   })
 
   it('keeps the best lesson score across attempts', () => {
