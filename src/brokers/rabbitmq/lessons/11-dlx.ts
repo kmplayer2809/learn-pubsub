@@ -87,4 +87,31 @@ export const dlxBasics: Lesson = {
       highlight: ['dlx', 'dead-inspector'],
     },
   ],
+  checkpoints: [
+    {
+      at: 6000,
+      question: 'Điều gì quyết định message reject đi sang `dlx` thay vì quay lại `work`?',
+      options: [
+        'Cờ `requeueOnNack: false` trên `worker`',
+        'Việc `dlx` thuộc loại fanout',
+        'Số lần message đã bị giao lại',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Dead-letter chỉ kích hoạt khi message rời queue mà **không** được requeue. Bật `requeueOnNack` thì message quay về `work` như bài trước, `deadLetterExchange` chẳng bao giờ tới lượt. Loại của `dlx` chỉ quyết định nó phân phát tiếp ra sao.',
+    },
+    {
+      at: 16_000,
+      question:
+        'Tổng kết: bạn xóa khai báo `deadLetterExchange` khỏi `work` nhưng giữ `requeueOnNack: false`. Message reject đi đâu?',
+      options: [
+        'Biến mất hoàn toàn, không dấu vết nào ở bất kỳ queue nào',
+        'Quay lại `work`, vì mất DLX thì requeue bật lại',
+        'Nằm mãi trong bảng unacked của broker',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Reject không requeue nghĩa là message rời queue vĩnh viễn. `deadLetterExchange` chỉ là một nhánh chuyển hướng tùy chọn cho đúng khoảnh khắc đó; thiếu nhánh này thì broker đơn giản bỏ message. Chính vì vậy DLX là mặc định nên có cho mọi queue mang tải nghiệp vụ.',
+    },
+  ],
 }

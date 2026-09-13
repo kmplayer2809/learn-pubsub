@@ -73,5 +73,18 @@ export const list: RedisLesson = {
       explanation:
         'Khác với RabbitMQ, nơi một message chưa ack tự requeue, `list` trong Redis không lưu bản sao nào sau khi `BLPOP` trả về — worker crash coi như message mất vĩnh viễn.',
     },
+    {
+      at: 16_000,
+      question:
+        'Tổng kết: cần hàng đợi job chịu được worker chết giữa chừng. Trong Redis nên chọn gì?',
+      options: [
+        'Redis Stream với consumer group, vì nó có ack cùng danh sách pending',
+        'Vẫn `list`, chỉ cần thêm nhiều worker `BLPOP` song song',
+        '`sorted set`, lấy score làm thứ tự ưu tiên',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không cấu trúc nào trong ba cái này tự sinh ra ack ngoài Stream. Consumer group của Stream giữ message đã giao trong danh sách pending cho tới khi có `XACK`, nên `XAUTOCLAIM` có thể chuyển phần việc mồ côi sang worker khác. Thêm worker cho `list` chỉ tăng thông lượng, không hề cứu được job đã pop.',
+    },
   ],
 }

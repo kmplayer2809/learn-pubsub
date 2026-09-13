@@ -91,5 +91,18 @@ export const retention: KafkaLesson = {
       explanation:
         'Committed offset không hề "khoá" retention lại — broker vẫn xoá segment cũ theo đúng lịch của nó bất kể có consumer nào từng commit tới offset đó hay không. Một consumer quay lại sau khi phần log đó đã bị xoá phải chấp nhận reset theo `auto.offset.reset`, đúng thứ lesson này minh hoạ với `c1` join muộn.',
     },
+    {
+      at: 30_000,
+      question:
+        'Tổng kết: `retention.ms` là 7 ngày nhưng `segment.ms` để mặc định 7 ngày. Vì sao dữ liệu cũ hơn 7 ngày vẫn nằm đó?',
+      options: [
+        'Segment đang mở không bị xoá — nó chỉ đóng sau 7 ngày, rồi mới bắt đầu đếm tuổi để xét retention',
+        'Retention chỉ chạy khi đĩa đầy',
+        '`retention.ms` đo từ lần đọc gần nhất, chưa phải từ lúc ghi',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Retention xét theo segment đã đóng, nên tuổi thật của dữ liệu xấp xỉ `segment.ms` cộng `retention.ms` — ở đây là tới 14 ngày. Muốn xoá đúng hạn thì `segment.ms` (hoặc `segment.bytes`) phải nhỏ hơn hẳn `retention.ms`. Đây là lý do rất thường gặp khiến đĩa phình gấp đôi dự tính.',
+    },
   ],
 }

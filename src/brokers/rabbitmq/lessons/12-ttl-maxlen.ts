@@ -89,4 +89,31 @@ export const ttlAndMaxLength: Lesson = {
       highlight: ['short-lived', 'dlx'],
     },
   ],
+  checkpoints: [
+    {
+      at: 6000,
+      question: '`maxLength: 3` đã đầy, message thứ tư tới nơi. Message nào bị đẩy ra?',
+      options: [
+        'Message vừa tới, vì queue đã hết chỗ',
+        'Message cũ nhất trong queue, theo chính sách `drop-head`',
+        'Một message ngẫu nhiên trong ba message đang chờ',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Mặc định `x-overflow` là `drop-head`: queue nhận message mới rồi đẩy message ở đầu hàng ra ngoài. Muốn giữ hàng chờ hiện có và từ chối message mới thì phải đổi sang `reject-publish`.',
+    },
+    {
+      at: 16_000,
+      question:
+        'Tổng kết: muốn message tự động chuyển sang queue khác sau đúng 30 giây, dựng thế nào?',
+      options: [
+        'Một queue có `messageTtlMs: 30000`, trỏ DLX tới đích, không consumer nào bind vào',
+        'Một queue có `maxLength: 1` để message bị đẩy đi ngay',
+        'Một consumer đọc message rồi tự ngủ 30 giây trước khi ack',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Queue không consumer cộng TTL cộng DLX chính là delay primitive chuẩn của RabbitMQ: message nằm chờ đủ 30 giây, hết hạn, rồi được dead-letter sang đích. Cách cho consumer tự ngủ thì chiếm giữ kết nối, dễ chạm timeout, lại mất hiệu lực ngay khi tiến trình chết.',
+    },
+  ],
 }

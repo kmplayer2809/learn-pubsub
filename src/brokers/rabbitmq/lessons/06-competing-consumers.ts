@@ -84,4 +84,32 @@ export const competingConsumers: Lesson = {
       highlight: ['work'],
     },
   ],
+  checkpoints: [
+    {
+      at: 5000,
+      question:
+        'Chín job chia cho ba consumer có tốc độ 400ms, 900ms, 2000ms. Mỗi consumer nhận bao nhiêu job?',
+      options: [
+        'Đúng ba job mỗi consumer — broker chia đều tuyệt đối',
+        'Consumer nhanh nhận nhiều nhất, consumer chậm ít nhất',
+        'Consumer chậm nhận nhiều nhất để bù thời gian rảnh',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Với `prefetch: 1`, một consumer đang giữ message chưa ack sẽ bị bỏ qua trong vòng xoay. `slow` bận 2000ms mỗi job nên vắng mặt phần lớn thời gian, còn `fast` quay lại trạng thái rảnh sau mỗi 400ms nên gom được nhiều job hơn hẳn.',
+    },
+    {
+      at: 14_000,
+      question:
+        'Tổng kết: bạn muốn cả ba consumer đều xử lý **mọi** job thay vì chia nhau. Phải đổi gì?',
+      options: [
+        'Cấp cho mỗi consumer một queue riêng, cùng bind vào một fanout exchange',
+        'Nâng prefetch của cả ba consumer lên số lớn',
+        'Thêm ba binding nữa từ `ex` tới queue `work`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhân bản là thuộc tính của số lượng queue, không phải số lượng consumer. Nhiều consumer trên **một** queue luôn là mô hình chia việc. Muốn ai cũng thấy mọi message thì mỗi consumer cần queue riêng của mình. Prefetch chỉ chỉnh độ sâu hàng chờ, còn binding trùng lặp không tạo thêm bản copy.',
+    },
+  ],
 }

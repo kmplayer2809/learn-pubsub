@@ -133,5 +133,18 @@ export const transactionsEos: KafkaLesson = {
       explanation:
         'Last stable offset là biên `read_committed` không bao giờ vượt qua — nó đứng lại đúng tại record đầu tiên của một transaction chưa resolve. `b1` đã append vào log thật (cộng vào high watermark, `read_uncommitted` thấy được), nhưng với `read_committed` nó "chưa tồn tại" cho tới khi commit-transaction ghi control record và đẩy last stable offset lên.',
     },
+    {
+      at: 30_000,
+      question:
+        'Tổng kết: một transaction bị treo, không commit cũng không abort. Ảnh hưởng gì tới consumer `read_committed`?',
+      options: [
+        'Chúng kẹt tại last stable offset, không đọc được cả những record commit sau đó',
+        'Chúng bỏ qua transaction treo rồi đọc tiếp bình thường',
+        'Chúng chuyển tạm sang `read_uncommitted` cho tới khi transaction kết thúc',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Last stable offset là một hàng rào cứng: nó đứng lại tại record đầu tiên của transaction chưa resolve, nên mọi thứ phía sau — kể cả transaction khác đã commit xong — đều bị chặn. Đây là lý do `transaction.timeout.ms` tồn tại: broker tự abort transaction quá hạn để hàng rào đó tiến lên, tránh một producer chết làm nghẽn cả topic.',
+    },
   ],
 }

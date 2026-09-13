@@ -90,4 +90,31 @@ export const prefetchQos: Lesson = {
       highlight: ['fair-q', 'fair-a', 'fair-b'],
     },
   ],
+  checkpoints: [
+    {
+      at: 9000,
+      question: '`greedy-q` cạn sạch sớm hơn `fair-q` rất nhiều. Điều đó chứng tỏ gì?',
+      options: [
+        '`greedy` xử lý xong công việc nhanh hơn hai consumer kia cộng lại',
+        'Message đã rời queue vào buffer của `greedy`, phần lớn còn chưa xử lý',
+        'Broker ưu tiên `greedy-q` vì queue này bind trước',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Độ sâu queue chỉ đo số message broker còn giữ, không đo tiến độ xử lý. `prefetch: 0` cho phép `greedy` kéo hết message về phía nó, nhưng vẫn xử lý tuần tự mất `processingMs` mỗi cái — hàng chờ chỉ dời chỗ chứ không ngắn đi.',
+    },
+    {
+      at: 20_000,
+      question:
+        'Tổng kết: `greedy` đang ôm chồng message chưa ack thì tiến trình chết. Hậu quả là gì?',
+      options: [
+        'Toàn bộ chồng message chưa ack quay lại queue cùng một lúc',
+        'Chỉ message đang xử lý dở quay lại, phần còn lại đã ack ngầm',
+        'Không message nào quay lại, vì `prefetch: 0` tắt bookkeeping',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Prefetch không giới hạn nghĩa là số message chưa ack cũng không giới hạn, nên bán kính thiệt hại khi crash bằng đúng chồng message đó. Chúng bị requeue hàng loạt và giao lại, làm mất mọi công đã xử lý dở. Prefetch nhỏ giữ bán kính này ở mức có thể đoán trước.',
+    },
+  ],
 }

@@ -56,5 +56,18 @@ export const persistence: RedisLesson = {
       answerIndex: 1,
       explanation: '`aof: always` fsync ngay sau mỗi lệnh ghi, nên tại bất kỳ thời điểm nào — kể cả ngay trước khi crash — mọi ghi đã hoàn tất đều đã nằm trên đĩa. Cái giá phải trả là một lần fsync cho mỗi lệnh ghi, chậm hơn hẳn everysec hay RDB.',
     },
+    {
+      at: 3000,
+      question:
+        'Tổng kết: cần khôi phục nhanh sau sự cố, đồng thời chấp nhận mất tối đa một giây dữ liệu. Cấu hình nào?',
+      options: [
+        'Bật đồng thời RDB cùng `aof: everysec` — RDB nạp nhanh, AOF vá phần đuôi',
+        'Chỉ `aof: always`, an toàn nhất nên khỏi nghĩ thêm',
+        'Chỉ RDB với chu kỳ chụp mỗi giây',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hai cơ chế này bù cho nhau chứ không loại trừ nhau: RDB là file nhị phân gọn, nạp lại rất nhanh, còn AOF `everysec` giữ phần ghi phát sinh sau bản chụp gần nhất trong phạm vi mất mát một giây. `always` thì chậm hơn mức cần thiết, còn RDB chụp mỗi giây gây tốn kém vì mỗi lần chụp là một lượt `fork` toàn bộ tiến trình.',
+    },
   ],
 }

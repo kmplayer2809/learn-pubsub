@@ -61,5 +61,18 @@ export const writeThrough: RedisLesson = {
       explanation:
         'Một phần tử đã rời khỏi queue `writeback` (bị `RPOP`) nhưng chưa kịp ghi xuống `database` sẽ mất trắng nếu `worker` hoặc Redis chết ngay lúc đó — độ bền của Redis không đổi được điều này, vì worker chỉ giữ dữ liệu đó trong bộ nhớ của chính nó khi đang xử lý.',
     },
+    {
+      at: 20_000,
+      question:
+        'Tổng kết: sổ cái thanh toán, tuyệt đối không được mất một bản ghi nào. Chọn chiến lược nào?',
+      options: [
+        'Write-through — người gọi chỉ nhận phản hồi sau khi `database` đã nhận',
+        'Write-behind — nhanh hơn, khoảng lệch chỉ vài giây nên chấp nhận được',
+        'Write-behind kèm queue `writeback` dài hơn để chứa nhiều bản ghi hơn',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Write-behind luôn có một cửa sổ dữ liệu chỉ tồn tại trong Redis. Với tiền bạc, cửa sổ đó là mất mát không thể chấp nhận, dù ngắn tới đâu. Write-through trả giá bằng độ trễ ghi bằng tổng hai kho — đúng cái giá phải trả cho dữ liệu không được phép mất. Queue dài hơn chỉ làm cửa sổ rộng thêm.',
+    },
   ],
 }

@@ -92,5 +92,18 @@ export const produceConsume: KafkaLesson = {
       explanation:
         'Producer không gửi từng record riêng lẻ. Nó gom vào một batch trong bộ nhớ, chỉ thật sự gửi khi `lingerMs` hết hoặc batch đủ `batchSize` — trì hoãn có chủ đích để đổi độ trễ nhỏ lấy thông lượng lớn hơn.',
     },
+    {
+      at: 25_000,
+      question:
+        'Tổng kết: tiến trình producer chết ngay sau khi `produce()` trả về, trước lúc batch kịp flush. Record ra sao?',
+      options: [
+        'Mất — nó mới nằm trong bộ nhớ producer, chưa broker nào thấy',
+        'An toàn, vì `produce()` đã trả về nghĩa là broker đã nhận',
+        'Broker phát hiện thiếu rồi yêu cầu gửi lại',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`produce()` trả về ngay khi record vào buffer, đó là một lời gọi bất đồng bộ. Chỉ callback hoặc `Future` mới báo broker đã nhận thật. Đây chính là lý do phải chờ callback trước khi coi một lượt ghi là xong, và vì sao `lingerMs` lớn vừa tăng thông lượng vừa nới rộng lượng dữ liệu có thể mất.',
+    },
   ],
 }

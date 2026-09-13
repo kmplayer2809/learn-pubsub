@@ -104,5 +104,18 @@ export const orderingRetries: KafkaLesson = {
       explanation:
         '`max.in.flight > 1` cho phép nhiều request bay song song — khi request đầu hỏng và phải gửi lại, các request gửi sau nó (không dính lỗi) hoàn toàn có thể tới broker và được append trước. Producer không idempotent không gắn sequence nào lên record để broker biết thứ tự đúng, nên broker chỉ ghi theo đúng thứ tự nó NHẬN được — hai cách chặn là giới hạn `max.in.flight = 1` hoặc bật idempotence để broker tự từ chối record tới sai lượt.',
     },
+    {
+      at: 24_000,
+      question:
+        'Tổng kết: cần vừa giữ thứ tự vừa giữ throughput. Chọn `maxInFlight: 1` hay bật idempotence?',
+      options: [
+        'Idempotence — giữ được năm request bay song song, broker tự sắp lại theo sequence',
+        '`maxInFlight: 1` — cách duy nhất chắc chắn, idempotence chỉ chống trùng lặp',
+        'Cả hai đều bắt buộc, thiếu một cái là thứ tự vẫn lệch',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Sequence trong idempotence phục vụ cả hai việc: khử trùng lặp lẫn giữ thứ tự, vì broker từ chối record đến sai lượt. Nhờ vậy `max.in.flight` giữ được tới 5 mà thứ tự vẫn đúng, trả giá bằng vài lần retry thay vì bằng thông lượng. `maxInFlight: 1` giữ thứ tự bằng cách chặn hẳn song song, tốn kém hơn nhiều.',
+    },
   ],
 }

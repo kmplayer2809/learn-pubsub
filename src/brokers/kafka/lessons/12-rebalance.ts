@@ -114,5 +114,18 @@ export const rebalance: KafkaLesson = {
       explanation:
         'Rebalance chỉ ảnh hưởng tới AI đang được phép fetch, không ảnh hưởng gì tới việc ghi vào log. Record vẫn được leader append và cấp offset bình thường; nó chỉ "chờ" tới khi có consumer nào đó nhận được assignment cho đúng partition của nó rồi fetch như mọi record khác.',
     },
+    {
+      at: 26_000,
+      question:
+        'Tổng kết: rolling restart mười pod consumer. Với assignor `range`, group gián đoạn bao nhiêu lần?',
+      options: [
+        'Hai mươi lần — mỗi pod gây một lần rời cộng một lần join, lần nào cũng dừng cả group',
+        'Một lần duy nhất, ở cuối đợt deploy',
+        'Không lần nào, vì luôn còn pod khác đang chạy',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`range` thuộc loại eager: mỗi lần thành viên thay đổi là toàn bộ group mất assignment. Rolling restart mười pod tạo ra hai mươi lần thay đổi như thế, mỗi lần dừng đọc cho tới khi rebalance chốt xong. Cách giảm là `group.instance.id` (thành viên tĩnh, tránh rebalance khi pod khởi động lại nhanh) hoặc `cooperative-sticky` ở bài 13.',
+    },
   ],
 }

@@ -42,5 +42,17 @@ export const lua: RedisLesson = {
       answerIndex: 1,
       explanation: 'Tốc độ không phải lý do — atomicity mới là lý do: engine không lên lịch một sự kiện mới nào cho từng redis.call bên trong script, nên không có khe hở thời gian nào cho một command khác len vào giữa.',
     },
+    {
+      at: 2000,
+      question: 'Tổng kết: một script Lua chạy mất 5 giây. Chuyện gì xảy ra với các client khác?',
+      options: [
+        'Tất cả bị chặn — Redis đơn luồng, script giữ trọn server suốt 5 giây',
+        'Chúng vẫn được phục vụ song song, script chạy trên luồng riêng',
+        'Redis tự huỷ script sau một ngưỡng rồi phục vụ tiếp',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chính tính atomicity gây ra điều này: không lệnh nào chen được vào giữa nghĩa là không lệnh nào chạy được, chấm hết. Script Lua phải ngắn gọn. `busy-reply-threshold` chỉ khiến Redis bắt đầu trả lỗi `BUSY` cho client khác, chứ không dừng script — trừ khi bị `SCRIPT KILL`.',
+    },
   ],
 }

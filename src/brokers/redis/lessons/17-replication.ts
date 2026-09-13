@@ -62,5 +62,18 @@ export const replication: RedisLesson = {
       answerIndex: 1,
       explanation: 'Replication bất đồng bộ không đảm bảo mọi ghi đều tới replica trước khi primary chết — chỉ những ghi đã có đủ thời gian (ít nhất lagMs) mới chắc chắn đã tới; phần còn nằm "trên đường" lúc crash sẽ không có mặt trên replica được promote.',
     },
+    {
+      at: 3500,
+      question:
+        'Tổng kết: hai `key` `user:1` cùng `cart:1` cần nằm chung một node để dùng `MULTI`. Trong Redis Cluster làm thế nào?',
+      options: [
+        'Đặt hash tag, ví dụ `{u1}:user` cùng `{u1}:cart` — chỉ phần trong ngoặc được băm',
+        'Không cách nào — cluster băm ngẫu nhiên nên đành chịu',
+        'Gọi `CLUSTER KEYSLOT` rồi tự đổi tên `key` tới khi trùng slot',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Khi tên `key` chứa `{...}`, CRC16 chỉ băm phần bên trong ngoặc, nên mọi `key` chung hash tag rơi vào cùng một slot, tức cùng một node — điều kiện bắt buộc để chạy `MULTI` hay Lua trên nhiều `key` trong cluster. Dò tên cho trùng slot bằng tay thì vừa mong manh vừa không cần thiết.',
+    },
   ],
 }

@@ -92,5 +92,18 @@ export const minInsyncReplicas: KafkaLesson = {
       explanation:
         'Với replicationFactor 3 và min.insync.replicas 2, cụm chịu được một broker chết (ISR co từ 3 xuống 2, vẫn đủ sàn) mà không ngừng ghi, trong khi vẫn đòi hai bản sao xác nhận cho mỗi lần ghi acks=all. Đặt min.insync.replicas bằng đúng replicationFactor (phương án thứ ba) là mất khả năng chịu lỗi hoàn toàn — chỉ cần một broker chết là ISR tụt dưới sàn ngay.',
     },
+    {
+      at: 26_000,
+      question:
+        'Tổng kết: đặt `min.insync.replicas: 2` nhưng producer vẫn để `acks: 1`. Sàn này có tác dụng gì?',
+      options: [
+        'Không tác dụng nào — sàn chỉ được kiểm tra với `acks=all`',
+        'Vẫn chặn ghi khi ISR tụt xuống một, bất kể mức `acks`',
+        'Nó âm thầm nâng `acks` của producer lên `all`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hai cấu hình này phải đi thành cặp. `acks=1` chỉ chờ leader nên broker chẳng bao giờ chạm tới phép kiểm tra ISR, còn `min.insync.replicas` chỉ được xét đúng trên nhánh `acks=all`. Đặt sàn mà quên nâng `acks` là một cấu hình an toàn giả — dễ tưởng đã bảo vệ mà thực ra chưa hề.',
+    },
   ],
 }

@@ -84,4 +84,31 @@ export const ackModes: Lesson = {
       highlight: ['auto', 'manual'],
     },
   ],
+  checkpoints: [
+    {
+      at: 6000,
+      question:
+        'Cả hai consumer cùng crash lúc đang xử lý dở. Message đang nằm trong tay `auto` ra sao?',
+      options: [
+        'Quay về `auto-q` rồi được giao lại khi `auto` hồi phục',
+        'Mất hẳn — broker đã coi nó là xong ngay lúc giao đi',
+        'Chuyển sang `manual-q` để consumer còn sống xử lý thay',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Với `autoAck: true`, broker xác nhận message ngay khoảnh khắc đẩy nó ra khỏi queue, rồi xóa khỏi bảng unacked. Không còn bản ghi nào thì không có gì để requeue. Message của `manual` thì vẫn nằm trong bảng unacked nên crash sẽ trả nó về queue.',
+    },
+    {
+      at: 14_000,
+      question: 'Tổng kết: trường hợp nào chọn auto-ack vẫn hợp lý?',
+      options: [
+        'Luồng metric hoặc log mà mất vài mẫu không gây hậu quả gì',
+        'Lệnh trừ tiền, nơi mỗi message phải được xử lý đúng một lần',
+        'Job nặng chạy nhiều phút, cần chắc chắn không mất giữa chừng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Auto-ack đánh đổi độ bền lấy throughput: bỏ vòng xác nhận nên nhanh hơn, nhưng mọi message đang bay đều mất khi consumer chết. Đánh đổi này chấp nhận được với dữ liệu có tính thống kê, còn nghiệp vụ tiền bạc hay job dài luôn cần manual ack.',
+    },
+  ],
 }

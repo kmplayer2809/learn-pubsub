@@ -51,5 +51,18 @@ export const rateLimit: RedisLesson = {
       answerIndex: 1,
       explanation: 'ZCARD chỉ đếm số member đang có trong zset tại thời điểm gọi — nếu gọi trước khi cắt phần cũ, request đã hết hạn vẫn bị tính vào hạn mức, làm rate limiter từ chối oan những request lẽ ra hợp lệ.',
     },
+    {
+      at: 3000,
+      question:
+        'Tổng kết: rate limiter này chạy trên nhiều máy chủ ứng dụng cùng lúc. Điểm yếu còn lại là gì?',
+      options: [
+        'Ba lệnh rời nhau tạo khoảng hở — nên gói vào một `EVAL` hoặc `MULTI`',
+        '`zset` không dùng chung được giữa nhiều máy chủ',
+        'Mỗi máy chủ cần một `key` `ratelimit` riêng của nó',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Trạng thái nằm chung trong Redis nên nhiều máy chủ dùng chung được, đó là điểm mạnh. Vấn đề là `ZREMRANGEBYSCORE`, `ZCARD`, `ZADD` là ba lượt round-trip riêng biệt: nhiều máy chủ đọc `ZCARD` cùng lúc rồi đều thấy còn hạn mức, nên tổng số request lọt qua vượt trần. Gói cả ba vào một Lua script thì phần kiểm tra cộng ghi trở thành một bước duy nhất.',
+    },
   ],
 }

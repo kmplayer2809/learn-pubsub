@@ -92,4 +92,31 @@ export const directExchange: Lesson = {
       highlight: ['ex'],
     },
   ],
+  checkpoints: [
+    {
+      at: 4800,
+      question: 'Message publish với routing key `refund` kết thúc ở đâu?',
+      options: [
+        'Ở queue `audit`, vốn đóng vai trò nơi hứng mặc định',
+        'Không ở đâu cả — broker drop nó vì không binding nào khớp',
+        'Ở cả ba queue, vì key lạ được coi như broadcast',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Direct exchange chỉ so khớp chuỗi một cách chính xác. Không binding nào trên `ex` mang key `refund`, nên message không có đích tới và bị loại bỏ. Không có queue nào giữ vai trò nơi hứng mặc định trừ khi bạn tự cấu hình.',
+    },
+    {
+      at: 10_000,
+      question:
+        'Tổng kết: bạn muốn phát hiện những message không route được thay vì để chúng biến mất. Cách nào đúng?',
+      options: [
+        'Publish kèm cờ `mandatory`, hoặc gắn alternate exchange cho `ex`',
+        'Thêm một binding nữa cho `audit` với cùng key `payment`',
+        'Đổi `ex` sang loại fanout để mọi key đều có nơi tới',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cờ `mandatory` khiến broker trả message không route được về publisher qua callback `basic.return`; alternate exchange thì chuyển nó sang một exchange dự phòng. Cả hai đều biến việc mất message âm thầm thành tín hiệu quan sát được. Chuyển sang fanout tuy hết drop nhưng đồng thời phá vỡ toàn bộ khả năng routing.',
+    },
+  ],
 }

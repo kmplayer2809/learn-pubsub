@@ -62,5 +62,18 @@ export const transactions: RedisLesson = {
       answerIndex: 1,
       explanation: '`EXEC` so phiên bản của `balance:1` tại lúc `WATCH` với phiên bản hiện tại — lệch nhau thì huỷ toàn bộ khối lệnh, trả về nil, không chạy gì.',
     },
+    {
+      at: 3500,
+      question:
+        'Tổng kết: lệnh thứ hai trong khối `MULTI` gặp lỗi runtime lúc `EXEC` chạy. Các lệnh còn lại ra sao?',
+      options: [
+        'Vẫn chạy hết — Redis không rollback lệnh đã thực thi',
+        'Toàn khối bị rollback về trạng thái trước `EXEC`',
+        '`EXEC` dừng ngay tại lệnh lỗi, phần sau bị bỏ',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`MULTI`/`EXEC` cho tính cô lập chứ không cho tính nguyên tử kiểu rollback. Lỗi cú pháp bị bắt lúc xếp hàng nên cả khối bị từ chối, nhưng lỗi runtime — ví dụ `INCR` trên một chuỗi — chỉ làm hỏng đúng lệnh đó, phần còn lại vẫn chạy tiếp. Cần rollback thật thì phải viết Lua script.',
+    },
   ],
 }

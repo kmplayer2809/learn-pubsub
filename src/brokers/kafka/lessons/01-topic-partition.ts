@@ -75,5 +75,18 @@ export const topicPartition: KafkaLesson = {
       explanation:
         'Kafka chỉ giữ thứ tự bên trong một partition. Sáu record rải ra ba partition khác nhau nên không hề có một thứ tự chung nào cho cả topic — ghép log của cả ba partition lại với nhau không cho ra thứ tự ghi gốc.',
     },
+    {
+      at: 18_000,
+      question:
+        'Tổng kết: hai consumer group cùng đọc `orders`. Group thứ nhất đọc xong rồi, group thứ hai còn thấy dữ liệu không?',
+      options: [
+        'Còn nguyên — đọc không hề xoá, mỗi group giữ offset riêng của mình',
+        'Không, group thứ nhất đọc xong là record rời khỏi log',
+        'Chỉ còn nếu group thứ hai đã đăng ký trước lúc record được ghi',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Log là nơi lưu trữ, không phải hàng đợi tiêu thụ. Record nằm đó cho tới khi retention xoá, còn mỗi group chỉ giữ thêm một con số đánh dấu đã đọc tới đâu. Chính điều này cho phép nhiều hệ thống độc lập cùng đọc một dòng dữ liệu — thứ một queue kiểu RabbitMQ không làm được nếu không nhân bản message.',
+    },
   ],
 }

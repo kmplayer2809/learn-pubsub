@@ -129,5 +129,18 @@ export const retryWithBackoff: Lesson = {
       explanation:
         'Routing key `parked` chỉ được dùng khi có logic ứng dụng đọc `x-death-count` rồi chủ động publish với key đó. Không có logic ấy, message cứ dead-letter qua lại giữa `work` và `retry-1s` mãi mãi — đúng như cảnh báo trong narrative phía trên.',
     },
+    {
+      at: 30_000,
+      question:
+        'Tổng kết: muốn backoff tăng dần 1s, 5s, 30s thay vì cố định một giây, phải đổi gì trong topology?',
+      options: [
+        'Dựng ba delay queue `retry-1s`, `retry-5s`, `retry-30s`, mỗi cái một TTL riêng',
+        'Nâng `messageTtlMs` của `retry-1s` lên sau mỗi lượt message đi qua',
+        'Đặt TTL trên `work` thay vì trên `retry-1s`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'TTL là thuộc tính tĩnh của queue, không thể tăng dần theo từng lượt. Cách chuẩn là một bậc thang delay queue, mỗi bậc một TTL, rồi ứng dụng đọc `x-death-count` để chọn routing key đẩy message vào bậc phù hợp. Đặt TTL lên `work` chỉ khiến chính công việc hết hạn.',
+    },
   ],
 }

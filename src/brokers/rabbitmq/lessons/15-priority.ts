@@ -80,5 +80,18 @@ export const priorityQueue: Lesson = {
       explanation:
         'Priority chỉ sắp xếp message còn nằm trong queue. Với `prefetch` cao, `worker` có thể đã lấy đi phần lớn message ngay từ đầu — trước khi Job 4 hay Job 8 kịp publish — nên hai message priority cao đó vẫn phải xếp hàng sau những gì `worker` đã ôm sẵn.',
     },
+    {
+      at: 16_000,
+      question:
+        'Tổng kết: dòng message priority 9 đổ vào liên tục, không ngừng. Điều gì xảy ra với bốn Job priority 0 đang chờ?',
+      options: [
+        'Chúng bị bỏ đói vô thời hạn — priority queue không có cơ chế chống đói',
+        'Broker tự nâng priority của message chờ lâu để chúng khỏi kẹt',
+        'Chúng được xử lý xen kẽ theo tỉ lệ ứng với mức priority',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Priority queue luôn chọn mức cao nhất còn hàng, không hề có aging hay chia phần theo tỉ lệ. Tải mức cao liên tục sẽ khiến message mức thấp nằm mãi. Cách xử lý thực tế là tách hẳn thành nhiều queue với số worker riêng, thay vì trông vào priority trong một queue duy nhất.',
+    },
   ],
 }

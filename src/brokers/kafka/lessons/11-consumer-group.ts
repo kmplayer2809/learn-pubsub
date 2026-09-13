@@ -115,5 +115,18 @@ export const consumerGroup: KafkaLesson = {
       explanation:
         'Một group là ranh giới chia việc: partition chỉ được chia trong PHẠM VI một group. Hai group khác nhau, dù cùng subscribe một topic, hoàn toàn không biết tới sự tồn tại của nhau — mỗi group tự chạy rebalance riêng, tự giữ `committedOffsets` riêng trên `GroupState` của chính nó.',
     },
+    {
+      at: 24_000,
+      question:
+        'Tổng kết: topic ba partition, lưu lượng dự kiến tăng gấp mười lần sang năm sau. Nên làm gì ngay bây giờ?',
+      options: [
+        'Tạo topic với số partition dư ra ngay từ đầu — thêm partition sau sẽ phá vỡ thứ tự theo key',
+        'Giữ ba partition, khi cần thì thêm consumer là đủ',
+        'Giữ ba partition, lúc nào cần thì thêm partition, Kafka tự rải lại dữ liệu',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Số partition là trần cứng của khả năng đọc song song: consumer thứ tư trong group ba partition chỉ ngồi không. Thêm partition về sau thì làm được, nhưng nó đổi `murmur2(key) % n` nên record mới của một key lạc sang partition khác record cũ, đứt thứ tự (bài 03). Vì vậy nên tính dư ngay từ đầu — partition thừa tốn rất ít, còn phải chia lại thì đắt.',
+    },
   ],
 }

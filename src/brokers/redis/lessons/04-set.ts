@@ -56,5 +56,18 @@ export const set: RedisLesson = {
       explanation:
         '`SADD` chỉ đếm phần tử mới thêm; một member đã tồn tại sẵn không làm gì thêm cả, nên kết quả luôn là `(integer) 0`.',
     },
+    {
+      at: 12_000,
+      question:
+        'Tổng kết: hai `set` mỗi cái một triệu member, cần biết số phần tử chung. Cách nào tốt nhất?',
+      options: [
+        '`SINTERCARD` — Redis tính rồi trả về đúng một con số',
+        '`SMEMBERS` cả hai rồi so sánh phía ứng dụng',
+        '`SISMEMBER` lặp qua từng member của `set` thứ nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nguyên tắc chung là đưa phép tính tới chỗ dữ liệu. `SMEMBERS` kéo hai triệu phần tử qua mạng, còn vòng lặp `SISMEMBER` tốn một triệu lượt round-trip. `SINTERCARD` làm trọn việc ngay trong Redis rồi trả về mỗi con số đếm.',
+    },
   ],
 }

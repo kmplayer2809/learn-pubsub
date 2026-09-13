@@ -96,5 +96,18 @@ export const delayedMessage: Lesson = {
       explanation:
         'Mô phỏng đặt một `ttlExpire` riêng cho mỗi message, nên vị trí trong queue không ảnh hưởng tới thời điểm hết hạn. RabbitMQ thật chỉ kiểm tra hết hạn ở đầu một classic queue — đó chính là head-of-line blocking, một giới hạn mô phỏng này không tái hiện.',
     },
+    {
+      at: 20_000,
+      question:
+        'Tổng kết: ứng dụng cần hoãn message với đủ mọi khoảng thời gian tùy ý, từ vài giây tới vài giờ. Cách nào bền vững trên RabbitMQ thật?',
+      options: [
+        'Một nhóm delay queue theo bậc cố định, hoặc plugin `rabbitmq_delayed_message_exchange`',
+        'Một delay queue duy nhất, đặt TTL riêng cho từng message lúc publish',
+        'Publish thẳng vào `due` rồi để `handler` tự ngủ tới lúc đến hạn',
+      ],
+      answerIndex: 0,
+      explanation:
+        'TTL trên từng message nghe hợp lý nhưng vướng đúng head-of-line blocking vừa nói: một message hạn dài đứng đầu chặn mọi message hạn ngắn phía sau. Bậc thang delay queue tránh được vì trong mỗi queue mọi message chung một TTL, còn plugin thì lập lịch thật sự thay vì mượn TTL.',
+    },
   ],
 }

@@ -101,5 +101,18 @@ export const zeroCopy: KafkaLesson = {
       explanation:
         'Zero-copy không có nghĩa không byte nào di chuyển — vẫn còn đúng hai lần sao chép (đĩa → page cache, page cache → socket buffer). Cái bị loại bỏ là hai lần sao chép băng qua ranh giới kernel/user (vào application buffer rồi lại ra socket buffer) cùng hai lần context switch đi kèm, nhờ định dạng byte trên đĩa đã giống hệt định dạng byte gửi qua mạng nên broker không cần dựng lại record nào trên JVM heap trước khi gửi.',
     },
+    {
+      at: 18_000,
+      question:
+        'Tổng kết: bật TLS cho cụm Kafka. Vì sao thông lượng tụt hẳn, quá mức chi phí mã hoá thuần tuý?',
+      options: [
+        'Vì mất luôn đường tắt `sendfile` — dữ liệu buộc phải đi vòng qua user space để mã hoá',
+        'Vì TLS buộc broker gửi từng record riêng lẻ thay vì cả batch',
+        'Vì bắt tay TLS phải lặp lại cho mỗi lần fetch',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Kernel không thể mã hoá byte trên đường đi, nên broker phải kéo dữ liệu lên user space, mã hoá, rồi đẩy ngược xuống — quay lại đúng đường bốn chặng. Phần tụt vì vậy gồm cả chi phí mã hoá lẫn phần đường tắt bị mất. Đó cũng là lý do một số triển khai dùng kTLS để giành lại `sendfile`.',
+    },
   ],
 }

@@ -82,5 +82,18 @@ export const keyPartitioning: KafkaLesson = {
       explanation:
         'Partition chỉ là kết quả một phép chia lấy dư. Đổi số partition đổi luôn kết quả đó, nên record MỚI của một key có thể rơi vào partition khác hẳn record CŨ của đúng key đó — bảo đảm thứ tự cho key này đứt đúng tại thời điểm đổi, còn dữ liệu cũ vẫn nguyên vẹn chứ không hề được Kafka "di chuyển" lại.',
     },
+    {
+      at: 22_000,
+      question:
+        'Tổng kết: chín mươi phần trăm sự kiện mang key của cùng một khách hàng lớn. Hậu quả là gì?',
+      options: [
+        'Một partition nóng ôm hết tải, thêm consumer cũng không giúp gì',
+        'Kafka tự tách key đó ra nhiều partition để cân bằng lại',
+        'Producer chuyển sang chế độ rải ngẫu nhiên khi phát hiện lệch tải',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đây là bài toán hot partition. Cùng key luôn về cùng partition, nên tải nghiêng hẳn về một chỗ và song song hoá tắc ngay tại đó — số consumer hữu ích trong một group bị chặn bởi số partition. Cách chữa là làm key mịn hơn, chẳng hạn ghép thêm hậu tố `customer-1#3`, đổi lại thì mất bảo đảm thứ tự trên toàn bộ khách hàng đó.',
+    },
   ],
 }

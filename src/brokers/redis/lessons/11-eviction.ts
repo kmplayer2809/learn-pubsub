@@ -79,5 +79,18 @@ export const eviction: RedisLesson = {
       explanation:
         'Chính sách `volatile-lru` chỉ chọn ứng viên trong số key mang `TTL`; không key nào mang `TTL` nghĩa là danh sách ứng viên rỗng, nên mọi lệnh ghi vượt `maxmemory` đều bị từ chối với `OOM`, giống hệt như đang chạy `noeviction`.',
     },
+    {
+      at: 24_000,
+      question:
+        'Tổng kết: một instance vừa làm cache vừa giữ dữ liệu bắt buộc phải còn. Chọn chính sách nào?',
+      options: [
+        '`volatile-lru`, đặt `TTL` cho riêng phần dữ liệu cache',
+        '`allkeys-lru`, cho Redis tự chọn key lạnh nhất',
+        '`noeviction`, chấp nhận `OOM` khi đầy bộ nhớ',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`allkeys-lru` coi mọi key là ứng viên, nên nó xoá cả dữ liệu bắt buộc phải còn. `volatile-lru` biến `TTL` thành lời tuyên bố "key này bỏ được", nên chỉ phần cache bị xoá. Bẫy duy nhất là quên đặt `TTL`: lúc đó danh sách ứng viên rỗng và mọi lệnh ghi trả `OOM`. Tách hẳn hai instance vẫn là phương án sạch sẽ nhất.',
+    },
   ],
 }

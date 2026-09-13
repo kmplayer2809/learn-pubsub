@@ -103,5 +103,18 @@ export const acks: KafkaLesson = {
       explanation:
         '`acks=0` không chờ phản hồi nên nhanh nhất, nhưng đổi lại producer hoàn toàn mù trước một record bị mất — như `p1` ở bài này. `acks=1`/`acks=all` chậm hơn vì phải chờ xác nhận, nhưng đổi lại luôn biết chắc trạng thái record. Chọn mức nào vì vậy phải dựa vào chi phí thật sự của việc mất một record trong hệ thống cụ thể, không phải một con số throughput trừu tượng.',
     },
+    {
+      at: 24_000,
+      question:
+        'Tổng kết: topic có `replicationFactor: 3`. Lúc này `acks=1` khác `acks=all` ở chỗ nào?',
+      options: [
+        '`acks=1` chỉ chờ leader, nên leader chết trước lúc follower kịp sao chép là mất record',
+        'Không khác gì — cả hai đều chờ đúng leader phản hồi',
+        '`acks=all` chờ toàn bộ ba replica, kể cả replica đã rớt khỏi ISR',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`acks=1` xác nhận ngay khi leader ghi vào log của nó. Leader chết ngay sau đó, trước khi follower kịp sao chép, thì record biến mất dù producer đã nhận báo thành công. `acks=all` chờ toàn bộ ISR — chỉ những replica đang bắt kịp, không phải cả ba — nên record đã xác nhận vẫn sống sót qua một lần bầu lại leader. Bài 18 ghép nó với `min.insync.replicas` cho đủ bộ.',
+    },
   ],
 }

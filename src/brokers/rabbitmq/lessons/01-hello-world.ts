@@ -81,5 +81,18 @@ export const helloWorld: Lesson = {
       explanation:
         'Prefetch giới hạn số message chưa ack. Với `prefetch: 1`, một message chưa ack sẽ chặn toàn bộ delivery kế tiếp tới consumer đó, nên queue depth tăng lên thay vì dừng hẳn.',
     },
+    {
+      at: 12_000,
+      question:
+        'Tổng kết: bạn "gửi thẳng vào queue `hello`" bằng thư viện client. Đường đi thật sự của message là gì?',
+      options: [
+        'Client mở kết nối riêng tới queue, bỏ qua mọi exchange',
+        'Message qua default exchange, dùng tên queue làm routing key',
+        'Broker tự tạo một exchange tạm cho mỗi lần publish',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Không có API nào publish thẳng vào queue. Default exchange là một direct exchange có sẵn binding ngầm tới mọi queue theo đúng tên queue, nên `hello` vừa là tên queue vừa là routing key. Hiểu điều này thì bốn loại exchange ở các bài sau chỉ còn là thay đổi luật khớp key.',
+    },
   ],
 }

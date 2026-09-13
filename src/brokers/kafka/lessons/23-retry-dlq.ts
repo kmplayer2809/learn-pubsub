@@ -123,5 +123,18 @@ export const retryDlq: KafkaLesson = {
       explanation:
         'Một consumer retry-tại-chỗ không tiến lên record kế tiếp cho tới khi record hiện tại thành công — với một record hỏng vĩnh viễn (dữ liệu sai định dạng chẳng hạn), điều đó chặn đứng toàn bộ phần còn lại của partition. Đẩy sang một topic retry (rồi DLQ nếu vẫn thất bại) tách hẳn số phận của record hỏng khỏi tiến độ của partition gốc.',
     },
+    {
+      at: 28_000,
+      question:
+        'Tổng kết: đẩy record hỏng sang `orders.retry` giải phóng partition gốc. Đánh đổi là gì?',
+      options: [
+        'Mất thứ tự — record hỏng nay được xử lý muộn hơn những record đứng sau nó',
+        'Không đánh đổi nào, đây thuần tuý tốt hơn về mọi mặt',
+        'Retry topic tốn gấp đôi dung lượng đĩa cho mọi record',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Retry topic đổi thứ tự lấy tiến độ. `order-6-loi` xử lý xong sau `order-7` và `order-8`, nên mô hình này chỉ dùng được khi các record độc lập nhau. Với chuỗi chuyển trạng thái theo key, xử lý sai thứ tự sinh ra dữ liệu hỏng — lúc đó phải chặn đứng partition, hoặc thiết kế lại để phần xử lý chịu được thứ tự bất kỳ.',
+    },
   ],
 }

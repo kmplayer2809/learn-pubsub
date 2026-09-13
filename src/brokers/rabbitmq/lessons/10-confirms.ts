@@ -78,5 +78,18 @@ export const durabilityAndConfirms: Lesson = {
       explanation:
         'Chỉ message vừa `persistent` vừa nằm trong queue `durable` mới sống sót — đúng ba trong bốn message ở đây. Message thứ ba là `persistent: false` nên vẫn mất, dù `orders` bản thân nó sống sót qua restart.',
     },
+    {
+      at: 12_000,
+      question:
+        'Tổng kết: publish với `persistent: true` vào queue `durable` nhưng **không** bật publisher confirm. Lỗ hổng còn lại nằm ở đâu?',
+      options: [
+        'Publisher chẳng bao giờ biết broker có thật sự nhận message hay chưa',
+        'Message mất tính `persistent` khi thiếu confirm',
+        'Không còn lỗ hổng nào, hai cờ kia đã đủ',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`persistent` cộng `durable` bảo vệ message *sau khi* broker đã nhận. Confirm bảo vệ đoạn trước đó: kết nối rớt giữa chừng thì publish im lặng biến mất, ứng dụng vẫn tưởng đã gửi xong. Đủ bộ ba mới khép kín đường đi từ publisher tới đĩa.',
+    },
   ],
 }

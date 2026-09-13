@@ -73,5 +73,18 @@ export const stampede: RedisLesson = {
       explanation:
         'Không có `TTL`, một `rebuilder` chết ngay sau khi giữ khoá sẽ không bao giờ tự giải phóng nó, khiến mọi reader khác kẹt lại vĩnh viễn — gắn hạn dùng riêng cho khoá đảm bảo nó luôn biến mất, dù rebuilder có gặp sự cố hay không.',
     },
+    {
+      at: 22_000,
+      question:
+        'Tổng kết: mười nghìn key nạp cùng lúc lúc khởi động, tất cả đều `EX 3600`. Vì sao đây là quả bom hẹn giờ?',
+      options: [
+        'Cả mười nghìn key chết trong cùng một giây, gây stampede đồng loạt',
+        'Redis không lưu nổi mười nghìn hạn dùng cùng lúc',
+        'Active expire cycle sẽ bỏ sót phần lớn số key đó',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hạn dùng giống hệt nhau tạo ra một đỉnh miss đồng loạt sau đúng một giờ. Cách chữa là jitter: đặt `EX` ngẫu nhiên trong khoảng 3600 tới 4200 chẳng hạn, rải điểm chết ra thành một vùng thay vì một mốc. Khoá `SETNX` chỉ hạ thiệt hại của từng key, jitter mới ngăn được cả đợt trùng nhau.',
+    },
   ],
 }

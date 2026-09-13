@@ -98,5 +98,18 @@ export const rpcPattern: Lesson = {
       explanation:
         'Routing key của reply chính là `correlationId` của request gốc. Thiếu `correlationId`, reply vẫn được publish nhưng với routing key rỗng, nên nó chỉ khớp một binding nếu binding đó cũng có routing key rỗng — nghĩa là rất dễ trở thành unroutable.',
     },
+    {
+      at: 16_000,
+      question:
+        'Tổng kết: `worker` chết sau khi nhận request nhưng trước lúc ack. `caller` nhận được gì?',
+      options: [
+        'Một reply báo lỗi do broker tự sinh ra',
+        'Không gì cả — `caller` phải tự đặt timeout cho mỗi request',
+        'Reply cũ của request trước, vì `correlationId` bị dùng lại',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Reply chỉ được publish khi request được ack, nên `worker` chết là chuỗi đứt hẳn: request quay về `rpc-work` chờ giao lại, còn phía `caller` im lặng. RPC qua broker không có khái niệm timeout sẵn có — phần đó thuộc trách nhiệm ứng dụng, cùng với việc dọn `correlationId` đã treo quá lâu.',
+    },
   ],
 }

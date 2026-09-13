@@ -110,4 +110,31 @@ export const topicExchange: Lesson = {
       highlight: ['eu-orders', 'all-orders', 'created-only'],
     },
   ],
+  checkpoints: [
+    {
+      at: 6000,
+      question: 'Key `order.us.created` khớp những binding nào trong ba binding trên?',
+      options: [
+        'Chỉ `order.#`',
+        '`order.#` và `*.*.created`',
+        'Cả ba, vì `*` khớp được `us`',
+      ],
+      answerIndex: 1,
+      explanation:
+        '`order.#` khớp mọi key mở đầu bằng `order`. `*.*.created` cần đúng ba từ với từ cuối là `created`, nên cũng khớp. Riêng `order.eu.*` đòi từ thứ hai đúng bằng `eu`, mà key này lại là `us`.',
+    },
+    {
+      at: 12_000,
+      question:
+        'Tổng kết: một queue cần bắt mọi sự kiện đơn hàng, sâu bao nhiêu cấp cũng được — `order`, `order.eu.created`, `order.eu.west.created`. Binding nào đúng?',
+      options: [
+        '`order.#`',
+        '`order.*`',
+        '`order.*.*`',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`#` khớp không hoặc nhiều từ, nên nó ôm trọn cả key `order` trơn lẫn key sâu bốn cấp. Mỗi `*` chỉ khớp đúng một từ, nên `order.*` bỏ sót `order` trơn lẫn key dài hơn ba cấp.',
+    },
+  ],
 }

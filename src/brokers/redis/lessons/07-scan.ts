@@ -68,5 +68,18 @@ export const scan: RedisLesson = {
       explanation:
         '`SCAN` chỉ cam kết một `key` sống suốt toàn bộ lượt quét sẽ xuất hiện ít nhất một lần — không cam kết đúng một lần, cũng không phải một bản snapshot tại thời điểm bắt đầu.',
     },
+    {
+      at: 16_000,
+      question:
+        'Tổng kết: `SCAN` có thể trả về cùng một `key` hai lần. Vòng lặp xử lý nên viết ra sao?',
+      options: [
+        'Thao tác phải idempotent, chạy lại trên cùng `key` vẫn cho kết quả đúng',
+        'Nhớ mọi `key` đã thấy trong một `set` phía ứng dụng để lọc trùng',
+        'Quay về dùng `KEYS` cho chắc chắn không trùng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Trùng lặp là đặc tính của `SCAN`, không phải lỗi. Thao tác idempotent như `DEL` hay `EXPIRE` chịu được điều đó mà không tốn gì. Bộ nhớ chống trùng phía client thì phình theo kích thước keyspace, đúng thứ `SCAN` sinh ra để tránh, còn `KEYS` thì đánh đổi bằng việc chặn cả server.',
+    },
   ],
 }

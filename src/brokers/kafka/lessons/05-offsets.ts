@@ -110,5 +110,18 @@ export const offsets: KafkaLesson = {
       explanation:
         'offset gắn với record, cố định. position là trạng thái tạm thời trong bộ nhớ của một consumer instance, tăng ngay sau mỗi lần fetch — kể cả khi chưa commit. committed offset chỉ nhích khi có lệnh commit tường minh, nên nó có thể tụt lại phía sau position rất xa nếu consumer đọc nhiều mà không commit.',
     },
+    {
+      at: 30_000,
+      question:
+        'Tổng kết: một service mới lên production với `auto.offset.reset=latest`. Vì sao nó không thấy record nào của tuần trước?',
+      options: [
+        'Group mới chưa có committed offset, nên `latest` neo thẳng vào cuối log',
+        'Retention đã xoá sạch dữ liệu tuần trước rồi',
+        '`latest` chặn mọi record cũ hơn lượt poll gần nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`auto.offset.reset` chỉ có tác dụng đúng một lần: khi group chưa hề có committed offset hợp lệ. `latest` neo vào high watermark nên toàn bộ lịch sử bị bỏ qua. Muốn xử lý lại từ đầu thì chọn `earliest`, hoặc `seek` về mốc mong muốn rồi commit — cấu hình sau đó không còn quyết định gì nữa.',
+    },
   ],
 }

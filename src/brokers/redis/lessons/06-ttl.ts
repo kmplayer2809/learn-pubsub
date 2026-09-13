@@ -69,5 +69,17 @@ export const ttl: RedisLesson = {
       explanation:
         'Redis không xoá đúng khoảnh khắc hết hạn — vùng nhớ chỉ thật sự giải phóng khi có một lượt đọc lazy chạm vào `key` đó, hoặc khi active cycle quét tới nó.',
     },
+    {
+      at: 20_000,
+      question: 'Tổng kết: `TTL` trả về `-1` cho một `key`. Nghĩa là gì?',
+      options: [
+        '`key` còn sống nhưng không mang hạn nào',
+        '`key` đã hết hạn, đang chờ được xoá',
+        '`key` không tồn tại trong keyspace',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`-1` nghĩa là có `key`, không có hạn. `-2` mới là `key` đã biến mất. Nhầm hai giá trị này thường dẫn tới lỗi kiểu coi mọi số âm đều là cache miss, trong khi `-1` lại chính là một `key` sống mãi mà lẽ ra phải mang TTL.',
+    },
   ],
 }

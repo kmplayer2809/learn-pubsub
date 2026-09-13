@@ -89,5 +89,18 @@ export const batchingLinger: KafkaLesson = {
       explanation:
         '`lingerMs: 0` khiến mỗi record flush ngay khi enqueue — không có gì để gom, nên tám record thành tám batch. `lingerMs: 2000` khiến producer cố tình chờ, gom được bốn record một batch trước khi hết giờ — tổng batch giảm còn hai, đổi lại record đầu của mỗi batch phải chờ lâu hơn mới được ghi.',
     },
+    {
+      at: 22_000,
+      question:
+        'Tổng kết: `lingerMs: 0` nhưng lưu lượng rất cao. Producer có gom batch được không?',
+      options: [
+        'Có — record dồn vào lúc request trước còn đang bay vẫn nằm chung một batch',
+        'Không, `lingerMs: 0` buộc mỗi record đi thành một request riêng',
+        'Có, nhưng chỉ khi bật thêm `enable.idempotence`',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`lingerMs: 0` nghĩa là không cố tình chờ, chứ không phải cấm gom. Producer chỉ gửi được khi còn khe `max.in.flight`; trong lúc chờ khe, mọi record tới đều dồn vào batch đang mở. Vì vậy tải càng cao thì batch tự nhiên càng lớn — `lingerMs` chỉ thật sự có ý nghĩa với tải thưa, nơi không có gì để gom nếu không chủ động chờ.',
+    },
   ],
 }

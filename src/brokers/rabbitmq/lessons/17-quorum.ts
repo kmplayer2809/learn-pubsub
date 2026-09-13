@@ -103,5 +103,18 @@ export const quorumVsClassic: Lesson = {
       explanation:
         'Mô phỏng chỉ crash consumer, không crash node. Sự cố consumer không phân biệt được hai loại queue, nhưng sự cố node thì có: classic queue không mirror sống trên một node, còn quorum queue replicate qua Raft majority nên chịu được một node chết.',
     },
+    {
+      at: 20_000,
+      question:
+        'Tổng kết: cụm ba node, `quorum-q` replicate trên cả ba. Hai node cùng chết. Queue còn ghi được không?',
+      options: [
+        'Còn, node sống sót tự tiếp quản toàn bộ vai trò',
+        'Không — Raft cần majority, tức hai trên ba node, nên queue chuyển sang chỉ đọc',
+        'Còn, vì mỗi replica giữ một bản đầy đủ nên một bản là đủ',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Quorum queue đổi tính sẵn sàng lấy tính nhất quán: mất majority thì không bầu được leader, nên thao tác ghi bị từ chối thay vì chấp nhận rủi ro phân kỳ dữ liệu. Đó cũng là lý do cụm quorum nên có số node lẻ — ba node chịu được một node chết, năm node chịu được hai.',
+    },
   ],
 }

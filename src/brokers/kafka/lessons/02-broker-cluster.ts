@@ -96,5 +96,18 @@ export const brokerCluster: KafkaLesson = {
       explanation:
         'Mỗi partition chỉ phụ thuộc vào leader riêng của nó. `orders-1` có leader là `b2` nên `b1` xuống không ảnh hưởng gì tới nó — mất một broker chỉ làm mất khả năng ghi ở đúng những partition mà broker đó làm leader, không phải cả cluster.',
     },
+    {
+      at: 20_000,
+      question:
+        'Tổng kết: `orders` dùng `replicationFactor: 1`. Vì sao đây là cấu hình không dùng được ngoài production?',
+      options: [
+        'Mất một broker là mất luôn dữ liệu những partition nó giữ, không bản sao nào để bầu leader thay',
+        'Cluster từ chối tạo topic có `replicationFactor` bằng 1',
+        'Producer bị chậm hẳn vì phải chờ đúng một broker duy nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`replicationFactor: 1` nghĩa là mỗi partition tồn tại đúng một bản. Broker xuống thì phần dữ liệu đó vừa ngừng ghi vừa ngừng đọc, và ổ đĩa hỏng là mất vĩnh viễn. Bài 17 chỉ ra vì sao `replicationFactor: 3` mới là mức chuẩn: có bản sao thì mới có ứng viên để bầu làm leader mới.',
+    },
   ],
 }

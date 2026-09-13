@@ -147,5 +147,18 @@ export const sizingTuning: KafkaLesson = {
       explanation:
         'Thứ tự theo key của Kafka chỉ đúng TRONG một partition. Tăng số partition thay đổi phép chia dùng để ánh xạ key sang partition, nên từ thời điểm đó, record mới của một key có thể không còn rơi vào partition cũ của nó nữa — hai record cùng key giờ nằm ở hai partition khác nhau, và thứ tự đọc giữa hai partition độc lập không được bảo đảm gì cả.',
     },
+    {
+      at: 26_000,
+      question:
+        'Tổng kết: bài toán cần ack riêng cho từng công việc, requeue khi thất bại, độ ưu tiên theo từng item. Kafka có phải công cụ đúng?',
+      options: [
+        'Không — đó là mô hình work queue, RabbitMQ hợp hơn hẳn',
+        'Có, chỉ cần một partition cho mỗi mức ưu tiên',
+        'Có, retry topic cùng DLQ thay thế được ack lẫn requeue',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Kafka chia việc theo partition, không theo từng record: không có ack lẻ, không có requeue, không có priority. Retry topic chỉ mô phỏng gần đúng và phải trả giá bằng thứ tự (bài 23). Chọn Kafka khi cần thông lượng, replay, nhiều consumer group độc lập trên cùng một dòng dữ liệu; chọn broker kiểu hàng đợi khi đơn vị công việc là từng message.',
+    },
   ],
 }

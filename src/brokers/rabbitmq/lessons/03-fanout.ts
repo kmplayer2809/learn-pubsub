@@ -108,4 +108,31 @@ export const fanoutExchange: Lesson = {
       highlight: ['ex'],
     },
   ],
+  checkpoints: [
+    {
+      at: 3000,
+      question: 'Nếu publish một message với routing key `ignored-a`, queue nào nhận được nó?',
+      options: [
+        'Chỉ `email`, vì binding của nó mang đúng key đó',
+        'Cả ba queue — fanout chẳng bao giờ đọc routing key',
+        'Không queue nào, vì key phải rỗng ở fanout exchange',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Fanout exchange bỏ qua routing key hoàn toàn. Key trên binding vẫn được lưu nhưng không tham gia quyết định route, nên `email`, `analytics` lẫn `audit` đều nhận một bản copy.',
+    },
+    {
+      at: 9_000,
+      question:
+        'Tổng kết: bạn cần `email` chỉ nhận sự kiện loại `signup`, còn `audit` vẫn nhận tất cả. Làm thế nào?',
+      options: [
+        'Đổi `ex` sang topic exchange rồi bind `email` theo pattern hẹp hơn',
+        'Giữ fanout, đặt routing key `signup` cho binding của `email`',
+        'Giữ fanout, cho `email` bind hai lần để tăng độ ưu tiên',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Fanout không có bất kỳ cơ chế lọc nào — mọi queue đã bind đều nhận mọi message. Muốn lọc theo nội dung key, bạn phải đổi loại exchange sang topic hoặc direct; lúc đó `audit` vẫn bắt hết bằng pattern `#`.',
+    },
+  ],
 }

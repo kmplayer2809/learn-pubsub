@@ -134,5 +134,18 @@ export const maxPollInterval: KafkaLesson = {
       explanation:
         'heartbeat và poll là hai vòng lặp tách biệt trong client Kafka thật. Một callback xử lý chạy quá lâu chỉ chặn vòng poll, không chặn heartbeat — nên consumer "trông vẫn sống" với coordinator trong khi thực chất đã vượt quá max.poll.interval.ms, và bị đá vì lý do đó, không phải vì mất kết nối.',
     },
+    {
+      at: 30_000,
+      question:
+        'Tổng kết: mỗi record mất 2 giây xử lý, `max.poll.records` mặc định là 500. Cần đặt `max.poll.interval.ms` bao nhiêu?',
+      options: [
+        'Giảm `max.poll.records` xuống còn 10 rồi giữ ngưỡng ở mức bình thường',
+        'Đặt lên 1000 giây để chứa trọn 500 record nhân 2 giây',
+        'Giữ mặc định 300 giây, client tự chia nhỏ lô khi cần',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Ngưỡng phải phủ được lô lớn nhất: 500 record nhân 2 giây là 1000 giây, một ngưỡng vô dụng vì consumer chết thật cũng phải mất mười sáu phút mới bị phát hiện. Siết `max.poll.records` là cách đúng — lô 10 record mất 20 giây, nằm gọn trong mặc định 300 giây mà vẫn phát hiện sự cố nhanh. Client không tự chia nhỏ lô cho bạn.',
+    },
   ],
 }

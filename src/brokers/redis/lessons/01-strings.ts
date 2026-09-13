@@ -57,5 +57,14 @@ export const strings: RedisLesson = {
       explanation:
         '`INCR` luôn tạo `key` ở 0 trước khi cộng thêm 1, nên kết quả đầu tiên luôn là `(integer) 1`, không bao giờ lỗi hay `(nil)`.',
     },
+    {
+      at: 12_000,
+      question:
+        'Tổng kết: `key` đang mang TTL 60 giây, bạn gọi `SET` ghi giá trị mới. TTL còn lại bao nhiêu?',
+      options: ['Không còn hạn nữa — `SET` xoá luôn TTL', 'Vẫn 60 giây như cũ', 'Đặt lại về 60 giây tính từ lúc ghi'],
+      answerIndex: 0,
+      explanation:
+        '`SET` thay thế toàn bộ `key`, gồm cả phần metadata mang hạn, nên `key` trở thành vĩnh viễn. Muốn giữ hạn cũ thì phải gọi `SET ... KEEPTTL`. Đây là nguyên nhân rất thường gặp khiến cache tưởng có hạn mà thực ra nằm mãi.',
+    },
   ],
 }

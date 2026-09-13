@@ -150,5 +150,18 @@ export const consumerLag: KafkaLesson = {
       explanation:
         'Số partition là trần cứng cho số consumer THẬT SỰ làm việc trong một group. Một khi số consumer đã bằng số partition, thêm consumer nữa chỉ tạo ra một member nằm không — không giúp lag giảm thêm, vì không còn partition nào để chia.',
     },
+    {
+      at: 30_000,
+      question:
+        'Tổng kết: lag của một partition duy nhất tăng đều, năm partition kia bằng không. Nghi ngờ điều gì trước tiên?',
+      options: [
+        'Hot key dồn hết vào partition đó, hoặc consumer giữ partition đó đang treo',
+        'Cả group thiếu consumer, cần thêm ngay vài member',
+        'Broker giữ partition đó đang quá tải đĩa',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Lag lệch giữa các partition loại trừ ngay giả thuyết thiếu năng lực chung: thiếu consumer thì mọi partition đều tăng. Còn đúng một partition tăng thì hoặc dữ liệu đổ dồn vào đó (hot key, bài 08), hoặc consumer sở hữu nó đang kẹt. Vì vậy luôn phải giám sát lag theo từng partition — nhìn tổng sẽ pha loãng mất tín hiệu này.',
+    },
   ],
 }

@@ -103,5 +103,18 @@ export const leaderElection: KafkaLesson = {
       explanation:
         'Bầu bừa (unclean) là đánh đổi tính sẵn sàng lấy nguy cơ mất dữ liệu — như `b3` ở bài này, log bị cắt và một record đã từng "chắc chắn thành công" theo lời hứa `acks=\'all\'` biến mất thật. Mặc định tắt (từ 0.11) buộc đây phải là một quyết định có ý thức của người vận hành, không phải hành vi ngầm định của hệ thống.',
     },
+    {
+      at: 30_000,
+      question:
+        'Tổng kết: `leaderEpoch` tăng lên sau mỗi lần bầu. Con số này giải quyết vấn đề gì?',
+      options: [
+        'Client đang giữ metadata cũ bị từ chối, buộc phải hỏi lại ai là leader',
+        'Nó đếm số lần broker chết để cảnh báo cho người vận hành',
+        'Nó quyết định replica nào được ưu tiên làm leader kế tiếp',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Sau một lần bầu, client vẫn có thể đang cầm metadata cũ và gửi request tới leader đã hết nhiệm. `leaderEpoch` là số nhiệm kỳ: request mang epoch cũ bị từ chối, client làm mới metadata rồi gửi lại đúng chỗ. Không có nó, một broker bị cô lập vẫn tưởng mình là leader và nhận ghi — đúng kịch bản split-brain.',
+    },
   ],
 }

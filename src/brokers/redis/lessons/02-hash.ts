@@ -56,5 +56,18 @@ export const hash: RedisLesson = {
       explanation:
         'Redis chỉ cho phép TTL gắn ở cấp `key`; không tồn tại `HEXPIRE` cho riêng một field, nên câu trả lời đúng là "không được".',
     },
+    {
+      at: 12_000,
+      question:
+        'Tổng kết: một object có 50 field, mỗi lần chỉ cần đọc đúng một field. Nên lưu kiểu nào?',
+      options: [
+        '`hash`, rồi dùng `HGET` cho từng field',
+        'Một chuỗi JSON, dùng `GET` rồi parse phía client',
+        'Năm mươi `key` kiểu `string` riêng biệt',
+      ],
+      answerIndex: 0,
+      explanation:
+        'JSON buộc mỗi lượt đọc phải kéo trọn 50 field qua mạng rồi parse lại. Tách thành 50 `key` rời thì mất khả năng thao tác cả object cùng lúc, lại tốn thêm bộ nhớ metadata cho mỗi `key`. `hash` giữ được cả hai: `HGET` lấy từng phần, `HGETALL` lấy trọn khi cần.',
+    },
   ],
 }

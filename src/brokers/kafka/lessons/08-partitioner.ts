@@ -93,5 +93,18 @@ export const partitioner: KafkaLesson = {
       explanation:
         'Mọi partitioner hash key giống nhau — record MANG key luôn về đúng một partition, bất kể số partition là bao nhiêu. Tăng số partition chỉ đổi con số kết quả của phép chia lấy dư, không đổi việc `vip-1` vẫn luôn về đúng một partition duy nhất. Muốn rải bảy record đó ra nhiều partition, phải đổi chính key dùng để hash.',
     },
+    {
+      at: 24_000,
+      question:
+        'Tổng kết: đổi key `vip-1` thành `vip-1#0` tới `vip-1#3` để rải qua bốn partition. Cái giá là gì?',
+      options: [
+        'Mất bảo đảm thứ tự trên toàn bộ sự kiện của `vip-1`',
+        'Không giá nào — Kafka vẫn giữ thứ tự theo tiền tố key',
+        'Consumer buộc phải đọc cả bốn partition trong cùng một luồng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thứ tự chỉ tồn tại bên trong một partition, nên tách key ra bốn partition là tự tay từ bỏ thứ tự chung của khách hàng đó. Chấp nhận được khi các sự kiện độc lập nhau, còn nếu chúng là chuỗi chuyển trạng thái thì phải giữ nguyên một key và chịu hot partition, hoặc chuyển sang một khoá mịn hơn mà vẫn giữ trọn vẹn từng nhóm cần thứ tự.',
+    },
   ],
 }

@@ -57,5 +57,18 @@ export const distributedLock: RedisLesson = {
       answerIndex: 1,
       explanation: 'Không phải chuyện tốc độ — là chuyện atomicity: hai lệnh rời để lộ một khoảng hở đúng bằng thời gian giữa chúng, đủ để client khác giành lại lock:job. Redlock (khoá qua nhiều node) vẫn còn bị tranh cãi (Martin Kleppmann và antirez từng tranh luận công khai) chính vì những khoảng hở tương tự ở tầng mạng, không phải tầng một lệnh.',
     },
+    {
+      at: 2400,
+      question:
+        'Tổng kết: `app` giành khoá `PX 5000` nhưng công việc mất 8 giây. Rủi ro nằm ở đâu?',
+      options: [
+        'Khoá hết hạn lúc giây thứ 5, client khác giành được, hai bên cùng chạy một lúc',
+        'Redis tự gia hạn khoá vì `app` vẫn còn kết nối',
+        'Không rủi ro nào — `PX` chỉ tính khi client chết',
+      ],
+      answerIndex: 0,
+      explanation:
+        'TTL của khoá là phỏng đoán về thời gian công việc, mà phỏng đoán thì sai được. Vượt hạn thì mất quyền loại trừ lẫn nhau, đúng thứ khoá sinh ra để bảo vệ. Cách chữa là một watchdog gia hạn khoá theo chu kỳ khi việc còn chạy, cộng thêm thiết kế idempotent để hai lượt chạy chồng nhau vẫn không gây hại.',
+    },
   ],
 }

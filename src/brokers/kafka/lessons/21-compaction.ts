@@ -78,5 +78,18 @@ export const compaction: KafkaLesson = {
       explanation:
         'Compaction phù hợp cho topic dạng "ảnh chụp trạng thái" (changelog, bảng key-value) — nơi chỉ giá trị mới nhất của mỗi key có ý nghĩa. Một dòng sự kiện (mỗi bản ghi là một sự việc độc lập, kể cả trùng key) cần `cleanupPolicy: \'delete\'` để giữ đúng lịch sử theo thời gian, không bị compaction âm thầm xoá mất các sự kiện cũ hơn.',
     },
+    {
+      at: 28_000,
+      question:
+        'Tổng kết: một record trong topic compact được ghi mà **không** có key. Chuyện gì xảy ra?',
+      options: [
+        'Compaction không xử lý được nó, record nằm lại mãi và làm log phình dần',
+        'Nó được coi như tombstone rồi bị xoá ngay lượt compaction kế tiếp',
+        'Broker từ chối ghi vì topic compact bắt buộc phải có key',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Compaction gom nhóm theo key, nên record thiếu key không thuộc nhóm nào và không bao giờ bị thay thế. Nó không bị coi là tombstone — tombstone là record **có** key với `value: null`. Vì vậy quy tắc là mọi record vào topic compact đều phải mang key; nhiều triển khai từ chối ghi ngay từ phía producer để tránh rác tích tụ.',
+    },
   ],
 }

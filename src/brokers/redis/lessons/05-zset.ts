@@ -56,5 +56,18 @@ export const zset: RedisLesson = {
       explanation:
         'Sau khi cộng thêm 200, score của `ann` tăng lên 300, vượt qua `bob` đang giữ 250, nên `ann` đứng đầu bảng xếp hạng.',
     },
+    {
+      at: 14_000,
+      question:
+        'Tổng kết: bảng xếp hạng mười triệu người chơi, cần đọc top 10 mỗi giây. Chi phí ra sao?',
+      options: [
+        'Rẻ — `ZREVRANGE board 0 9` chỉ chạm mười phần tử đầu',
+        'Đắt — Redis phải sắp xếp lại toàn bộ mười triệu member mỗi lượt gọi',
+        'Đắt — phải quét hết `sorted set` để tìm ra nhóm điểm cao nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`sorted set` giữ trật tự sẵn trong skiplist ngay lúc ghi, nên không có bước sắp xếp nào lúc đọc. Lấy top N chỉ là đi mười bước từ một đầu, chi phí không phụ thuộc kích thước tập. Chỗ tốn kém là những truy vấn cần thứ hạng của một member ở giữa bảng.',
+    },
   ],
 }

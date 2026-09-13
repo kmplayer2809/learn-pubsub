@@ -93,5 +93,18 @@ export const idempotentProducer: KafkaLesson = {
       explanation:
         'Duplicate ở đây tới từ chính việc producer resend sau khi ack bị mất, không phải một lỗi ứng dụng. `p1` không có định danh nào đi kèm record nên broker không có cách nào biết bản gửi lại là "cũ" — ghi thêm một lần nữa. `p2` (`idempotent: true`) gắn `producerId` + `sequence` cố định cho mỗi record; broker so sequence với lần cuối đã chấp nhận, thấy trùng thì bỏ qua, không ghi lần hai.',
     },
+    {
+      at: 22_000,
+      question:
+        'Tổng kết: `enable.idempotence` đã bật. Ứng dụng có còn cần xử lý trùng lặp nữa không?',
+      options: [
+        'Còn — idempotence chỉ chặn trùng do producer gửi lại, trong phạm vi một partition',
+        'Hết — mọi record giờ được bảo đảm exactly-once từ đầu tới cuối',
+        'Chỉ còn cần khi ứng dụng ghi vào nhiều topic khác nhau',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Phạm vi của bảo đảm này rất hẹp: một partition, một phiên `producerId`. Nó không bảo vệ trước việc ứng dụng gọi `produce()` hai lần, không giúp gì khi producer khởi động lại, và không cản consumer xử lý một record hai lượt sau rebalance. Muốn siết chặt hơn thì cần transaction (bài 22), còn khâu tiêu thụ vẫn phải idempotent.',
+    },
   ],
 }

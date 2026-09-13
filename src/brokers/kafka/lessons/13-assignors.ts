@@ -115,5 +115,18 @@ export const assignors: KafkaLesson = {
       explanation:
         'range là một assignor "eager": toàn bộ group mất assignment ngay khi `PreparingRebalance` bắt đầu, rồi mới tính lại từ đầu. cooperative-sticky trì hoãn việc thu hồi tới đúng lúc cần, và chỉ thu hồi đúng những partition thật sự phải đổi chủ — partition không đổi chủ tiếp tục được đọc suốt quá trình rebalance.',
     },
+    {
+      at: 28_000,
+      question:
+        'Tổng kết: chuyển một group đang chạy từ `range` sang `cooperative-sticky`. Đổi cấu hình rồi restart một lượt là xong?',
+      options: [
+        'Không — cần deploy hai đợt, đợt đầu khai báo cả hai assignor, đợt sau mới bỏ `range`',
+        'Được, mọi member đọc cấu hình mới ngay lần rebalance kế tiếp',
+        'Được, miễn là restart toàn bộ member cùng một lúc',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mọi member trong một group phải thống nhất một protocol chung, mà eager với cooperative thì không tương thích. Quy trình chuẩn là nâng cấp hai đợt: đợt đầu mỗi member khai báo danh sách `[cooperative-sticky, range]` nên vẫn chốt được `range` trong lúc group pha trộn; khi mọi member đã lên đợt đầu thì đợt sau bỏ `range` đi, group tự chuyển sang cooperative.',
+    },
   ],
 }

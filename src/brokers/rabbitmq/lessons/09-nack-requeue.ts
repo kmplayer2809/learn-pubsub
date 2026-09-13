@@ -62,4 +62,31 @@ export const nackRequeue: Lesson = {
       highlight: ['flaky-q'],
     },
   ],
+  checkpoints: [
+    {
+      at: 5000,
+      question: 'Message bị reject kèm `requeueOnNack: true` được chèn lại ở vị trí nào?',
+      options: [
+        'Cuối `flaky-q`, sau mọi message đang chờ',
+        'Đầu `flaky-q`, nên nó được giao lại gần như tức thì',
+        'Một queue retry riêng do broker tự sinh ra',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Requeue trả message về đầu queue, giữ nguyên thứ tự ban đầu. Hệ quả thực tế: message hỏng được thử lại ngay lập tức, không có khoảng nghỉ nào — nên một lỗi tạm thời chưa kịp tự khỏi thì lần thử lại cũng hỏng.',
+    },
+    {
+      at: 18_000,
+      question:
+        'Tổng kết: một message *luôn luôn* khiến consumer reject. Cấu hình hiện tại xử lý nó ra sao?',
+      options: [
+        'Broker bỏ cuộc sau ba lần rồi tự xóa message',
+        'Message quay vòng vô tận, chiếm chỗ của mọi message phía sau',
+        '`redeliveryCount` chạm trần rồi message chuyển sang DLX',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Requeue trần trụi không có giới hạn số lần thử. `redeliveryCount` tăng mãi nhưng chẳng có gì đọc nó, nên message độc cứ chiếm đầu queue liên tục. Muốn thoát, ứng dụng phải tự đọc số lần giao lại rồi reject *không* requeue để đẩy sang DLX, hoặc dựng vòng retry có backoff.',
+    },
+  ],
 }

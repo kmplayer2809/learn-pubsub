@@ -70,5 +70,18 @@ export const cacheAside: RedisLesson = {
       explanation:
         'Với hit rate 20%, tám mươi phần trăm lượt gọi phải đi thêm hai round trip Redis (một lần miss, một lần ghi lại) cộng một round trip `database`, nên tổng độ trễ vượt xa việc bỏ qua cache — đúng như `metrics.hits` và `metrics.misses` cho thấy.',
     },
+    {
+      at: 20_000,
+      question:
+        'Tổng kết: giá sản phẩm vừa đổi trong `database`. Nên `DEL` cache hay `SET` đè giá trị mới?',
+      options: [
+        '`DEL` — lượt đọc kế tiếp tự nạp lại, khỏi lo ghi nhầm giá trị cũ',
+        '`SET` đè — tiết kiệm được một lần miss cho reader kế tiếp',
+        'Cả hai đều rủi ro như nhau, chọn cái nào cũng được',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`DEL` an toàn hơn vì nó không khẳng định giá trị nào cả. Với `SET` đè, hai lượt cập nhật chạy song song có thể về đích lệch thứ tự, để lại giá trị cũ nằm trong cache vô thời hạn. `DEL` chỉ đánh đổi bằng đúng một lần miss của reader tiếp theo.',
+    },
   ],
 }

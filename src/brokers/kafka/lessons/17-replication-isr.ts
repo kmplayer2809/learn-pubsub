@@ -101,5 +101,18 @@ export const replicationIsr: KafkaLesson = {
       explanation:
         'High watermark là LEO nhỏ nhất trong ISR, và `readFrom` không bao giờ trả record ở offset từ high watermark trở lên. Một record vừa ghi mà chưa đủ ISR bắt kịp thì vẫn "chưa tồn tại" với consumer — đúng ý nghĩa của durability: chỉ công nhận đã ghi khi đủ bản sao đã có nó.',
     },
+    {
+      at: 28_000,
+      question:
+        'Tổng kết: ISR co từ ba xuống một broker. Điều gì xảy ra với `acks=all` khi `min.insync.replicas` vẫn để mặc định là 1?',
+      options: [
+        'Ghi vẫn thành công dù chỉ còn một bản sao — "all" lúc này nghĩa là mỗi leader',
+        'Ghi bị từ chối, vì `acks=all` luôn đòi đủ số replica trong `replicationFactor`',
+        'Ghi treo lại chờ tới khi có replica quay lại ISR',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đây là cái bẫy `acks=all` hay bị hiểu nhầm: "all" là toàn bộ ISR hiện tại, mà ISR co lại được tới đúng một thành viên. Lúc đó producer vẫn nhận báo thành công dù dữ liệu chỉ nằm trên một ổ đĩa duy nhất. `min.insync.replicas` là mảnh ghép còn thiếu — đặt sàn để ghi bị từ chối thay vì thành công một cách giả tạo (bài 18).',
+    },
   ],
 }

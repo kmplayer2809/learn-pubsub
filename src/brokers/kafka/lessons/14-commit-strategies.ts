@@ -145,5 +145,18 @@ export const commitStrategies: KafkaLesson = {
       explanation:
         'committed offset là con số DUY NHẤT một client dùng để biết đọc tiếp từ đâu. Commit trước khi xử lý xong nghĩa là con số đó đã "hứa" record vừa fetch coi như xong — nếu crash xảy ra trước khi xử lý thật sự hoàn tất, record đó vĩnh viễn không được đọc lại nữa. Đây chính là at-most-once, đối lập với at-least-once (commit sau khi xử lý xong, chấp nhận có thể xử lý lại nhưng không bao giờ mất).',
     },
+    {
+      at: 26_000,
+      question:
+        'Tổng kết: chọn at-least-once, commit sau khi xử lý xong. Ứng dụng còn phải làm gì nữa?',
+      options: [
+        'Làm cho khâu xử lý idempotent — at-least-once nghĩa là record chắc chắn có lúc bị xử lý hai lần',
+        'Không gì nữa, at-least-once đã đảm bảo mỗi record xử lý đúng một lần',
+        'Bật thêm `enable.idempotence` phía consumer',
+      ],
+      answerIndex: 0,
+      explanation:
+        'At-least-once đổi mất mát lấy trùng lặp: crash giữa lúc xử lý xong nhưng chưa commit sẽ khiến record đó chạy lại. Việc xử lý vì vậy phải chịu được chạy lại — khoá trùng lặp trong database, phép ghi kiểu đặt giá trị thay vì cộng dồn, hoặc một bảng ghi nhận id đã xử lý. `enable.idempotence` là cấu hình phía producer, không liên quan tới khâu này.',
+    },
   ],
 }

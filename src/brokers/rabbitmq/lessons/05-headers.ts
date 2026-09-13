@@ -140,4 +140,31 @@ export const headersExchange: Lesson = {
       highlight: ['ex'],
     },
   ],
+  checkpoints: [
+    {
+      at: 4200,
+      question: 'Message chỉ mang một header duy nhất `{format: pdf}` được route tới đâu?',
+      options: [
+        'Chỉ `anything-pdf`',
+        '`pdf-reports` và `anything-pdf`',
+        'Không queue nào, vì thiếu header `kind`',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`anything-pdf` dùng `xMatch: any` theo `{format: pdf}`, nên một header khớp là đủ. `pdf-reports` dùng `xMatch: all` nên đòi cả `format: pdf` lẫn `kind: report`, thiếu một cái là trượt. `csv-or-report` không có tiêu chí nào trùng.',
+    },
+    {
+      at: 10_000,
+      question:
+        'Tổng kết: bạn đổi binding của `pdf-reports` sang `xMatch: any` nhưng giữ nguyên `{format: pdf, kind: report}`. Hệ quả?',
+      options: [
+        'Queue này bắt đầu nhận thêm mọi message chỉ mang `kind: report`',
+        'Queue này ngừng nhận message, vì `any` cần đúng một header',
+        'Không thay đổi gì, `all` với `any` chỉ khác nhau lúc header rỗng',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`all` là phép giao: mọi cặp header trong tiêu chí đều phải khớp. `any` là phép hợp: một cặp khớp đã đủ. Nới sang `any` khiến tiêu chí rộng ra, nên message chỉ có `kind: report` — trước kia bị loại — nay lọt vào.',
+    },
+  ],
 }
