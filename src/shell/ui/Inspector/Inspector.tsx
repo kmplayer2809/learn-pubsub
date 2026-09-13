@@ -3,9 +3,11 @@ import type { AnyBrokerModule } from '../../../brokers/types'
 import type { JournalEntry, KernelState, ValidationIssueBase } from '../../kernel/types'
 import type { Lesson } from '../../lesson/types'
 import { activeStepIndex } from '../../lesson/activeStep'
+import { useAppStore } from '../../store'
 import { CheckpointSection } from './CheckpointCard'
 import { InspectorTabs } from './InspectorTabs'
 import { Markdown, MarkdownInline } from './Markdown'
+import { LessonQuizDialog } from '../Quiz/LessonQuizDialog'
 
 /** Vietnamese label for a severity shared by every broker's `ValidationIssueBase`. */
 const SEVERITY_LABEL: Record<ValidationIssueBase['severity'], string> = {
@@ -105,6 +107,13 @@ export function Inspector({
   const [exportOpen, setExportOpen] = useState(false)
   const { ExportDialog } = broker
 
+  const [quizOpen, setQuizOpen] = useState(false)
+  const recordLessonQuiz = useAppStore((s) => s.recordLessonQuiz)
+  const quiz = lesson.quiz ?? []
+  // The transport stops at durationMs, so this is the one moment we can be sure the
+  // lesson has played out — the same reason the wrap-up checkpoint sits exactly there.
+  const lessonFinished = state.now >= lesson.durationMs
+
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="inspector">
       {/* Vùng 1: narrative, cuộn riêng. Tách khỏi vùng dữ liệu bên dưới để đọc
@@ -135,6 +144,38 @@ export function Inspector({
         {/* Lesson-only: the sandbox has no narrative and no checkpoints, so SandboxPanel
             deliberately does not render this the way it shares IssuesList/MetricsGrid. */}
         <CheckpointSection lessonId={lesson.id} checkpoints={lesson.checkpoints} now={state.now} />
+
+        {quiz.length > 0 && lessonFinished && (
+          <section
+            data-testid="lesson-quiz-prompt"
+            className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-surface-raised p-3"
+          >
+            <div>
+              <p className="text-ui font-medium text-content-strong">Bài test cuối bài</p>
+              <p className="text-meta text-content-faint">{quiz.length} câu, có chấm điểm</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setQuizOpen(true)}
+              data-testid="lesson-quiz-start"
+              className="min-h-11 shrink-0 rounded-md border border-edge-strong px-3 py-1.5 text-ui font-medium text-content hover:bg-surface-hover md:min-h-0"
+            >
+              Bắt đầu
+            </button>
+          </section>
+        )}
+
+        {quizOpen && quiz.length > 0 && (
+          <LessonQuizDialog
+            // Keyed by lesson: switching lesson while the dialog is open must not carry
+            // the previous lesson's answers into the new one's questions.
+            key={lesson.id}
+            title={lesson.title}
+            questions={quiz}
+            onSubmit={(result) => recordLessonQuiz(lesson.id, result)}
+            onClose={() => setQuizOpen(false)}
+          />
+        )}
 
         <IssuesList issues={issues} issueText={broker.issueText} />
 
