@@ -92,6 +92,18 @@ export const quorumVsClassic: Lesson = {
   ],
   checkpoints: [
     {
+      at: 8000,
+      question: 'Hai consumer vừa hồi phục. Nhìn vào hai queue lúc này có phân biệt được classic với quorum không?',
+      options: [
+        'Không — sự cố consumer khiến hai loại hành xử giống hệt nhau',
+        'Có, `quorum-q` giao lại nhanh hơn hẳn',
+        'Có, `classic-q` mất message mỗi lần consumer crash',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Requeue message chưa ack là hành vi chung của mọi loại queue. Khác biệt của quorum queue nằm ở tầng node, mà mô phỏng này chưa từng giết node nào.',
+    },
+    {
       at: 18000,
       question: 'Lesson này cho hai lane requeue giống hệt nhau khi consumer crash. Kết luận nào đúng về `classic-q` và `quorum-q`?',
       options: [
@@ -115,6 +127,56 @@ export const quorumVsClassic: Lesson = {
       answerIndex: 1,
       explanation:
         'Quorum queue đổi tính sẵn sàng lấy tính nhất quán: mất majority thì không bầu được leader, nên thao tác ghi bị từ chối thay vì chấp nhận rủi ro phân kỳ dữ liệu. Đó cũng là lý do cụm quorum nên có số node lẻ — ba node chịu được một node chết, năm node chịu được hai.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Quorum queue replicate dữ liệu bằng cơ chế nào?',
+      options: [
+        'Raft, cần majority đồng thuận cho mỗi thao tác',
+        'Một bản sao bất đồng bộ trên node kế bên',
+        'Ghi xuống một đĩa dùng chung giữa các node',
+        'Không replicate, chỉ ghi đĩa nhanh hơn',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mỗi thao tác được xác nhận khi majority replica ghi xong, nên một node chết không làm mất message đã confirm. Đổi lại là chi phí đồng thuận cho mỗi lần ghi.',
+    },
+    {
+      question: 'Classic queue không mirror sống ở đâu?',
+      options: [
+        'Trên đúng một node — node đó chết thì nội dung queue mất theo',
+        'Trên mọi node của cụm',
+        'Trên node ít tải nhất ở mỗi thời điểm',
+        'Trên đĩa chung của cụm',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đó là khác biệt thật sự giữa hai loại queue. Sự cố consumer không lộ ra điều này, chỉ sự cố node mới lộ.',
+    },
+    {
+      question: 'Vì sao cụm quorum nên có số node lẻ?',
+      options: [
+        'Số lẻ cho ngưỡng majority rõ ràng, tận dụng hết khả năng chịu lỗi',
+        'Vì Raft từ chối chạy trên số node chẵn',
+        'Vì số chẵn làm tốc độ ghi chậm đi gấp đôi',
+        'Vì mỗi node cần đúng một node dự phòng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Ba node chịu được một node chết, năm node chịu được hai. Bốn node cũng chỉ chịu được một node chết như ba node, nên node thứ tư tốn tài nguyên mà không mua thêm khả năng chịu lỗi.',
+    },
+    {
+      question: 'Quorum queue đánh đổi cái gì để lấy tính nhất quán?',
+      options: [
+        'Tính sẵn sàng — mất majority thì ngừng nhận ghi',
+        'Thứ tự message',
+        'Khả năng có nhiều consumer',
+        'Khả năng dùng dead-letter exchange',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mất majority thì không bầu được leader, nên queue từ chối ghi thay vì chấp nhận rủi ro phân kỳ dữ liệu. Classic queue thì ngược lại: vẫn phục vụ tới khi node của nó chết, rồi mất sạch.',
     },
   ],
 }

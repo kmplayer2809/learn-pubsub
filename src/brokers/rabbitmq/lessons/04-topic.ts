@@ -112,6 +112,18 @@ export const topicExchange: Lesson = {
   ],
   checkpoints: [
     {
+      at: 3200,
+      question: 'Key `order.eu.created` vừa publish. Nó khớp bao nhiêu binding trong ba binding trên?',
+      options: [
+        'Một — chỉ `order.eu.*`',
+        'Hai — `order.eu.*` cùng `order.#`',
+        'Cả ba binding',
+      ],
+      answerIndex: 2,
+      explanation:
+        '`order.eu.*` khớp vì key có đúng ba từ, hai từ đầu đúng. `order.#` khớp mọi key mở đầu bằng `order`. `*.*.created` cần ba từ với từ cuối là `created` — cũng khớp. Một lần publish, ba bản copy.',
+    },
+    {
       at: 6000,
       question: 'Key `order.us.created` khớp những binding nào trong ba binding trên?',
       options: [
@@ -135,6 +147,56 @@ export const topicExchange: Lesson = {
       answerIndex: 0,
       explanation:
         '`#` khớp không hoặc nhiều từ, nên nó ôm trọn cả key `order` trơn lẫn key sâu bốn cấp. Mỗi `*` chỉ khớp đúng một từ, nên `order.*` bỏ sót `order` trơn lẫn key dài hơn ba cấp.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`*` trong một topic binding khớp bao nhiêu từ?',
+      options: [
+        'Đúng một từ',
+        'Không hoặc nhiều từ',
+        'Ít nhất một từ, tối đa ba',
+        'Mọi ký tự, kể cả dấu chấm',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`*` thay cho đúng một từ nằm giữa hai dấu chấm. Vì vậy `order.eu.*` đòi key có đúng ba từ, không hơn không kém.',
+    },
+    {
+      question: 'Key `order` đứng một mình khớp binding nào?',
+      options: [
+        'Chỉ `order.#`',
+        'Chỉ `order.*`',
+        'Cả `order.#` lẫn `order.*`',
+        'Không binding nào trong hai cái',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`#` chấp nhận cả trường hợp không còn từ nào phía sau, nên `order` trơn vẫn khớp `order.#`. `order.*` thì đòi thêm đúng một từ nữa.',
+    },
+    {
+      question: 'Key `payment.eu.created` khớp binding nào trong ba binding của bài?',
+      options: [
+        'Chỉ `*.*.created`',
+        'Chỉ `order.#`',
+        '`order.eu.*` cùng `*.*.created`',
+        'Không binding nào',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Key có ba từ, từ cuối là `created` nên `*.*.created` khớp. Hai binding kia đều đòi từ đầu tiên đúng bằng `order`.',
+    },
+    {
+      question: 'Vì sao topic exchange có thể thay vai của cả direct lẫn fanout?',
+      options: [
+        'Pattern không wildcard hành xử như direct, pattern `#` hành xử như fanout',
+        'Vì topic đọc thêm header khi key trượt',
+        'Vì topic gửi bản copy tới mọi queue rồi lọc ở consumer',
+        'Vì topic tự đổi loại theo key của message',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một binding key không wildcard chỉ khớp chuỗi chính xác, đúng hành vi direct. Binding `#` khớp mọi key, đúng hành vi fanout. Topic là tập cha của hai kiểu kia, đổi lại chi phí so khớp cao hơn.',
     },
   ],
 }

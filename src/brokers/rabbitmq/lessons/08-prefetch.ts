@@ -92,6 +92,14 @@ export const prefetchQos: Lesson = {
   ],
   checkpoints: [
     {
+      at: 4500,
+      question: 'Ngay lúc này `fair-a` được phép giữ tối đa bao nhiêu message chưa ack?',
+      options: ['0', '1', '2'],
+      answerIndex: 1,
+      explanation:
+        '`prefetch: 1` cho phép đúng một message chưa ack mỗi consumer. Phần còn lại nằm trong `fair-q`, chờ ai rảnh trước thì nhận.',
+    },
+    {
       at: 9000,
       question: '`greedy-q` cạn sạch sớm hơn `fair-q` rất nhiều. Điều đó chứng tỏ gì?',
       options: [
@@ -115,6 +123,56 @@ export const prefetchQos: Lesson = {
       answerIndex: 0,
       explanation:
         'Prefetch không giới hạn nghĩa là số message chưa ack cũng không giới hạn, nên bán kính thiệt hại khi crash bằng đúng chồng message đó. Chúng bị requeue hàng loạt và giao lại, làm mất mọi công đã xử lý dở. Prefetch nhỏ giữ bán kính này ở mức có thể đoán trước.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`prefetch` giới hạn cái gì?',
+      options: [
+        'Số message chưa ack broker đẩy cho một consumer',
+        'Số message mỗi queue chứa được',
+        'Số consumer mỗi queue',
+        'Kích thước tối đa của message',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Prefetch là cửa sổ message đã đẩy đi mà chưa được ack. Đầy cửa sổ thì broker ngừng đẩy cho consumer đó.',
+    },
+    {
+      question: 'Consumer chậm giữ một message không ack, `prefetch: 1`, chuyện gì xảy ra?',
+      options: [
+        'Consumer đó không nhận thêm message nào cho tới khi ack',
+        'Broker huỷ message rồi gửi cho consumer khác ngay',
+        'Queue ngừng nhận message mới từ publisher',
+        'Message tự động vào DLX',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chỉ consumer đó bị chặn. Queue vẫn nhận message mới, còn consumer khác vẫn được đẩy message bình thường.',
+    },
+    {
+      question: 'Vì sao `prefetch` cao lại làm lệch tải giữa các consumer?',
+      options: [
+        'Một consumer ôm sẵn nhiều message dù nó đang xử lý chậm',
+        'Broker ưu tiên consumer kết nối trước',
+        'Message lớn luôn về cùng một consumer',
+        'Routing key quyết định consumer nhận message',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Prefetch cao nghĩa là message nằm chờ trong bộ đệm của một consumer thay vì chờ trong queue, nơi consumer rảnh có thể nhận.',
+    },
+    {
+      question: 'Với tác vụ ngắn, thời lượng đều nhau, nên đặt `prefetch` thế nào?',
+      options: [
+        'Cao hơn 1, để bớt vòng chờ giữa broker với consumer',
+        'Luôn đặt bằng 1',
+        'Đặt bằng số queue',
+        'Không đặt, mặc định luôn tối ưu',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Prefetch 1 trả giá một vòng round-trip cho mỗi message. Tác vụ ngắn, đều nhau thì cửa sổ lớn hơn cho thông lượng cao hơn mà lệch tải không đáng kể.',
     },
   ],
 }

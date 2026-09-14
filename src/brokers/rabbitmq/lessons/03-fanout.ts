@@ -122,6 +122,18 @@ export const fanoutExchange: Lesson = {
         'Fanout exchange bỏ qua routing key hoàn toàn. Key trên binding vẫn được lưu nhưng không tham gia quyết định route, nên `email`, `analytics` lẫn `audit` đều nhận một bản copy.',
     },
     {
+      at: 5500,
+      question: 'Ba queue drain với tốc độ khác nhau. `audit` chậm có kéo `email` chậm theo không?',
+      options: [
+        'Không — mỗi queue giữ bản copy riêng của nó',
+        'Có, vì cả ba chia chung một bản copy',
+        'Có, vì `ex` chờ mọi queue nhận xong mới phát tiếp',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Fanout tạo bản copy độc lập cho từng queue đã bind. Consumer chậm chỉ làm queue của chính nó sâu thêm, các lane còn lại không hề biết.',
+    },
+    {
       at: 9_000,
       question:
         'Tổng kết: bạn cần `email` chỉ nhận sự kiện loại `signup`, còn `audit` vẫn nhận tất cả. Làm thế nào?',
@@ -133,6 +145,56 @@ export const fanoutExchange: Lesson = {
       answerIndex: 0,
       explanation:
         'Fanout không có bất kỳ cơ chế lọc nào — mọi queue đã bind đều nhận mọi message. Muốn lọc theo nội dung key, bạn phải đổi loại exchange sang topic hoặc direct; lúc đó `audit` vẫn bắt hết bằng pattern `#`.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Fanout exchange quyết định route dựa trên cái gì?',
+      options: [
+        'Không dựa vào gì cả — mọi queue đã bind đều nhận',
+        'Routing key của message',
+        'Routing key ghi trên binding',
+        'Header của message',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Fanout bỏ qua routing key hoàn toàn, kể cả key ghi trên binding. Bind vào fanout exchange nghĩa là đăng ký nhận tất cả.',
+    },
+    {
+      question: 'Binding của `email` mang key `ignored-a`. Message publish với key `ignored-a` tới đâu?',
+      options: [
+        'Cả ba queue',
+        'Chỉ `email`',
+        'Không queue nào',
+        'Chỉ `analytics` cùng `audit`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Key trên binding vẫn được lưu nhưng fanout chẳng bao giờ đọc tới. Ba queue đều đã bind nên ba queue đều nhận một bản copy.',
+    },
+    {
+      question: 'Một message vào fanout exchange có ba binding sinh ra bao nhiêu bản copy?',
+      options: [
+        'Ba bản độc lập, mỗi queue một bản',
+        'Một bản dùng chung cho ba queue',
+        'Ba bản nhưng chỉ queue rảnh nhất giữ lại',
+        'Số bản bằng số consumer',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhân bản xảy ra ở tầng queue: mỗi queue đã bind nhận bản copy riêng, có depth riêng, ack riêng. Số consumer không tham gia phép tính này.',
+    },
+    {
+      question: 'Vì sao thêm một consumer nữa vào `email` *không* khiến mọi consumer cùng thấy mọi message?',
+      options: [
+        'Nhân bản thuộc về số queue; nhiều consumer trên một queue là chia việc',
+        'Vì fanout chỉ hỗ trợ đúng một consumer mỗi queue',
+        'Vì routing key rỗng chặn consumer thứ hai',
+        'Vì prefetch mặc định bằng 1',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Fanout nhân bản tới từng queue, không tới từng consumer. Hai consumer trên `email` sẽ cạnh tranh trên cùng một bản copy — muốn ai cũng thấy đủ thì mỗi bên cần queue riêng.',
     },
   ],
 }

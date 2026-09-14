@@ -154,6 +154,18 @@ export const headersExchange: Lesson = {
         '`anything-pdf` dùng `xMatch: any` theo `{format: pdf}`, nên một header khớp là đủ. `pdf-reports` dùng `xMatch: all` nên đòi cả `format: pdf` lẫn `kind: report`, thiếu một cái là trượt. `csv-or-report` không có tiêu chí nào trùng.',
     },
     {
+      at: 6400,
+      question: 'Message cuối chỉ mang `{kind: invoice}`. Nó tới queue nào?',
+      options: [
+        'Không queue nào — không tiêu chí binding nào nhắc tới `invoice`',
+        'Tới `csv-or-report`, vì binding này dùng `xMatch: any`',
+        'Tới cả ba, vì header lạ được coi như broadcast',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`xMatch: any` vẫn đòi ít nhất một cặp header trùng cả khóa lẫn giá trị. `csv-or-report` chỉ chấp nhận `format: csv` hoặc `kind: report`, nên `kind: invoice` trượt. Message không khớp gì bị drop y như một routing key không route được.',
+    },
+    {
       at: 10_000,
       question:
         'Tổng kết: bạn đổi binding của `pdf-reports` sang `xMatch: any` nhưng giữ nguyên `{format: pdf, kind: report}`. Hệ quả?',
@@ -165,6 +177,56 @@ export const headersExchange: Lesson = {
       answerIndex: 0,
       explanation:
         '`all` là phép giao: mọi cặp header trong tiêu chí đều phải khớp. `any` là phép hợp: một cặp khớp đã đủ. Nới sang `any` khiến tiêu chí rộng ra, nên message chỉ có `kind: report` — trước kia bị loại — nay lọt vào.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Headers exchange route dựa trên cái gì?',
+      options: [
+        '`headers` map của message',
+        'Routing key',
+        'Tên queue đích',
+        'Thứ tự khai báo binding',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Headers exchange bỏ qua routing key — ở bài này mọi message publish với key rỗng. Quyết định route nằm ở phép so khớp giữa header của message với tiêu chí của binding.',
+    },
+    {
+      question: '`x-match: all` đòi hỏi điều gì?',
+      options: [
+        'Mọi cặp header trong tiêu chí đều phải khớp',
+        'Ít nhất một cặp header khớp',
+        'Message không được mang header thừa',
+        'Header phải xuất hiện đúng thứ tự khai báo',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`all` là phép giao: thiếu một cặp là trượt. Header thừa thì vô hại — binding chỉ soi đúng những khóa nó liệt kê.',
+    },
+    {
+      question: 'Message `{format: pdf}` đi tới đâu trong ba queue của bài?',
+      options: [
+        'Chỉ `anything-pdf`',
+        'Chỉ `pdf-reports`',
+        '`pdf-reports` cùng `anything-pdf`',
+        'Không queue nào',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`anything-pdf` dùng `xMatch: any` theo `{format: pdf}` nên một cặp khớp là đủ. `pdf-reports` dùng `all` nên đòi thêm `kind: report`. `csv-or-report` không có tiêu chí nào trùng.',
+    },
+    {
+      question: 'Đổi một binding từ `all` sang `any` mà giữ nguyên tiêu chí. Tập message lọt vào thay đổi ra sao?',
+      options: [
+        'Rộng ra — tiêu chí trở nên dễ khớp hơn',
+        'Hẹp lại — mỗi lần chỉ một header được xét',
+        'Không đổi, nếu tiêu chí có đúng hai header',
+        'Queue ngừng nhận message',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Phép giao chuyển thành phép hợp, nên mọi message vốn đã khớp `all` vẫn khớp, cộng thêm những message chỉ trùng một phần tiêu chí.',
     },
   ],
 }

@@ -99,6 +99,18 @@ export const competingConsumers: Lesson = {
         'Với `prefetch: 1`, một consumer đang giữ message chưa ack sẽ bị bỏ qua trong vòng xoay. `slow` bận 2000ms mỗi job nên vắng mặt phần lớn thời gian, còn `fast` quay lại trạng thái rảnh sau mỗi 400ms nên gom được nhiều job hơn hẳn.',
     },
     {
+      at: 9500,
+      question: 'Ngay lúc này `slow` đang bận. Broker làm gì với message kế tiếp trong `work`?',
+      options: [
+        'Giao cho `fast` hoặc `medium` nếu một trong hai đang rảnh',
+        'Giữ lại chờ `slow` tới lượt trong vòng xoay',
+        'Nhân bản để cả ba consumer cùng xử lý',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Vòng xoay chỉ tính những consumer chưa chạm trần prefetch. `slow` còn giữ một message chưa ack nên bị bỏ qua, message đi thẳng tới người rảnh gần nhất.',
+    },
+    {
       at: 14_000,
       question:
         'Tổng kết: bạn muốn cả ba consumer đều xử lý **mọi** job thay vì chia nhau. Phải đổi gì?',
@@ -110,6 +122,56 @@ export const competingConsumers: Lesson = {
       answerIndex: 0,
       explanation:
         'Nhân bản là thuộc tính của số lượng queue, không phải số lượng consumer. Nhiều consumer trên **một** queue luôn là mô hình chia việc. Muốn ai cũng thấy mọi message thì mỗi consumer cần queue riêng của mình. Prefetch chỉ chỉnh độ sâu hàng chờ, còn binding trùng lặp không tạo thêm bản copy.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Nhiều consumer trên cùng một queue nghĩa là gì?',
+      options: [
+        'Mỗi message tới đúng một consumer',
+        'Mỗi consumer nhận một bản copy',
+        'Chỉ consumer kết nối sớm nhất nhận message',
+        'Broker chọn ngẫu nhiên rồi nhân đôi message',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một queue là một dòng công việc. Nhân bản chỉ xảy ra khi có nhiều queue, nên nhiều consumer trên một queue luôn là mô hình chia việc.',
+    },
+    {
+      question: 'Điều gì khiến consumer chậm nhận ít job hơn?',
+      options: [
+        'Trần `prefetch: 1` loại consumer đang bận ra khỏi vòng xoay',
+        'Queue đo tốc độ xử lý rồi ưu tiên consumer nhanh',
+        'Broker đọc `processingMs` lúc consumer đăng ký',
+        'Message ngắn tự tìm tới consumer nhanh',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Queue không hề biết ai nhanh ai chậm. Chính prefetch tạo ra sự công bằng: consumer còn giữ message chưa ack thì bị bỏ qua, nên ai rảnh nhiều hơn sẽ gom nhiều việc hơn.',
+    },
+    {
+      question: 'Thêm consumer thứ tư vào `work` đem lại gì?',
+      options: [
+        'Thông lượng cao hơn, mỗi message vẫn chỉ được xử lý một lần',
+        'Mỗi message được xử lý bốn lần',
+        'Queue tự nhân bản để đủ việc cho bốn bên',
+        'Không gì cả, một queue chỉ phục vụ được ba consumer',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thêm consumer vào một queue là scale out phần xử lý. Message vẫn chia nhau, nên tổng thời gian rút ngắn mà số lần xử lý mỗi message giữ nguyên bằng một.',
+    },
+    {
+      question: '`fast` crash lúc đang giữ một message chưa ack. Message đó ra sao?',
+      options: [
+        'Quay về `work`, rồi được giao cho consumer còn sống',
+        'Mất hẳn, vì nó đã rời queue',
+        'Nằm chờ tới khi `fast` hồi phục',
+        'Chuyển sang DLX',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Message chưa ack vẫn nằm trong bảng unacked của broker, gắn với `work`. Consumer chết thì nó được requeue, rồi bất kỳ ai trong hai consumer còn lại cũng nhận được.',
     },
   ],
 }

@@ -76,6 +76,18 @@ export const nackRequeue: Lesson = {
         'Requeue trả message về đầu queue, giữ nguyên thứ tự ban đầu. Hệ quả thực tế: message hỏng được thử lại ngay lập tức, không có khoảng nghỉ nào — nên một lỗi tạm thời chưa kịp tự khỏi thì lần thử lại cũng hỏng.',
     },
     {
+      at: 9500,
+      question: 'Một message vừa quay lại `flaky` thêm lần nữa. Trường nào ghi lại chuyện đó?',
+      options: [
+        '`redeliveryCount` tăng thêm một',
+        '`x-death-count` tăng thêm một',
+        'Priority của message giảm đi một',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Requeue là đường đi trong cùng một queue nên nó chạm `redeliveryCount`. `x-death-count` chỉ tăng khi message bị dead-letter sang exchange khác — chuyện của bài DLX.',
+    },
+    {
       at: 18_000,
       question:
         'Tổng kết: một message *luôn luôn* khiến consumer reject. Cấu hình hiện tại xử lý nó ra sao?',
@@ -87,6 +99,56 @@ export const nackRequeue: Lesson = {
       answerIndex: 1,
       explanation:
         'Requeue trần trụi không có giới hạn số lần thử. `redeliveryCount` tăng mãi nhưng chẳng có gì đọc nó, nên message độc cứ chiếm đầu queue liên tục. Muốn thoát, ứng dụng phải tự đọc số lần giao lại rồi reject *không* requeue để đẩy sang DLX, hoặc dựng vòng retry có backoff.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Vì sao requeue trần trụi thường không chữa được một lỗi tạm thời?',
+      options: [
+        'Message quay lại đầu queue nên được thử lại ngay, lỗi chưa kịp tự khỏi',
+        'Broker xóa nội dung message lúc requeue',
+        'Message mất `correlationId` sau requeue',
+        'Consumer bị ngắt kết nối mỗi lần requeue',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Requeue chèn message lại ở đầu queue, không có khoảng nghỉ nào. Lỗi cần thời gian hồi phục — một dịch vụ phụ thuộc đang chậm chẳng hạn — sẽ gặp lại y nguyên ở lần thử kế tiếp. Vòng retry cần một delay queue chính vì vậy.',
+    },
+    {
+      question: 'Ứng dụng muốn chặn một message độc lặp vô tận thì phải làm gì?',
+      options: [
+        'Tự đọc số lần giao lại rồi reject *không* requeue để đẩy sang DLX',
+        'Đặt `maxPriority` cho queue',
+        'Bật `autoAck` cho consumer',
+        'Nâng `prefetch` lên số lớn',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Broker không có sẵn trần số lần thử. `redeliveryCount` tăng mãi nhưng chỉ ứng dụng mới đọc nó, rồi quyết định khi nào ngừng requeue để message rơi sang DLX hoặc parking lot.',
+    },
+    {
+      question: 'Nack có requeue khác nack không requeue ở điểm nào?',
+      options: [
+        'Có requeue thì message về lại queue cũ; không requeue thì nó rời queue, đi tiếp sang DLX nếu có',
+        'Có requeue thì message mất; không requeue thì nó được giữ lại',
+        'Chỉ khác nhau ở tốc độ giao lại',
+        'Không khác gì, cờ này chỉ ghi vào log',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cùng một hành động reject nhưng hai nhánh khác hẳn nhau. Nhánh không requeue là điều kiện duy nhất kích hoạt `deadLetterExchange`.',
+    },
+    {
+      question: '`nackRate: 0.5` nhưng rốt cuộc mọi message đều được ack. Vì sao?',
+      options: [
+        'Mỗi lần giao lại là một phép thử mới, xác suất trượt mãi tiến dần về 0',
+        'Broker hạ `nackRate` sau mỗi lần thất bại',
+        'Sau ba lần reject consumer buộc phải ack',
+        'Message được sửa nội dung trước khi giao lại',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Consumer reject theo xác suất độc lập từng lần, nên sau đủ nhiều lượt gần như chắc chắn có một lượt ack. Message độc thật sự thì khác hẳn: nó hỏng mọi lần, nên vòng lặp không bao giờ tự kết thúc.',
     },
   ],
 }

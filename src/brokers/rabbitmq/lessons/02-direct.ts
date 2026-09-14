@@ -94,6 +94,18 @@ export const directExchange: Lesson = {
   ],
   checkpoints: [
     {
+      at: 2400,
+      question: 'Message `Payment 1` vừa được route. Bao nhiêu queue nhận nó?',
+      options: [
+        'Một — chỉ `pay`',
+        'Hai — `pay` cùng `audit`, vì cả hai bind key `payment`',
+        'Cả ba queue, vì `ex` phát cho mọi binding',
+      ],
+      answerIndex: 1,
+      explanation:
+        'Direct exchange giao bản copy cho *mọi* binding có key khớp, chứ không dừng ở binding đầu tiên. `pay` với `audit` cùng bind key `payment` nên mỗi queue nhận một bản riêng; `ship` mang key khác nên đứng ngoài.',
+    },
+    {
       at: 4800,
       question: 'Message publish với routing key `refund` kết thúc ở đâu?',
       options: [
@@ -117,6 +129,56 @@ export const directExchange: Lesson = {
       answerIndex: 0,
       explanation:
         'Cờ `mandatory` khiến broker trả message không route được về publisher qua callback `basic.return`; alternate exchange thì chuyển nó sang một exchange dự phòng. Cả hai đều biến việc mất message âm thầm thành tín hiệu quan sát được. Chuyển sang fanout tuy hết drop nhưng đồng thời phá vỡ toàn bộ khả năng routing.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Direct exchange so khớp routing key kiểu nào?',
+      options: [
+        'Khớp chuỗi chính xác',
+        'Khớp tiền tố',
+        'Khớp pattern dùng `*` cùng `#`',
+        'Khớp không phân biệt hoa thường',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Direct chỉ so bằng: key của message phải trùng từng ký tự với key của binding. Muốn khớp theo pattern thì cần topic exchange.',
+    },
+    {
+      question: 'Hai binding cùng key `payment` trỏ về hai queue. Một message key `payment` tạo ra bao nhiêu bản copy?',
+      options: [
+        'Hai, mỗi queue một bản độc lập',
+        'Một, broker chọn queue rảnh hơn',
+        'Một, queue bind trước được ưu tiên',
+        'Không bản nào, vì key trùng gây xung đột',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Số bản copy bằng số binding khớp. Mỗi queue giữ bản riêng của nó, tiêu thụ độc lập, không ai tranh phần của ai.',
+    },
+    {
+      question: 'Message mang key `refund` không khớp binding nào. Broker làm gì?',
+      options: [
+        'Drop im lặng, không nơi nào giữ lại',
+        'Giữ trong exchange cho tới khi có binding mới',
+        'Đẩy vào `audit` như nơi hứng mặc định',
+        'Trả lỗi cho publisher',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Exchange không lưu trữ. Không binding nào khớp, không cờ `mandatory`, không alternate exchange thì message bị bỏ ngay, không để lại dấu vết ở queue nào.',
+    },
+    {
+      question: 'Cách nào biến việc mất message âm thầm thành tín hiệu quan sát được?',
+      options: [
+        'Publish kèm cờ `mandatory`, hoặc gắn alternate exchange cho `ex`',
+        'Đổi `ex` sang fanout',
+        'Nâng prefetch cho cả ba consumer',
+        'Bật `durable` cho cả ba queue',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`mandatory` khiến broker trả message không route được về publisher qua `basic.return`; alternate exchange chuyển nó sang một exchange dự phòng. Fanout tuy hết drop nhưng xoá luôn khả năng routing.',
     },
   ],
 }

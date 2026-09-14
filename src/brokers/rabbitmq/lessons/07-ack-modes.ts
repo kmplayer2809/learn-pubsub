@@ -99,6 +99,18 @@ export const ackModes: Lesson = {
         'Với `autoAck: true`, broker xác nhận message ngay khoảnh khắc đẩy nó ra khỏi queue, rồi xóa khỏi bảng unacked. Không còn bản ghi nào thì không có gì để requeue. Message của `manual` thì vẫn nằm trong bảng unacked nên crash sẽ trả nó về queue.',
     },
     {
+      at: 10_500,
+      question: 'So với auto-ack, manual ack bắt broker trả thêm cái giá nào?',
+      options: [
+        'Bookkeeping: broker phải nhớ mọi message chưa ack',
+        'Một bản copy dự phòng của mỗi message trên đĩa',
+        'Một kết nối riêng cho mỗi lần ack',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Broker giữ bảng unacked cho từng consumer để còn requeue khi cần. Đổi chút bộ nhớ cùng một vòng xác nhận, message không biến mất lúc consumer chết.',
+    },
+    {
       at: 14_000,
       question: 'Tổng kết: trường hợp nào chọn auto-ack vẫn hợp lý?',
       options: [
@@ -109,6 +121,56 @@ export const ackModes: Lesson = {
       answerIndex: 0,
       explanation:
         'Auto-ack đánh đổi độ bền lấy throughput: bỏ vòng xác nhận nên nhanh hơn, nhưng mọi message đang bay đều mất khi consumer chết. Đánh đổi này chấp nhận được với dữ liệu có tính thống kê, còn nghiệp vụ tiền bạc hay job dài luôn cần manual ack.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Với `autoAck: true`, broker coi message là xong vào lúc nào?',
+      options: [
+        'Ngay khoảnh khắc đẩy message ra khỏi queue',
+        'Khi consumer gọi ack',
+        'Khi consumer chạy hết `processingMs`',
+        'Khi message được ghi xuống đĩa',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Auto-ack xác nhận ngay lúc giao rồi xóa message khỏi bảng unacked. Từ đó trở đi broker không còn bản ghi nào để requeue.',
+    },
+    {
+      question: 'Consumer auto-ack crash giữa lúc xử lý. Message đang trong tay nó ra sao?',
+      options: [
+        'Mất hẳn, không ai requeue được',
+        'Quay về queue rồi được giao lại',
+        'Chuyển sang DLX của queue',
+        'Nằm trong bảng unacked chờ hồi phục',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không còn bản ghi thì không có gì để trả về queue. Đây chính là mất mát âm thầm: `acked` không tăng, `redeliveryCount` cũng không, nên chẳng còn dấu vết nào.',
+    },
+    {
+      question: 'Message được requeue sau một lần crash mang theo dấu hiệu gì?',
+      options: [
+        '`redeliveryCount` tăng thêm một, event log ghi nhãn redelivered',
+        'Một header `x-death-reason` mới',
+        'Priority bị hạ về 0',
+        'Không dấu hiệu nào, message y hệt lần đầu',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`redeliveryCount` chính là thứ ứng dụng đọc để biết mình đang xử lý lại. Header `x-death-reason` thuộc về đường dead-letter, không phải requeue.',
+    },
+    {
+      question: 'Vì sao auto-ack cho throughput cao hơn?',
+      options: [
+        'Bỏ hẳn vòng xác nhận nên broker đẩy message liên tục',
+        'Message được nén lại trước khi giao',
+        'Broker bỏ qua prefetch nên xử lý song song hơn',
+        'Queue ghi thẳng xuống đĩa nhanh hơn',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mỗi ack là một vòng đi về giữa consumer với broker. Bỏ vòng đó thì nhịp giao nhanh hơn, đổi lại mọi message đang bay sẽ mất khi consumer chết — đánh đổi chỉ hợp lý với dữ liệu mang tính thống kê.',
     },
   ],
 }

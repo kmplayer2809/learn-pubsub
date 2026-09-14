@@ -67,6 +67,18 @@ export const durabilityAndConfirms: Lesson = {
   ],
   checkpoints: [
     {
+      at: 4200,
+      question: 'Message thứ ba publish với `persistent: false`. Nó có vào `orders` không?',
+      options: [
+        'Có — route rồi tiêu thụ bình thường, chỉ khác lúc broker restart',
+        'Không, broker từ chối message transient vào một queue `durable`',
+        'Có, nhưng `worker` bỏ qua nó',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`persistent` không ảnh hưởng tới routing hay tiêu thụ, nó chỉ quyết định message có được ghi xuống đĩa hay không. Khác biệt duy nhất lộ ra đúng lúc broker khởi động lại.',
+    },
+    {
       at: 9000,
       question: 'Nếu broker restart ngay sau khi cả bốn message đã nằm trong `orders`, điều gì sống sót?',
       options: [
@@ -90,6 +102,56 @@ export const durabilityAndConfirms: Lesson = {
       answerIndex: 0,
       explanation:
         '`persistent` cộng `durable` bảo vệ message *sau khi* broker đã nhận. Confirm bảo vệ đoạn trước đó: kết nối rớt giữa chừng thì publish im lặng biến mất, ứng dụng vẫn tưởng đã gửi xong. Đủ bộ ba mới khép kín đường đi từ publisher tới đĩa.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`durable` nằm trên đâu, `persistent` nằm trên đâu?',
+      options: [
+        '`durable` trên queue, `persistent` trên từng message',
+        '`durable` trên message, `persistent` trên queue',
+        'Cả hai đều nằm trên queue',
+        'Cả hai đều nằm trên exchange',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hai cờ ở hai tầng khác nhau nên phải đủ cả hai: queue sống sót qua restart, còn message cũng phải tự đánh dấu để được ghi xuống đĩa.',
+    },
+    {
+      question: 'Queue `durable` nhưng message `persistent: false`. Sau restart còn lại gì?',
+      options: [
+        'Queue còn, message đó mất',
+        'Cả queue lẫn message đều còn',
+        'Cả hai đều mất',
+        'Message còn, nhưng queue phải khai báo lại',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Khai báo queue được ghi xuống đĩa nên `orders` xuất hiện lại sau restart, chỉ thiếu phần message transient. Độ bền chỉ khép kín khi cả hai tầng cùng bật.',
+    },
+    {
+      question: 'Publisher confirm cho biết điều gì?',
+      options: [
+        'Broker đã nhận trách nhiệm với message',
+        'Consumer đã ack message',
+        'Message đã tới đúng consumer',
+        'Message đã hết TTL',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Confirm là lời xác nhận của broker về việc nhận message; với message `persistent` thì còn chờ ghi xong xuống đĩa. Nó không nói gì về phía tiêu thụ — ack mới là chuyện của consumer.',
+    },
+    {
+      question: 'Vì sao confirm cho message `persistent` về trễ hơn message transient?',
+      options: [
+        'Broker chờ ghi xong xuống đĩa rồi mới xác nhận',
+        'Message `persistent` phải qua thêm một exchange',
+        'Broker nén message trước khi lưu',
+        'Confirm transient được gửi trước cả lúc route',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Khoảng trễ đó chính là cái giá của durability. Message transient chỉ cần route xong là confirm, nên nhanh hơn nhưng lời hứa cũng yếu hơn hẳn.',
     },
   ],
 }

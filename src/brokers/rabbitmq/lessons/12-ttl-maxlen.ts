@@ -103,6 +103,14 @@ export const ttlAndMaxLength: Lesson = {
         'Mặc định `x-overflow` là `drop-head`: queue nhận message mới rồi đẩy message ở đầu hàng ra ngoài. Muốn giữ hàng chờ hiện có và từ chối message mới thì phải đổi sang `reject-publish`.',
     },
     {
+      at: 9000,
+      question: 'Message hết hạn TTL rồi bị dead-letter mang lý do nào trong `x-death-reason`?',
+      options: ['*expired*', '*rejected*', '*maxlen*'],
+      answerIndex: 0,
+      explanation:
+        'Ba lý do dùng chung một nhánh dead-letter nhưng ghi nhãn khác nhau: *rejected* khi consumer từ chối, *expired* khi hết TTL, *maxlen* khi queue tràn. Nhãn này là thứ giúp phân loại message ở nơi hứng.',
+    },
+    {
       at: 16_000,
       question:
         'Tổng kết: muốn message tự động chuyển sang queue khác sau đúng 30 giây, dựng thế nào?',
@@ -114,6 +122,56 @@ export const ttlAndMaxLength: Lesson = {
       answerIndex: 0,
       explanation:
         'Queue không consumer cộng TTL cộng DLX chính là delay primitive chuẩn của RabbitMQ: message nằm chờ đủ 30 giây, hết hạn, rồi được dead-letter sang đích. Cách cho consumer tự ngủ thì chiếm giữ kết nối, dễ chạm timeout, lại mất hiệu lực ngay khi tiến trình chết.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Muốn giữ nguyên hàng chờ hiện có, từ chối message mới lúc queue đầy thì đặt gì?',
+      options: [
+        '`x-overflow` sang `reject-publish`',
+        '`x-overflow` sang `drop-head`',
+        '`messageTtlMs` bằng 0',
+        '`maxPriority` bằng 1',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mặc định `drop-head` hy sinh message cũ để nhận message mới. `reject-publish` đảo ngược ưu tiên đó: queue giữ nguyên nội dung, publish mới bị từ chối — publisher biết ngay thay vì mất message âm thầm.',
+    },
+    {
+      question: 'Vì sao `short-lived` mất message dù chưa message nào chạm mốc TTL?',
+      options: [
+        '`maxLength: 3` tràn trước, message cũ nhất bị đẩy ra',
+        'TTL được tính từ lúc publish message đầu tiên',
+        'Queue không consumer thì broker xóa luôn queue',
+        'Message thứ tư ghi đè message đầu tiên',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hai giới hạn chạy song song, cái nào tới trước thì cái đó quyết định. Nhịp publish 400ms khiến queue đầy ngay ở message thứ tư, sớm hơn mốc 2500ms rất nhiều.',
+    },
+    {
+      question: 'Message bị đẩy ra vì tràn queue có mất luôn không?',
+      options: [
+        'Không, nếu queue khai báo DLX thì nó được chuyển sang đó',
+        'Có, tràn queue luôn đồng nghĩa mất message',
+        'Không, broker giữ nó trong bộ nhớ chờ chỗ trống',
+        'Có, chỉ message hết TTL mới được dead-letter',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Tràn queue lẫn hết hạn TTL đều đi vào cùng một nhánh dead-letter. Thiếu `deadLetterExchange` thì cả hai trường hợp đều mất sạch, không dấu vết.',
+    },
+    {
+      question: 'Đặt `messageTtlMs` trên queue khác gì đặt TTL trên từng message?',
+      options: [
+        'TTL trên queue áp cho mọi message như nhau, TTL trên message thì mỗi cái một hạn riêng',
+        'Không khác gì, broker gộp cả hai thành một',
+        'TTL trên queue chỉ áp cho message `persistent`',
+        'TTL trên message bị bỏ qua nếu queue có DLX',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đồng nhất một hạn cho cả queue chính là cách bậc thang delay queue hoạt động. TTL riêng từng message nghe linh hoạt hơn nhưng vướng head-of-line blocking ở classic queue — bài delay sẽ mổ xẻ chỗ này.',
     },
   ],
 }

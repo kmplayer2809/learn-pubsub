@@ -70,6 +70,18 @@ export const helloWorld: Lesson = {
   ],
   checkpoints: [
     {
+      at: 2600,
+      question: 'Queue `hello` đang phình ra. Điều đó nói lên chuyện gì?',
+      options: [
+        'Publisher tạo message nhanh hơn consumer xử lý',
+        'Broker đang nhân bản message cho nhiều consumer',
+        'Routing key sai nên message bị giữ lại',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Queue là bộ đệm giữa hai tốc độ khác nhau. Depth tăng nghĩa là nhịp publish vượt nhịp tiêu thụ — chính khoảng cách đó là lý do broker tồn tại.',
+    },
+    {
       at: 6000,
       question: 'Nếu consumer ngừng ack, điều gì sẽ xảy ra với queue?',
       options: [
@@ -93,6 +105,56 @@ export const helloWorld: Lesson = {
       answerIndex: 1,
       explanation:
         'Không có API nào publish thẳng vào queue. Default exchange là một direct exchange có sẵn binding ngầm tới mọi queue theo đúng tên queue, nên `hello` vừa là tên queue vừa là routing key. Hiểu điều này thì bốn loại exchange ở các bài sau chỉ còn là thay đổi luật khớp key.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Publisher gửi message tới đâu trước tiên?',
+      options: [
+        'Một exchange, không có ngoại lệ',
+        'Thẳng vào queue nếu biết tên queue',
+        'Thẳng tới consumer đang rảnh',
+        'Vào bảng unacked của broker',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không có API nào ghi thẳng vào queue. Kiểu "gửi thẳng vào queue" thực chất đi qua default exchange, nên mọi đường đi của message đều bắt đầu ở một exchange.',
+    },
+    {
+      question: 'Default exchange thuộc loại nào, khớp message theo cái gì?',
+      options: [
+        'Direct, khớp routing key đúng bằng tên queue',
+        'Fanout, gửi tới mọi queue đang tồn tại',
+        'Topic, khớp theo pattern của tên queue',
+        'Headers, khớp theo header `queue`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Default exchange là direct exchange mang sẵn một binding ngầm tới mọi queue, lấy tên queue làm routing key. Vì vậy `hello` vừa là tên queue vừa là routing key.',
+    },
+    {
+      question: 'Với `prefetch: 1` cùng manual ack, khi nào consumer nhận message kế tiếp?',
+      options: [
+        'Sau khi nó ack message đang giữ',
+        'Ngay khi message kế tiếp vào queue',
+        'Sau mỗi 900ms theo `processingMs`',
+        'Khi queue depth vượt một ngưỡng',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`prefetch: 1` cho phép đúng một message chưa ack mỗi consumer. Ack chính là tín hiệu mở cửa sổ cho message kế tiếp, nên queue drain theo từng nhịp một.',
+    },
+    {
+      question: 'Consumer ngừng ack hẳn. Queue `hello` ra sao?',
+      options: [
+        'Depth tăng dần, delivery dừng sau một message',
+        'Broker drop phần message dư ra',
+        'Message tự chuyển sang consumer khác',
+        'Publisher bị chặn ngay lập tức',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một message chưa ack đã lấp kín cửa sổ `prefetch: 1`, nên broker ngừng đẩy tiếp cho consumer đó. Message mới vẫn vào queue bình thường, chỉ là không ai lấy đi.',
     },
   ],
 }

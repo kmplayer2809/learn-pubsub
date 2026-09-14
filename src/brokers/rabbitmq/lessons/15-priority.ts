@@ -69,6 +69,18 @@ export const priorityQueue: Lesson = {
   ],
   checkpoints: [
     {
+      at: 5000,
+      question: 'Job 4 mang priority 9 vừa vào `jobs`. Nó đứng ở đâu trong hàng chờ?',
+      options: [
+        'Trước Job 2 cùng Job 3, dù hai job đó tới sớm hơn',
+        'Sau Job 2 cùng Job 3, theo đúng thứ tự tới',
+        'Ở cuối queue, chờ hết một chu kỳ',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Priority sắp xếp lại phần message còn đang chờ: mức cao hơn luôn được chọn trước. Riêng Job 1 đã rời queue từ trước nên priority không thể động tới nó.',
+    },
+    {
       at: 15000,
       question: 'Nếu `worker` khai báo `prefetch: 10` thay vì `prefetch: 1`, priority của Job 4 và Job 8 còn phát huy tác dụng như trong lesson này không?',
       options: [
@@ -92,6 +104,56 @@ export const priorityQueue: Lesson = {
       answerIndex: 0,
       explanation:
         'Priority queue luôn chọn mức cao nhất còn hàng, không hề có aging hay chia phần theo tỉ lệ. Tải mức cao liên tục sẽ khiến message mức thấp nằm mãi. Cách xử lý thực tế là tách hẳn thành nhiều queue với số worker riêng, thay vì trông vào priority trong một queue duy nhất.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Priority tác động lên phần nào của dòng message?',
+      options: [
+        'Chỉ message còn nằm chờ trong queue',
+        'Cả message đã giao cho consumer',
+        'Cả message đã ack',
+        'Message trong bảng unacked',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Message đã rời queue thì queue hết quyền sắp xếp. Vì vậy Job 1 được xử lý trước dù priority 0, còn priority chỉ định đoạt những gì chưa đi.',
+    },
+    {
+      question: 'Hai message cùng priority 0 thì queue chọn cái nào trước?',
+      options: [
+        'Cái vào queue trước',
+        'Cái có body ngắn hơn',
+        'Một cái ngẫu nhiên',
+        'Cái vào queue sau',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Trong cùng một mức priority, queue vẫn là FIFO. Priority chỉ phá vỡ thứ tự giữa các mức khác nhau.',
+    },
+    {
+      question: 'Vì sao `prefetch` thấp là điều kiện để priority còn ý nghĩa?',
+      options: [
+        'Mỗi lần consumer rảnh mới là một cơ hội chọn lại message xứng đáng nhất',
+        'Vì prefetch cao làm queue bỏ qua `maxPriority`',
+        'Vì broker chỉ sắp xếp queue lúc prefetch bằng 1',
+        'Vì prefetch cao khiến message mất priority',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Prefetch cao nghĩa là consumer ôm sẵn một loạt message, thứ tự xử lý coi như chốt từ sớm. Message priority cao tới sau đó phải xếp hàng sau những gì đã bị lấy đi.',
+    },
+    {
+      question: 'Cách nào chống việc message mức thấp bị bỏ đói?',
+      options: [
+        'Tách hẳn thành nhiều queue, mỗi queue có số worker riêng',
+        'Bật aging để broker tự nâng priority của message chờ lâu',
+        'Đặt `maxPriority` cao hơn',
+        'Giảm `processingMs` của worker',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Priority queue luôn chọn mức cao nhất còn hàng, không hề có aging hay chia phần theo tỉ lệ. Muốn đảm bảo phần tài nguyên tối thiểu cho việc mức thấp thì phải tách queue.',
     },
   ],
 }

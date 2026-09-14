@@ -87,6 +87,18 @@ export const rpcPattern: Lesson = {
   ],
   checkpoints: [
     {
+      at: 7000,
+      question: 'Ba reply cùng đổ vào `reply-q`. `caller` ghép reply với request nhờ cái gì?',
+      options: [
+        '`correlationId` đi kèm mỗi reply',
+        'Thứ tự tới trước xử lý trước',
+        'Kích thước của message',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thứ tự reply không có gì đảm bảo: nhiều worker chạy song song hoặc một request nặng hơn là đủ để đảo thứ tự. `correlationId` là nhãn duy nhất ghép được đúng cặp.',
+    },
+    {
       at: 12500,
       question: 'Nếu message request thiếu trường `correlationId`, điều gì xảy ra với reply mà `worker` publish?',
       options: [
@@ -110,6 +122,56 @@ export const rpcPattern: Lesson = {
       answerIndex: 1,
       explanation:
         'Reply chỉ được publish khi request được ack, nên `worker` chết là chuỗi đứt hẳn: request quay về `rpc-work` chờ giao lại, còn phía `caller` im lặng. RPC qua broker không có khái niệm timeout sẵn có — phần đó thuộc trách nhiệm ứng dụng, cùng với việc dọn `correlationId` đã treo quá lâu.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Trường `replyTo` mang thông tin gì?',
+      options: [
+        'Nơi câu trả lời sẽ được publish tới',
+        'Địa chỉ mạng của `caller`',
+        'Thời hạn chờ reply',
+        'Tên consumer đã xử lý request',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`replyTo` ghi exchange nhận reply, còn `correlationId` trở thành routing key của reply. Nhờ vậy `worker` trả lời đúng chỗ mà không cần biết `caller` là ai.',
+    },
+    {
+      question: 'Broker publish reply vào lúc nào?',
+      options: [
+        'Khi `worker` ack request',
+        'Ngay khi request vào `rpc-work`',
+        'Khi `caller` gửi lệnh nhận',
+        'Sau khi `rpc-work` rỗng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Ack là tín hiệu request đã xử lý xong. Vì vậy `worker` chết trước lúc ack nghĩa là không có reply nào, còn request quay về `rpc-work` chờ giao lại.',
+    },
+    {
+      question: 'Vì sao RPC qua broker vẫn cần timeout ở tầng ứng dụng?',
+      options: [
+        'Không có reply nào thì `caller` chờ mãi, broker không báo lỗi thay',
+        'Vì broker giới hạn số request mỗi giây',
+        'Vì `correlationId` hết hạn sau mười giây',
+        'Vì `reply-q` tự xóa sau một phút',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chuỗi request-reply đứt ở bất kỳ đâu — worker chết, reply không route được — đều biểu hiện giống nhau phía `caller`: im lặng. Timeout cùng việc dọn `correlationId` treo quá lâu thuộc trách nhiệm ứng dụng.',
+    },
+    {
+      question: 'RPC kiểu này có tạo kết nối trực tiếp giữa `client` với `worker` không?',
+      options: [
+        'Không — hai bên chỉ gặp nhau qua exchange cùng queue',
+        'Có, broker mở một socket riêng cho mỗi cặp',
+        'Có, nhưng chỉ khi `replyTo` trỏ đúng',
+        'Không, hai bên trao đổi qua một file tạm',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cả hai chiều đều là publish rồi consume bình thường. Nhờ vậy request có thể được giao lại cho worker khác, còn `caller` chẳng cần biết ai đã xử lý.',
     },
   ],
 }

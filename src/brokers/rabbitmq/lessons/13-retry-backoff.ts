@@ -118,6 +118,18 @@ export const retryWithBackoff: Lesson = {
   ],
   checkpoints: [
     {
+      at: 11000,
+      question: 'Một message vừa đi trọn vòng `work → retry-ex → retry-1s → main-ex → work`. Cái gì đẩy nó rời `retry-1s`?',
+      options: [
+        'TTL 1000ms hết hạn',
+        'Một consumer của `retry-1s` ack nó',
+        '`worker` chủ động kéo nó về',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`retry-1s` không có consumer nào. Thứ duy nhất đẩy message ra là `messageTtlMs: 1000`, rồi `deadLetterExchange: main-ex` quyết định nó quay lại `work`.',
+    },
+    {
       at: 20000,
       question: 'Nếu không có bất kỳ death-count check tường minh nào đọc `x-death-count`, điều gì sẽ xảy ra với một message luôn luôn bị `worker` reject?',
       options: [
@@ -141,6 +153,56 @@ export const retryWithBackoff: Lesson = {
       answerIndex: 0,
       explanation:
         'TTL là thuộc tính tĩnh của queue, không thể tăng dần theo từng lượt. Cách chuẩn là một bậc thang delay queue, mỗi bậc một TTL, rồi ứng dụng đọc `x-death-count` để chọn routing key đẩy message vào bậc phù hợp. Đặt TTL lên `work` chỉ khiến chính công việc hết hạn.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Vì sao vòng retry này không cần timer nào ở tầng ứng dụng?',
+      options: [
+        'TTL cộng DLX của `retry-1s` đóng vai trò hẹn giờ',
+        '`worker` tự ngủ giữa hai lần thử',
+        'Broker có sẵn một scheduler',
+        'Publisher publish lại sau mỗi giây',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Message nằm trong delay queue đúng một giây rồi hết hạn, sau đó dead-letter đưa nó về `main-ex`. Toàn bộ nhịp chờ nằm trong cấu hình queue, không dòng code nào canh giờ.',
+    },
+    {
+      question: 'Trường nào đếm số lần một message đã đi qua vòng retry?',
+      options: [
+        '`x-death-count` cùng death trail',
+        '`redeliveryCount`',
+        '`correlationId`',
+        '`priority`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mỗi lần dead-letter ghi thêm một mục vào death trail. `redeliveryCount` thì đếm lần giao lại trong cùng một queue, nên nó không phản ánh số vòng retry.',
+    },
+    {
+      question: 'Vì sao TTL không thể tăng dần theo từng lượt của cùng một message?',
+      options: [
+        'TTL là thuộc tính tĩnh của queue, nên mỗi bậc backoff cần một queue riêng',
+        'Vì broker giới hạn TTL tối đa một giây',
+        'Vì `x-death-count` ghi đè lên TTL',
+        'Vì message mất TTL sau lần dead-letter đầu tiên',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một queue một TTL. Bậc thang `retry-1s`, `retry-5s`, `retry-30s` là cách thông dụng, kèm logic ứng dụng đọc `x-death-count` để chọn routing key đẩy message vào bậc phù hợp.',
+    },
+    {
+      question: '`parking-lot` nhận message bằng cách nào?',
+      options: [
+        'Ai đó publish vào `retry-ex` với routing key `parked`',
+        'Broker tự chuyển message sang đó sau ba vòng retry',
+        '`retry-1s` dead-letter sang đó khi TTL hết hạn',
+        '`work` tràn `maxLength` rồi đẩy sang',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`retry-ex` là direct exchange: key `retry` về delay queue, key `parked` về parking lot. Không có gì tự đổi key — ứng dụng phải đọc `x-death-count` rồi quyết định, nếu không vòng lặp cứ chạy mãi.',
     },
   ],
 }
