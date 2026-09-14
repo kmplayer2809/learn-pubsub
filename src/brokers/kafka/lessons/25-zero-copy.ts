@@ -90,6 +90,18 @@ export const zeroCopy: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 8000,
+      question: 'Vì sao broker khỏi phải dựng lại record trên JVM heap trước khi gửi?',
+      options: [
+        'Định dạng byte trên đĩa giống hệt định dạng byte gửi qua mạng',
+        'Vì consumer tự giải mã phần còn thiếu',
+        'Vì record đã được nén sẵn từ producer',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Byte trên đĩa với byte trên dây đã là một, nên `sendfile` chuyển thẳng được mà CPU không đụng tới payload.',
+    },
+    {
       at: 14_000,
       question: 'Điều gì thật sự khiến Kafka gọi được là zero-copy khi phục vụ một lần fetch cho consumer?',
       options: [
@@ -113,6 +125,56 @@ export const zeroCopy: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Kernel không thể mã hoá byte trên đường đi, nên broker phải kéo dữ liệu lên user space, mã hoá, rồi đẩy ngược xuống — quay lại đúng đường bốn chặng. Phần tụt vì vậy gồm cả chi phí mã hoá lẫn phần đường tắt bị mất. Đó cũng là lý do một số triển khai dùng kTLS để giành lại `sendfile`.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Đường đi truyền thống của một lượt fetch gồm mấy chặng?',
+      options: [
+        'Bốn chặng, trong đó hai lần sao chép băng qua ranh giới kernel/user',
+        'Hai chặng, không lần nào băng qua ranh giới đó',
+        'Một chặng duy nhất',
+        'Ba chặng, chỉ khi bật nén',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chi phí đó trả cho mỗi byte, mỗi lần fetch, mỗi consumer — không phải một lần rồi thôi.',
+    },
+    {
+      question: '`sendfile` đưa cho kernel cái gì?',
+      options: [
+        'Bộ ba file descriptor, offset, length — không byte payload nào',
+        'Toàn bộ batch đã đọc lên heap',
+        'Một con trỏ tới JVM heap',
+        'Bản sao đã mã hoá của dữ liệu',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Kernel tự sao chép từ page cache sang socket buffer, nên CPU không phải đọc payload.',
+    },
+    {
+      question: 'Zero-copy có nghĩa là không byte nào được sao chép không?',
+      options: [
+        'Không — vẫn còn hai lần sao chép; thứ bị loại là hai lần băng qua ranh giới kernel/user',
+        'Có, không byte nào di chuyển',
+        'Có, consumer đọc thẳng page cache của broker',
+        'Không, nó chỉ là một tên gọi khác của cùng cơ chế cũ',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đĩa sang page cache, page cache sang socket buffer vẫn còn. Phần biến mất là đường vòng qua application buffer cùng hai lần context switch đi kèm.',
+    },
+    {
+      question: 'High watermark với zero-copy quan hệ ra sao?',
+      options: [
+        'Độc lập — một cái quyết định record nào đọc được, cái kia quyết định byte rời broker rẻ tới đâu',
+        'Zero-copy nâng high watermark lên nhanh hơn',
+        'High watermark tắt zero-copy khi ISR co lại',
+        'Hai khái niệm chỉ là một',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đổi cơ chế truyền tải không dịch chuyển offset nào được phép đọc, còn siết offset được phép đọc cũng không làm chậm `sendfile` phía dưới.',
     },
   ],
 }

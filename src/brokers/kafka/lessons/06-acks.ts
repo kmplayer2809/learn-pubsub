@@ -92,6 +92,18 @@ export const acks: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 12_000,
+      question: '`p1` (`acks=0`) gửi `đơn-1b` lúc `b1` đang down. Producer biết được gì?',
+      options: [
+        'Không gì cả — không có phản hồi nào để phát hiện record đã mất',
+        'Nhận lỗi rồi tự thử lại',
+        'Nhận xác nhận thành công dù record chưa vào log',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`acks=0` là gửi rồi quên. Producer chỉ biết mỗi việc đã gửi đi, nên mất record ở đây là mất im lặng.',
+    },
+    {
       at: 20_000,
       question: 'Vì sao chọn `acks` là chọn theo giá của một record bị mất, không phải theo throughput mong muốn?',
       options: [
@@ -115,6 +127,56 @@ export const acks: KafkaLesson = {
       answerIndex: 0,
       explanation:
         '`acks=1` xác nhận ngay khi leader ghi vào log của nó. Leader chết ngay sau đó, trước khi follower kịp sao chép, thì record biến mất dù producer đã nhận báo thành công. `acks=all` chờ toàn bộ ISR — chỉ những replica đang bắt kịp, không phải cả ba — nên record đã xác nhận vẫn sống sót qua một lần bầu lại leader. Bài 18 ghép nó với `min.insync.replicas` cho đủ bộ.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`acks=1` xác nhận cho producer tại thời điểm nào?',
+      options: [
+        'Khi leader ghi xong, chưa cần follower sao chép',
+        'Khi mọi replica trong ISR đã ghi',
+        'Ngay khi request rời producer',
+        'Khi consumer đọc được message',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Leader trả lời ngay sau khi ghi vào log của mình. Leader chết trước lúc follower kịp sao chép thì message đó mất.',
+    },
+    {
+      question: '`acks=0` đánh đổi cái gì?',
+      options: [
+        'Nhanh nhất, đổi bằng việc producer mù hoàn toàn trước một record bị mất',
+        'Chậm nhất, đổi bằng độ bền cao nhất',
+        'Không đổi gì, nó chỉ tắt phần log phía client',
+        'Thông lượng thấp hơn, đổi bằng thứ tự chặt hơn',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không chờ phản hồi nghĩa là không có tín hiệu nào để phát hiện lỗi. Mức này chỉ hợp với dữ liệu mang tính thống kê.',
+    },
+    {
+      question: 'Với `replicationFactor: 1`, `acks=all` đòi thêm gì so với `acks=1`?',
+      options: [
+        'Không gì cả — ISR chỉ gồm đúng leader',
+        'Chờ thêm hai follower',
+        'Chờ consumer đọc xong',
+        'Chờ controller xác nhận',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hai mức chỉ tách nhau ra khi ISR có nhiều hơn một replica. Bài 17 cùng bài 18 mới làm lộ khác biệt đó.',
+    },
+    {
+      question: 'Leader của partition đang down. `acks=1` cho producer biết gì?',
+      options: [
+        'Producer nhận lỗi, nên nó biết chắc record chưa vào log',
+        'Producer nhận xác nhận thành công',
+        'Producer không nhận gì cả, y như `acks=0`',
+        'Một broker khác tự nhận thay record đó',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Miễn còn chờ phản hồi thì trạng thái của record luôn rõ ràng. Đó là khác biệt lớn nhất so với `acks=0`.',
     },
   ],
 }

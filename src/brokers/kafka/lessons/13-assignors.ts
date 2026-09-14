@@ -104,6 +104,18 @@ export const assignors: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 12_000,
+      question: '`cg3` vừa join `g-coop`. `cg1` với `cg2` có ngừng đọc không?',
+      options: [
+        'Không — chúng giữ nguyên assignment, chỉ phần cần đổi chủ mới bị thu hồi',
+        'Có, y hệt bên `g-range`',
+        'Có, nhưng chỉ `cg1` ngừng',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`cooperative-sticky` trì hoãn việc thu hồi tới đúng lúc cần, nên partition không đổi chủ vẫn được đọc suốt quá trình rebalance.',
+    },
+    {
       at: 26_000,
       question: 'Khi một consumer thứ ba join một group hai consumer đang `Stable`, khác biệt lớn nhất giữa `range` và `cooperative-sticky` là gì?',
       options: [
@@ -127,6 +139,56 @@ export const assignors: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Mọi member trong một group phải thống nhất một protocol chung, mà eager với cooperative thì không tương thích. Quy trình chuẩn là nâng cấp hai đợt: đợt đầu mỗi member khai báo danh sách `[cooperative-sticky, range]` nên vẫn chốt được `range` trong lúc group pha trộn; khi mọi member đã lên đợt đầu thì đợt sau bỏ `range` đi, group tự chuyển sang cooperative.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`range` xếp partition theo cách nào?',
+      options: [
+        'Thành khối liên tiếp cho từng member',
+        'Xen kẽ từng partition một',
+        'Ngẫu nhiên theo seed',
+        'Theo kích thước dữ liệu mỗi partition',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nó tính lại phần dư cho mỗi topic riêng, nên với một group nhiều topic, phần lệch dồn vào những member đứng đầu bảng chữ cái.',
+    },
+    {
+      question: '`round-robin` khác `sticky` ở chỗ nào?',
+      options: [
+        'Cùng công thức phân bổ, nhưng `sticky` ưu tiên giữ lại assignment cũ',
+        '`round-robin` bỏ qua member mới',
+        '`sticky` chỉ chạy được với một topic',
+        '`round-robin` giữ assignment cũ tốt hơn',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`cooperative-sticky` chỉ là `sticky` cộng thêm cách chuyển êm hơn giữa hai lần gán.',
+    },
+    {
+      question: 'Vì sao sáu partition chia cho hai consumer chưa lộ ra khác biệt giữa hai assignor?',
+      options: [
+        'Chia hết nên cả hai đều cân bằng tuyệt đối; khác biệt chỉ lộ khi thành viên thay đổi',
+        'Vì hai group dùng chung một assignor',
+        'Vì `cooperative-sticky` chỉ chạy từ ba member trở lên',
+        'Vì lần gán đầu tiên luôn theo `range`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Lần gán đầu chưa ai từng sở hữu gì, nên phần ưu tiên giữ lại assignment cũ chưa có đất dùng.',
+    },
+    {
+      question: 'Vì sao eager với cooperative không thể cùng tồn tại trong một group?',
+      options: [
+        'Mọi member phải thống nhất một protocol chung, mà hai loại này không tương thích',
+        'Vì hai loại dùng hai coordinator khác nhau',
+        'Vì cooperative đòi số partition chẵn',
+        'Vì eager không đọc được `generationId`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Quy trình chuẩn là khai báo `[cooperative-sticky, range]` ở đợt đầu để group vẫn chốt được `range`, rồi bỏ `range` ở đợt sau.',
     },
   ],
 }

@@ -78,6 +78,18 @@ export const batchingLinger: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 10_000,
+      question: '`p2` (`lingerMs: 2000`) flush batch đầu tiên vào lúc nào?',
+      options: [
+        't=2500, đúng lúc hết `lingerMs` tính từ record mở batch',
+        'Ngay khi record thứ tư tới',
+        'Khi batch chạm `batchSize: 4096`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Bốn record nhỏ còn rất xa mới chạm `batchSize`, nên đồng hồ `lingerMs` mới là thứ đóng batch. `batchSize` chỉ là trần buộc gửi sớm khi batch đầy trước.',
+    },
+    {
       at: 18_000,
       question: 'Giữa hai producer cùng ghi tám record, `p1` (`lingerMs: 0`) và `p2` (`lingerMs: 2000`), điều gì đúng?',
       options: [
@@ -101,6 +113,56 @@ export const batchingLinger: KafkaLesson = {
       answerIndex: 0,
       explanation:
         '`lingerMs: 0` nghĩa là không cố tình chờ, chứ không phải cấm gom. Producer chỉ gửi được khi còn khe `max.in.flight`; trong lúc chờ khe, mọi record tới đều dồn vào batch đang mở. Vì vậy tải càng cao thì batch tự nhiên càng lớn — `lingerMs` chỉ thật sự có ý nghĩa với tải thưa, nơi không có gì để gom nếu không chủ động chờ.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`lingerMs` là gì?',
+      options: [
+        'Khoảng producer cố tình chờ để gom thêm record vào batch đang mở',
+        'Thời gian chờ phản hồi từ leader',
+        'Hạn của một record trong log',
+        'Chu kỳ poll của consumer',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đồng hồ đếm từ lúc mở batch, không phải từ mỗi record. Hết giờ hoặc đầy `batchSize` thì batch rời producer.',
+    },
+    {
+      question: 'Ít batch hơn cho cùng lượng dữ liệu đem lại gì?',
+      options: [
+        'Ít round-trip mạng hơn, thông lượng cao hơn',
+        'Độ trễ từng record thấp hơn',
+        'Ít offset được cấp hơn',
+        'Log chiếm ít chỗ hơn theo số batch',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đổi lại record đầu của mỗi batch phải chờ lâu hơn. Đây là đánh đổi latency lấy throughput, không phải một tuỳ chọn bật cho nhanh.',
+    },
+    {
+      question: 'Vì sao `lingerMs` chỉ thật sự có ý nghĩa với tải thưa?',
+      options: [
+        'Tải cao thì record tự dồn vào batch đang mở trong lúc chờ khe `max.in.flight`',
+        'Tải cao thì producer bỏ qua `lingerMs`',
+        'Tải thưa thì `batchSize` tự giảm',
+        'Tải cao thì broker gom batch thay producer',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`lingerMs: 0` nghĩa là không cố tình chờ, chứ không cấm gom. Tải càng cao thì batch tự nhiên càng lớn.',
+    },
+    {
+      question: '`batchSize` đóng vai trò gì bên cạnh `lingerMs`?',
+      options: [
+        'Trần buộc gửi ngay khi batch đầy, dù chưa hết `lingerMs`',
+        'Số batch tối đa đang bay',
+        'Kích thước tối đa của một record',
+        'Số record tối đa mỗi partition',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hai điều kiện chạy song song, cái nào tới trước thì cái đó đóng batch.',
     },
   ],
 }

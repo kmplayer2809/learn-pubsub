@@ -104,6 +104,18 @@ export const consumerGroup: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 14_000,
+      question: '`c2` vừa join `g1`. Ba partition được chia ra sao?',
+      options: [
+        'Mỗi partition thuộc về đúng một trong hai consumer',
+        'Cả hai cùng đọc cả ba partition',
+        'Mỗi partition bị cắt đôi theo offset',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Trong một group, mỗi partition có đúng một chủ: không partition nào bị đọc trùng, cũng không partition nào bị bỏ trống.',
+    },
+    {
       at: 23_000,
       question: 'Group `g1` (bốn consumer) và group `g2` (một consumer) cùng đọc topic `orders`. Điều gì đúng?',
       options: [
@@ -127,6 +139,56 @@ export const consumerGroup: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Số partition là trần cứng của khả năng đọc song song: consumer thứ tư trong group ba partition chỉ ngồi không. Thêm partition về sau thì làm được, nhưng nó đổi `murmur2(key) % n` nên record mới của một key lạc sang partition khác record cũ, đứt thứ tự (bài 03). Vì vậy nên tính dư ngay từ đầu — partition thừa tốn rất ít, còn phải chia lại thì đắt.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Consumer group đóng vai trò gì?',
+      options: [
+        'Đơn vị chia partition; hai group đọc độc lập nhau',
+        'Một cách gộp nhiều topic lại',
+        'Một tên gọi khác của consumer',
+        'Một nhóm broker',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mỗi group giữ bộ committed offset riêng, chạy rebalance riêng, hoàn toàn không biết tới sự tồn tại của group khác.',
+    },
+    {
+      question: 'Trần cứng của việc scale một consumer group nằm ở đâu?',
+      options: [
+        'Số partition của topic',
+        'Số broker trong cluster',
+        'Số producer đang ghi',
+        '`max.poll.interval.ms`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Ba partition không chia được cho nhiều hơn ba consumer đang thật sự làm việc.',
+    },
+    {
+      question: 'Consumer thứ tư trong một group ba partition làm gì?',
+      options: [
+        'Ngồi không, chỉ gửi heartbeat',
+        'Đứng dự phòng nóng, tự nhảy vào ngay khi một consumer chết',
+        'Đọc ké partition của consumer khác',
+        'Bị coordinator từ chối cho join',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nó vẫn là member của group nên lần rebalance kế tiếp có thể chia phần cho nó, nhưng ở trạng thái ổn định thì nó không có việc gì.',
+    },
+    {
+      question: 'Thêm partition về sau gây hệ quả gì?',
+      options: [
+        'Đổi `murmur2(key) % n`, nên record mới của một key lạc sang partition khác record cũ',
+        'Kafka rải lại toàn bộ dữ liệu cũ',
+        'Mọi committed offset bị đặt lại về 0',
+        'Group phải tạo lại từ đầu',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thứ tự theo key đứt ngay tại ranh giới đó. Partition thừa tốn rất ít, còn chia lại thì đắt.',
     },
   ],
 }

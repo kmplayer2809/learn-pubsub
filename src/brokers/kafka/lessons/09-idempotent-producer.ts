@@ -82,6 +82,18 @@ export const idempotentProducer: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 10_000,
+      question: 'Ack bị mất trên đường về. Producer phân biệt được chuyện đó với một request chưa từng tới nơi không?',
+      options: [
+        'Không — im lặng ở hai trường hợp giống hệt nhau, nên nó gửi lại',
+        'Có, broker gửi kèm một mã lỗi riêng',
+        'Có, producer đọc lại log để kiểm tra',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chính vì không phân biệt được nên gửi lại là hành vi đúng. Duplicate sinh ra từ đó, không phải từ một lỗi ứng dụng.',
+    },
+    {
       at: 18_000,
       question: 'Cùng một lần "ack bị mất", vì sao log của `p1` có `đơn-2a` hai lần còn log của `p2` chỉ có `đơn-2b` một lần?',
       options: [
@@ -105,6 +117,56 @@ export const idempotentProducer: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Phạm vi của bảo đảm này rất hẹp: một partition, một phiên `producerId`. Nó không bảo vệ trước việc ứng dụng gọi `produce()` hai lần, không giúp gì khi producer khởi động lại, và không cản consumer xử lý một record hai lượt sau rebalance. Muốn siết chặt hơn thì cần transaction (bài 22), còn khâu tiêu thụ vẫn phải idempotent.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`enable.idempotence` gắn thêm gì vào mỗi record?',
+      options: [
+        '`producerId` cùng `sequence`, giữ nguyên qua các lần gửi lại',
+        'Một dấu thời gian chính xác tới nano giây',
+        'Một bản băm của giá trị record',
+        'Offset dự kiến trong log',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhờ hai trường đó, broker so `sequence` với lần cuối đã chấp nhận cho đúng `producerId` rồi bỏ qua bản trùng.',
+    },
+    {
+      question: 'Vì sao producer không idempotent lại sinh duplicate khi ack bị mất?',
+      options: [
+        'Broker không có cách nào phân biệt bản gửi lại với một record hoàn toàn mới',
+        'Producer gửi hai bản ngay từ đầu',
+        'Broker ghi mỗi record hai lần rồi xoá bớt một bản',
+        'Log tự nhân đôi khi gặp lỗi mạng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Record không mang định danh nào nên broker chấp nhận bản gửi lại y như một record mới.',
+    },
+    {
+      question: 'Bảo đảm của idempotence có phạm vi tới đâu?',
+      options: [
+        'Một partition, một phiên `producerId`',
+        'Toàn bộ topic',
+        'Toàn bộ cluster',
+        'Từ producer tới tận consumer',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nó không phải exactly-once đầu-cuối. Ứng dụng gọi `produce()` hai lần, hoặc consumer xử lý lại sau rebalance, đều nằm ngoài phạm vi này.',
+    },
+    {
+      question: 'Bật `enable.idempotence` tốn gì?',
+      options: [
+        'Gần như không gì — chỉ thêm vài trường vào mỗi record',
+        'Giảm một nửa thông lượng',
+        'Cần thêm một topic phụ',
+        'Buộc phải đặt `acks=0`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Rẻ tới mức Kafka bản mới bật sẵn theo mặc định. Producer cũng khỏi phải tự dò trùng.',
     },
   ],
 }

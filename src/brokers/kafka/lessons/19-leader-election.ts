@@ -92,6 +92,18 @@ export const leaderElection: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 18_000,
+      question: '`b3` fetch mười sáu giây một lần, ngưỡng lag là mười giây. Trạng thái của nó ra sao?',
+      options: [
+        'Vẫn online, nhưng đã rớt khỏi ISR',
+        'Bị đánh dấu là đã chết',
+        'Vẫn trong ISR, vì nó còn online',
+      ],
+      answerIndex: 0,
+      explanation:
+        'ISR đo mức bắt kịp, không đo trạng thái sống chết. Một replica online nhưng chậm thì không còn là ứng viên sạch cho lần bầu kế tiếp.',
+    },
+    {
       at: 28_000,
       question: 'Vì sao `unclean.leader.election.enable` mặc định là `false` kể từ Kafka 0.11?',
       options: [
@@ -115,6 +127,56 @@ export const leaderElection: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Sau một lần bầu, client vẫn có thể đang cầm metadata cũ và gửi request tới leader đã hết nhiệm. `leaderEpoch` là số nhiệm kỳ: request mang epoch cũ bị từ chối, client làm mới metadata rồi gửi lại đúng chỗ. Không có nó, một broker bị cô lập vẫn tưởng mình là leader và nhận ghi — đúng kịch bản split-brain.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Bầu leader từ ISR có làm mất record không?',
+      options: [
+        'Không — mọi replica trong ISR đã có đủ record tới high watermark',
+        'Có, luôn mất phần chưa kịp fetch',
+        'Có, trừ khi bật `acks=all`',
+        'Không, vì controller sao chép lại phần thiếu',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đó đúng là lý do high watermark được định nghĩa theo ISR: ranh giới đọc luôn nằm trong phần mọi ứng viên đều có.',
+    },
+    {
+      question: 'Không có `leaderEpoch` thì chuyện gì có thể xảy ra?',
+      options: [
+        'Một broker bị cô lập vẫn tưởng mình là leader rồi nhận ghi — split-brain',
+        'Controller không bầu được leader mới',
+        'Consumer đọc trùng record',
+        'Log bị cắt ngẫu nhiên',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Epoch là số nhiệm kỳ: request mang epoch cũ bị từ chối, client làm mới metadata rồi gửi lại đúng chỗ.',
+    },
+    {
+      question: 'ISR rỗng đặt người vận hành trước lựa chọn nào?',
+      options: [
+        'Chờ (mất tính sẵn sàng), hoặc bầu bừa ngoài ISR (mất dữ liệu)',
+        'Xoá topic, hoặc tạo lại từ đầu',
+        'Tăng `replicationFactor`, hoặc giảm số partition',
+        'Đổi assignor, hoặc đổi group',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không lựa chọn nào là không mất gì. Mặc định `unclean.leader.election.enable=false` nghĩa là chọn chờ.',
+    },
+    {
+      question: 'Bầu bừa từ một replica ngoài ISR làm gì với log?',
+      options: [
+        'Cắt log về đúng phần replica đó có, kể cả record đã nhận `acks=all`',
+        'Giữ nguyên log rồi bổ sung phần thiếu sau',
+        'Chuyển phần thiếu sang một topic khác',
+        'Từ chối mọi lượt ghi mới',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đây là lúc một lời hứa đã xác nhận bị phá vỡ thật sự, nên nó phải là quyết định có ý thức của người vận hành.',
     },
   ],
 }

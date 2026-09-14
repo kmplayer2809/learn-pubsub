@@ -80,6 +80,18 @@ export const retention: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 14_000,
+      question: 'Segment cũ nhất vừa bị xoá. `logStartOffset` ra sao?',
+      options: [
+        'Nhảy lên offset đầu của segment còn lại sớm nhất',
+        'Giữ nguyên ở 0',
+        'Đặt lại bằng high watermark',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mọi offset dưới `logStartOffset` vĩnh viễn không đọc được nữa, kể cả khi trước đó đã từng đọc được.',
+    },
+    {
       at: 27_000,
       question: 'Một consumer commit offset 5 rồi ngừng hoạt động rất lâu. Khi quay lại, offset 5 đã bị retention xoá mất. Điều gì xảy ra?',
       options: [
@@ -103,6 +115,51 @@ export const retention: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Retention xét theo segment đã đóng, nên tuổi thật của dữ liệu xấp xỉ `segment.ms` cộng `retention.ms` — ở đây là tới 14 ngày. Muốn xoá đúng hạn thì `segment.ms` (hoặc `segment.bytes`) phải nhỏ hơn hẳn `retention.ms`. Đây là lý do rất thường gặp khiến đĩa phình gấp đôi dự tính.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Retention xoá dữ liệu theo đơn vị nào?',
+      options: ['Nguyên một segment', 'Từng record một', 'Từng partition', 'Từng batch của producer'],
+      answerIndex: 0,
+      explanation:
+        'Vì vậy retention là một hạt thô, không chính xác tới từng mili giây.',
+    },
+    {
+      question: 'Segment đang mở có bị retention xoá không?',
+      options: [
+        'Không — chỉ segment đã đóng mới nằm trong diện xét',
+        'Có, nếu nó đủ tuổi',
+        'Có, nếu đĩa đã đầy',
+        'Có, sau mỗi lần rebalance',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đây là lý do tuổi thật của dữ liệu xấp xỉ `segment.ms` cộng `retention.ms`.',
+    },
+    {
+      question: 'Committed offset có giữ được một segment khỏi bị xoá không?',
+      options: [
+        'Không — broker xoá theo lịch của nó, bất kể có ai commit tới đó hay chưa',
+        'Có, segment được giữ tới khi mọi group đọc qua',
+        'Có, nếu group vẫn còn member sống',
+        'Có, trong vòng bảy ngày kể từ lần commit',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Consumer quay lại sau khi phần log đó đã bị xoá phải chấp nhận reset theo `auto.offset.reset`.',
+    },
+    {
+      question: '`earliest` nghĩa là gì với một log đã bị retention cắt bớt?',
+      options: [
+        '`logStartOffset` hiện tại — phần cũ nhất vẫn còn, không phải phần cũ nhất từng có',
+        'Luôn là offset 0',
+        'Offset đã commit gần nhất',
+        'High watermark trừ đi một',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Consumer join muộn vì vậy không bao giờ đọc được phần đã bị xoá — mất dữ liệu ở phía consumer, không phải một lỗi của broker.',
     },
   ],
 }

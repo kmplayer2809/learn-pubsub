@@ -99,6 +99,18 @@ export const offsets: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 16_000,
+      question: '`c1` vừa seek về `earliest`. Committed offset đổi chưa?',
+      options: [
+        'Chưa — seek chỉ đặt lại position, committed offset giữ nguyên tới lần commit kế tiếp',
+        'Đổi ngay theo position mới',
+        'Đổi về 0 rồi khoá lại',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Ba con số tách bạch nhau: offset gắn với record, position là vị trí đọc kế tiếp, committed offset chỉ nhích khi có lệnh commit.',
+    },
+    {
       at: 25_000,
       question: 'Giữa offset của record, position và committed offset, đâu là điểm khác nhau đúng?',
       options: [
@@ -122,6 +134,56 @@ export const offsets: KafkaLesson = {
       answerIndex: 0,
       explanation:
         '`auto.offset.reset` chỉ có tác dụng đúng một lần: khi group chưa hề có committed offset hợp lệ. `latest` neo vào high watermark nên toàn bộ lịch sử bị bỏ qua. Muốn xử lý lại từ đầu thì chọn `earliest`, hoặc `seek` về mốc mong muốn rồi commit — cấu hình sau đó không còn quyết định gì nữa.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`auto.offset.reset` có tác dụng vào lúc nào?',
+      options: [
+        'Khi group chưa có committed offset hợp lệ',
+        'Ở mọi lượt poll',
+        'Mỗi lần rebalance',
+        'Khi consumer gọi seek',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nó chỉ quyết định điểm bắt đầu. Có committed offset rồi thì cấu hình này không còn quyết định gì nữa.',
+    },
+    {
+      question: '`latest` neo vào đâu?',
+      options: [
+        'High watermark hiện tại, nên toàn bộ lịch sử bị bỏ qua',
+        'Offset nhỏ nhất còn trong log',
+        'Offset đã commit gần nhất',
+        'Record mới nhất của mỗi key',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đây đúng là cái bẫy khiến một service mới lên production không thấy dữ liệu cũ. Muốn xử lý lại từ đầu thì chọn `earliest`.',
+    },
+    {
+      question: 'Position nhích vào lúc nào?',
+      options: [
+        'Ngay sau mỗi lần fetch, kể cả khi chưa commit',
+        'Chỉ khi commit',
+        'Khi high watermark đổi',
+        'Khi rebalance kết thúc',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Vì vậy position có thể chạy trước committed offset rất xa. Consumer chết giữa chừng thì đúng phần chênh đó bị đọc lại.',
+    },
+    {
+      question: 'Vì sao một consumer vừa join group mới chưa đọc được gì ngay?',
+      options: [
+        'Coordinator đợi hết `maxPollIntervalMs` rồi mới chốt assignment',
+        'Broker phải nén log trước',
+        'Producer phải flush batch trước',
+        'Consumer phải commit một lần trước',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chưa có assignment thì chưa partition nào thuộc về nó. Đây cũng là lý do record ghi trong lúc chờ có thể bị `latest` bỏ qua.',
     },
   ],
 }

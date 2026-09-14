@@ -123,6 +123,18 @@ export const maxPollInterval: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 20_000,
+      question: '`c1` heartbeat đều đặn mỗi 3000ms nhưng vẫn bị đá. Điều kiện nào đã bị vượt?',
+      options: [
+        '`maxPollIntervalMs` — hơn 6000ms không hề poll',
+        '`sessionTimeoutMs`',
+        'Số lần rebalance tối đa',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hai điều kiện đá member hoàn toàn tách biệt, chỉ cần vượt một trong hai. Heartbeat đều không cứu được một vòng poll đã treo.',
+    },
+    {
       at: 28_000,
       question: 'Một consumer heartbeat đều đặn, không hề mất kết nối, nhưng vẫn liên tục bị đá khỏi group. Nguyên nhân khả dĩ nhất là gì?',
       options: [
@@ -146,6 +158,56 @@ export const maxPollInterval: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Ngưỡng phải phủ được lô lớn nhất: 500 record nhân 2 giây là 1000 giây, một ngưỡng vô dụng vì consumer chết thật cũng phải mất mười sáu phút mới bị phát hiện. Siết `max.poll.records` là cách đúng — lô 10 record mất 20 giây, nằm gọn trong mặc định 300 giây mà vẫn phát hiện sự cố nhanh. Client không tự chia nhỏ lô cho bạn.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Heartbeat với poll chạy ở đâu?',
+      options: [
+        'Hai vòng lặp tách biệt — heartbeat nằm trên thread riêng',
+        'Cùng một vòng lặp',
+        'Cả hai đều do broker chủ động gọi',
+        'Heartbeat nằm gọn trong mỗi request fetch',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhờ đó một callback xử lý chạy quá lâu chỉ chặn vòng poll, còn coordinator vẫn thấy consumer sống.',
+    },
+    {
+      question: '`session.timeout.ms` bắt lỗi gì?',
+      options: [
+        'Consumer ngừng heartbeat — tiến trình chết hoặc mất kết nối',
+        'Consumer xử lý quá chậm',
+        'Consumer commit quá thưa',
+        'Consumer đọc quá nhiều record mỗi lô',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Còn `max.poll.interval.ms` mới bắt trường hợp tiến trình vẫn sống nhưng vòng poll kẹt lại.',
+    },
+    {
+      question: 'Vòng lặp join, được assign, treo, bị đá gây hậu quả gì?',
+      options: [
+        '`metrics.rebalances` tăng mãi mà group không xử lý xong lô nào',
+        'Group tự chuyển sang assignor khác',
+        'Broker khoá topic lại',
+        'Committed offset bị đặt lại về 0',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không bước nào trong chuỗi đó thật sự tiến được, nên chỉ nới ngưỡng thôi chưa chắc thoát ra.',
+    },
+    {
+      question: 'Lối ra đúng cho một consumer xử lý chậm là gì?',
+      options: [
+        'Giảm `max.poll.records`, hoặc đẩy phần việc nặng sang thread khác rồi poll đều',
+        'Tăng `sessionTimeoutMs`',
+        'Tăng số partition',
+        'Tắt heartbeat',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Heartbeat chưa từng là vấn đề nên tăng `sessionTimeoutMs` không giúp gì. Ngưỡng `max.poll.interval.ms` quá lớn thì consumer chết thật cũng rất lâu mới bị phát hiện.',
     },
   ],
 }

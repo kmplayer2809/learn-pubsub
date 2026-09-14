@@ -62,3 +62,26 @@ describe('mọi lesson Kafka', () => {
     expect(sim.snapshot().halted).toBeUndefined()
   })
 })
+
+describe('nội dung quiz', () => {
+  // Local to this broker on purpose: the BROKERS-wide rule lands in
+  // `src/shell/lesson/quiz.test.ts` in the next task, once every broker has content.
+  it.each(LESSONS.map((l) => [l.id, l] as const))('%s carries a four-question quiz', (_id, lesson) => {
+    const quiz = lesson.quiz ?? []
+    expect(quiz.length, `${lesson.id} needs at least 4 quiz questions`).toBeGreaterThanOrEqual(4)
+    for (const question of quiz) {
+      expect(question.options.length, `${lesson.id}: "${question.question}"`).toBeGreaterThanOrEqual(3)
+      expect(new Set(question.options).size, `${lesson.id}: "${question.question}" has duplicate options`)
+        .toBe(question.options.length)
+      expect(question.answerIndex).toBeGreaterThanOrEqual(0)
+      expect(question.answerIndex).toBeLessThan(question.options.length)
+    }
+    const questions = quiz.map((q) => q.question)
+    expect(new Set(questions).size, `${lesson.id} asks the same question twice`).toBe(questions.length)
+  })
+
+  it.each(LESSONS.map((l) => [l.id, l] as const))('%s has three checkpoints', (_id, lesson) => {
+    expect((lesson.checkpoints ?? []).length, `${lesson.id} needs 2 mid-run beats and a wrap-up`)
+      .toBeGreaterThanOrEqual(3)
+  })
+})

@@ -90,6 +90,18 @@ export const replicationIsr: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 14_000,
+      question: '`b3` vừa rớt khỏi ISR. High watermark của partition đó ra sao?',
+      options: [
+        'Có thể nhích lên ngay, vì nó là LEO nhỏ nhất *trong ISR*',
+        'Tụt xuống theo `b3`',
+        'Đứng yên cho tới khi `b3` quay lại',
+      ],
+      answerIndex: 0,
+      explanation:
+        'ISR co lại không phải luôn là tin xấu cho throughput đọc — loại một replica đang kéo tụt con số đó khiến ranh giới đọc nhích lên ngay.',
+    },
+    {
       at: 24_000,
       question: 'Một record vừa được leader ghi vào log nhưng chưa follower nào trong ISR fetch tới nó. Điều gì đúng?',
       options: [
@@ -113,6 +125,56 @@ export const replicationIsr: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Đây là cái bẫy `acks=all` hay bị hiểu nhầm: "all" là toàn bộ ISR hiện tại, mà ISR co lại được tới đúng một thành viên. Lúc đó producer vẫn nhận báo thành công dù dữ liệu chỉ nằm trên một ổ đĩa duy nhất. `min.insync.replicas` là mảnh ghép còn thiếu — đặt sàn để ghi bị từ chối thay vì thành công một cách giả tạo (bài 18).',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Follower lấy dữ liệu từ leader theo cách nào?',
+      options: [
+        'Chủ động kéo định kỳ',
+        'Leader đẩy sang ngay mỗi lần ghi',
+        'Qua controller trung chuyển',
+        'Cùng đọc chung một ổ đĩa',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Vì vậy luôn có độ trễ giữa LEO của leader với LEO của follower, và high watermark phản ánh đúng độ trễ đó.',
+    },
+    {
+      question: 'ISR là gì?',
+      options: [
+        'Tập replica đã fetch đủ gần đây để coi là bắt kịp',
+        'Danh sách mọi bản sao của partition',
+        'Tập replica đang online',
+        'Tập replica đã từng được bầu làm leader',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một replica online nhưng fetch chậm quá hạn vẫn bị loại khỏi ISR, dù nó không hề chết.',
+    },
+    {
+      question: 'High watermark bằng gì?',
+      options: [
+        'LEO nhỏ nhất trong ISR',
+        'LEO của leader',
+        'LEO lớn nhất trong ISR',
+        'Committed offset của group đọc nhanh nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Consumer không bao giờ đọc được record ở offset từ high watermark trở lên. Record vừa ghi mà chưa đọc được chính là bảo đảm bền đang hoạt động.',
+    },
+    {
+      question: 'Vì sao "all" trong `acks=all` không phải là toàn bộ `replicationFactor`?',
+      options: [
+        'Nó là toàn bộ ISR hiện tại, mà ISR thì co lại được',
+        'Nó chỉ tính follower, bỏ qua leader',
+        'Nó tính cả replica đã chết',
+        'Nó là số replica do controller chọn ngẫu nhiên',
+      ],
+      answerIndex: 0,
+      explanation:
+        'ISR co tới đúng một thành viên thì producer vẫn nhận báo thành công dù dữ liệu chỉ nằm trên một ổ đĩa. `min.insync.replicas` là mảnh ghép đặt sàn cho chuyện đó.',
     },
   ],
 }

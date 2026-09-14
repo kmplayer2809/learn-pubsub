@@ -85,6 +85,18 @@ export const brokerCluster: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 11_500,
+      question: '`b1` vừa xuống. `orders-0` ra sao?',
+      options: [
+        'Ngừng nhận ghi, vì `b1` là leader của nó',
+        'Chuyển leader sang `b2` ngay lập tức',
+        'Vẫn ghi bình thường qua `b3`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Với `replicationFactor: 1` không có replica nào để bầu thay. Ghi vào `orders-0` chỉ trở lại khi chính `b1` kết nối lại.',
+    },
+    {
       at: 18_000,
       question: 'Khi broker `b1` (leader của `orders-0` và `orders-3`) xuống, điều gì xảy ra với `orders-1`?',
       options: [
@@ -108,6 +120,51 @@ export const brokerCluster: KafkaLesson = {
       answerIndex: 0,
       explanation:
         '`replicationFactor: 1` nghĩa là mỗi partition tồn tại đúng một bản. Broker xuống thì phần dữ liệu đó vừa ngừng ghi vừa ngừng đọc, và ổ đĩa hỏng là mất vĩnh viễn. Bài 17 chỉ ra vì sao `replicationFactor: 3` mới là mức chuẩn: có bản sao thì mới có ứng viên để bầu làm leader mới.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Một broker giữ cái gì?',
+      options: [
+        'Một phần partition của topic, không phải bản sao đầy đủ',
+        'Bản sao đầy đủ của mọi topic',
+        'Chỉ metadata, dữ liệu nằm nơi khác',
+        'Đúng một partition',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Dữ liệu của một topic trải qua nhiều broker. Nhờ vậy dung lượng cùng thông lượng mở rộng theo số broker.',
+    },
+    {
+      question: 'Producer ghi vào một partition thông qua đâu?',
+      options: ['Leader của đúng partition đó', 'Broker bất kỳ trong cluster', 'Controller', 'Follower gần nhất'],
+      answerIndex: 0,
+      explanation:
+        'Mỗi partition có đúng một leader tại mỗi thời điểm. Client đọc metadata để biết leader nằm ở broker nào rồi gửi thẳng tới đó.',
+    },
+    {
+      question: 'Controller đảm nhiệm việc gì?',
+      options: [
+        'Quản lý metadata của cluster: broker nào còn sống, ai làm leader partition nào',
+        'Nhận mọi lượt ghi rồi phân phát lại',
+        'Giữ bản sao của mọi partition',
+        'Quyết định key rơi vào partition nào',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Kafka bản mới dùng KRaft để tự bầu rồi đồng bộ controller giữa các broker, thay cho ZooKeeper trước đây.',
+    },
+    {
+      question: 'Thêm một broker vào cluster đem lại gì ngay lập tức?',
+      options: [
+        'Không gì cả — partition phải được rải lại thì chỗ chứa mới dùng được',
+        'Tải tự cân bằng lại trong vài giây',
+        'Mọi partition tự nhân thêm một bản sao',
+        'Số partition của mỗi topic tự tăng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Rải lại partition là một thao tác quản trị riêng. Broker mới đứng không cho tới khi thao tác đó chạy.',
     },
   ],
 }

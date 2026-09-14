@@ -103,6 +103,18 @@ export const rebalance: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 12_000,
+      question: '`c2` vừa join group. Assignment của `c1` ra sao?',
+      options: [
+        'Bị xoá luôn — assignor `range` kiểu eager dừng cả group',
+        'Giữ nguyên, chỉ mình `c2` phải chờ',
+        'Chỉ mất đúng một partition',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`c1` không rời, không lỗi, nhưng vẫn ngừng đọc cho tới khi vòng rebalance mới chốt xong. Đó là cái giá của một assignor eager.',
+    },
+    {
       at: 24_000,
       question: 'Trong lúc group đang `PreparingRebalance`, một record mới được ghi vào topic. Chuyện gì xảy ra với nó?',
       options: [
@@ -126,6 +138,51 @@ export const rebalance: KafkaLesson = {
       answerIndex: 0,
       explanation:
         '`range` thuộc loại eager: mỗi lần thành viên thay đổi là toàn bộ group mất assignment. Rolling restart mười pod tạo ra hai mươi lần thay đổi như thế, mỗi lần dừng đọc cho tới khi rebalance chốt xong. Cách giảm là `group.instance.id` (thành viên tĩnh, tránh rebalance khi pod khởi động lại nhanh) hoặc `cooperative-sticky` ở bài 13.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Một vòng rebalance đi qua hai bước nào?',
+      options: ['JoinGroup rồi SyncGroup', 'Fetch rồi Commit', 'Elect rồi Replicate', 'Subscribe rồi Assign'],
+      answerIndex: 0,
+      explanation:
+        'Coordinator gom member trong `rebalanceTimeoutMs` rồi chạy assignor; SyncGroup mới phát assignment rồi đưa group về `Stable`.',
+    },
+    {
+      question: '`generationId` dùng để làm gì?',
+      options: [
+        'Đánh số vòng rebalance; heartbeat mang số cũ bị từ chối bằng `ILLEGAL_GENERATION`',
+        'Đếm số record đã commit',
+        'Đánh số partition trong topic',
+        'Đếm số lần consumer poll',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhờ đó một client biết mình đã lỡ một vòng rồi chủ động JoinGroup lại.',
+    },
+    {
+      question: 'Rebalance có ảnh hưởng tới việc ghi vào log không?',
+      options: [
+        'Không — nó chỉ quyết định ai được phép fetch',
+        'Có, producer bị chặn cho tới khi xong',
+        'Có, record bị giữ ở leader rồi mới append sau',
+        'Có, log chuyển sang chỉ đọc',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Leader vẫn append rồi cấp offset bình thường. Record chỉ nằm chờ tới khi partition của nó có chủ mới.',
+    },
+    {
+      question: 'Cách nào giảm số lần gián đoạn trong một đợt rolling restart?',
+      options: [
+        '`group.instance.id` cho thành viên tĩnh, hoặc `cooperative-sticky`',
+        'Tăng số partition',
+        'Tắt auto-commit',
+        'Giảm `lingerMs`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thành viên tĩnh tránh hẳn rebalance khi pod khởi động lại đủ nhanh; `cooperative-sticky` thì không dừng cả group.',
     },
   ],
 }

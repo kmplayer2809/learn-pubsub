@@ -82,6 +82,18 @@ export const partitioner: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 12_000,
+      question: '`p2` dùng `round-robin` cho mười record không key. Kết quả ra sao?',
+      options: [
+        'Rải khá đều qua bốn partition, theo một bộ đếm của riêng `p2`',
+        'Dồn hết vào partition 0',
+        'Vẫn hash qua `murmur2` rồi dồn về một chỗ',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không có key thì không có gì để hash. Bộ đếm vòng tròn thuộc về riêng producer đó, không đồng bộ giữa nhiều producer.',
+    },
+    {
       at: 20_000,
       question: 'Thêm partition cho topic `orders` có giải quyết được hot partition do key `vip-1` gây ra không?',
       options: [
@@ -105,6 +117,56 @@ export const partitioner: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Thứ tự chỉ tồn tại bên trong một partition, nên tách key ra bốn partition là tự tay từ bỏ thứ tự chung của khách hàng đó. Chấp nhận được khi các sự kiện độc lập nhau, còn nếu chúng là chuỗi chuyển trạng thái thì phải giữ nguyên một key và chịu hot partition, hoặc chuyển sang một khoá mịn hơn mà vẫn giữ trọn vẹn từng nhóm cần thứ tự.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Vì sao `orders-1` giữ bảy trong mười record của `p1`?',
+      options: [
+        'Bảy record mang cùng key `vip-1`, nên chúng luôn về đúng một partition',
+        'Partitioner `default` ưu tiên partition đang có ít dữ liệu',
+        '`orders-1` là leader của cả topic',
+        'Producer gửi nhầm partition',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không phải partitioner sai, mà chính key phân bố lệch. Đây đúng là hot partition.',
+    },
+    {
+      question: '`default`, `sticky`, `round-robin` khác nhau ở chỗ nào?',
+      options: [
+        'Chúng chỉ khác nhau với record không key; record mang key thì cả ba đều hash giống hệt',
+        '`sticky` bỏ qua key',
+        '`round-robin` hash key theo vòng tròn',
+        '`default` ưu tiên partition gần nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Vì vậy đổi partitioner không bao giờ chữa được một hot key.',
+    },
+    {
+      question: 'Cách duy nhất phân tán bảy record của `vip-1` ra nhiều partition là gì?',
+      options: [
+        'Đổi chính key dùng để hash, ví dụ ghép thêm hậu tố',
+        'Tăng số partition của topic',
+        'Đổi sang partitioner `sticky`',
+        'Thêm consumer vào group',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Tăng số partition chỉ đổi con số kết quả của phép chia lấy dư; `vip-1` vẫn về đúng một chỗ.',
+    },
+    {
+      question: 'Khi nào việc tách key thành `vip-1#0` tới `vip-1#3` là chấp nhận được?',
+      options: [
+        'Khi các sự kiện của khách hàng đó độc lập nhau',
+        'Khi chúng là một chuỗi chuyển trạng thái',
+        'Khi topic chỉ có một partition',
+        'Khi group chỉ có một consumer',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Tách key là tự tay từ bỏ thứ tự chung của khách hàng đó. Chuỗi chuyển trạng thái thì phải giữ nguyên một key rồi chịu hot partition, hoặc tìm một khoá mịn hơn mà vẫn giữ trọn từng nhóm cần thứ tự.',
     },
   ],
 }

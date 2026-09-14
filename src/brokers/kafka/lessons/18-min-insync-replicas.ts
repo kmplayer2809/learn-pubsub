@@ -81,6 +81,18 @@ export const minInsyncReplicas: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 12_000,
+      question: '`b2` chết, ISR còn một broker. Produce vào `orders-strict` (`min.insync.replicas: 2`) ra sao?',
+      options: [
+        'Bị từ chối thẳng với `NOT_ENOUGH_REPLICAS`, không ghi phần nào',
+        'Ghi thành công vì `b1` vẫn còn sống',
+        'Treo lại chờ `b2` sống lại',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Lỗi ồn ào chính là mục đích của sàn này: producer biết ngay để thử lại hoặc báo lên ứng dụng, thay vì nhận một lượt ghi chỉ nằm trên đúng một bản sao.',
+    },
+    {
       at: 22_000,
       question: 'Công thức phổ biến `replicationFactor: 3`, `min.insync.replicas: 2`, `acks: \'all\'` cân bằng điều gì?',
       options: [
@@ -104,6 +116,51 @@ export const minInsyncReplicas: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Hai cấu hình này phải đi thành cặp. `acks=1` chỉ chờ leader nên broker chẳng bao giờ chạm tới phép kiểm tra ISR, còn `min.insync.replicas` chỉ được xét đúng trên nhánh `acks=all`. Đặt sàn mà quên nâng `acks` là một cấu hình an toàn giả — dễ tưởng đã bảo vệ mà thực ra chưa hề.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`min.insync.replicas` được đặt ở đâu?',
+      options: [
+        'Trên từng topic, nên hai topic trong cùng cụm có thể khác nhau',
+        'Trên producer',
+        'Trên consumer group',
+        'Trên controller, áp chung cho cả cụm',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cùng một sự cố cụm cho hai kết quả khác hẳn nhau chỉ vì con số này khác nhau giữa hai topic.',
+    },
+    {
+      question: 'Vì sao đặt `min.insync.replicas` bằng đúng `replicationFactor` là lựa chọn tồi?',
+      options: [
+        'Mất hẳn khả năng chịu lỗi — một broker chết là ISR tụt dưới sàn ngay',
+        'Nó làm mọi lượt ghi chậm gấp ba',
+        'Broker từ chối cấu hình đó',
+        'Nó ép `acks` về 1',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Sàn 2 trên `replicationFactor` 3 vẫn đòi hai bản sao xác nhận mà chịu được một broker chết.',
+    },
+    {
+      question: '`min.insync.replicas` được xét trên nhánh nào?',
+      options: ['Chỉ trên `acks=all`', 'Trên mọi mức `acks`', 'Chỉ trên `acks=0`', 'Chỉ lúc consumer đọc'],
+      answerIndex: 0,
+      explanation:
+        'Đặt sàn mà quên nâng `acks` là một cấu hình an toàn giả: `acks=1` chỉ chờ leader nên phép kiểm tra ISR chẳng bao giờ chạy tới.',
+    },
+    {
+      question: 'ISR co xuống một broker mà `min.insync.replicas: 1`. Producer `acks=all` nhận được gì?',
+      options: [
+        'Báo thành công, dù dữ liệu chỉ nằm trên một ổ đĩa',
+        'Lỗi `NOT_ENOUGH_REPLICAS`',
+        'Không phản hồi nào',
+        'Một cảnh báo kèm xác nhận',
+      ],
+      answerIndex: 0,
+      explanation:
+        '"all" là toàn bộ ISR hiện tại, mà ISR co lại được tới đúng một. Đây chính là chỗ sàn phải bù vào.',
     },
   ],
 }

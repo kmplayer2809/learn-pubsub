@@ -67,6 +67,18 @@ export const compaction: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 12_000,
+      question: 'Compaction vừa xoá một record. Offset của nó ra sao?',
+      options: [
+        'Biến mất vĩnh viễn, để lại một lỗ trong dãy offset',
+        'Được đánh số lại cho liên tục',
+        'Chuyển sang cho record kế tiếp',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Consumer đọc tuần tự sẽ thấy offset nhảy cóc. Đó là hành vi bình thường của một topic compact, không phải dấu hiệu mất mát ngoài ý muốn.',
+    },
+    {
       at: 24_000,
       question: 'Vì sao một topic ghi log sự kiện thuần tuý (ví dụ lịch sử giao dịch) không nên dùng `cleanupPolicy: \'compact\'`?',
       options: [
@@ -90,6 +102,56 @@ export const compaction: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Compaction gom nhóm theo key, nên record thiếu key không thuộc nhóm nào và không bao giờ bị thay thế. Nó không bị coi là tombstone — tombstone là record **có** key với `value: null`. Vì vậy quy tắc là mọi record vào topic compact đều phải mang key; nhiều triển khai từ chối ghi ngay từ phía producer để tránh rác tích tụ.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`cleanupPolicy: \'compact\'` giữ lại cái gì?',
+      options: [
+        'Bản ghi mới nhất của mỗi key',
+        'Mọi record trong khoảng `retention.ms` gần nhất',
+        'Record đầu tiên của mỗi key',
+        'Một mẫu ngẫu nhiên trong số record',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nó hợp cho topic dạng ảnh chụp trạng thái — changelog, bảng key-value — nơi chỉ giá trị mới nhất của mỗi key có ý nghĩa.',
+    },
+    {
+      question: 'Tombstone là gì?',
+      options: [
+        'Record có key với `value: null`, báo hiệu xoá hẳn key đó',
+        'Record không mang key',
+        'Record đã bị compaction bỏ qua',
+        'Một control record do broker tự sinh',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Sau khi làm xong nhiệm vụ, chính tombstone cũng tự xoá luôn.',
+    },
+    {
+      question: 'Compaction chạm vào segment nào?',
+      options: [
+        'Chỉ segment đã đóng',
+        'Cả segment đang mở',
+        'Chỉ segment đầu tiên',
+        'Toàn bộ partition trong một lượt',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cùng nguyên tắc với retention: segment đang nhận ghi không bao giờ bị đụng tới.',
+    },
+    {
+      question: 'Vì sao mọi record vào một topic compact đều nên mang key?',
+      options: [
+        'Compaction gom nhóm theo key; record thiếu key không thuộc nhóm nào nên nằm lại mãi',
+        'Vì broker cần key để tính partition',
+        'Vì tombstone phải trùng key với record đầu tiên',
+        'Vì thiếu key thì consumer không đọc được',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Rác kiểu đó tích tụ dần làm log phình lên. Nhiều triển khai từ chối ghi ngay từ phía producer.',
     },
   ],
 }

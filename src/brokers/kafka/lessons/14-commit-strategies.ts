@@ -134,6 +134,18 @@ export const commitStrategies: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 16_000,
+      question: '`c-auto` đang treo xử lý, vòng poll dừng hẳn. Tick auto-commit có nổ ra không?',
+      options: [
+        'Có — nó là một đồng hồ riêng, độc lập hoàn toàn với vòng poll',
+        'Không, auto-commit bám theo tiến độ poll',
+        'Không, coordinator tạm dừng nó',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Auto-commit chạy theo đồng hồ, không theo tiến độ xử lý thật. Đây chính là nguồn gốc của rủi ro at-most-once.',
+    },
+    {
       at: 24_000,
       question: 'Một consumer commit offset của một record NGAY SAU khi fetch, TRƯỚC khi xử lý xong record đó. Nếu consumer crash giữa lúc xử lý, chuyện gì xảy ra?',
       options: [
@@ -157,6 +169,56 @@ export const commitStrategies: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'At-least-once đổi mất mát lấy trùng lặp: crash giữa lúc xử lý xong nhưng chưa commit sẽ khiến record đó chạy lại. Việc xử lý vì vậy phải chịu được chạy lại — khoá trùng lặp trong database, phép ghi kiểu đặt giá trị thay vì cộng dồn, hoặc một bảng ghi nhận id đã xử lý. `enable.idempotence` là cấu hình phía producer, không liên quan tới khâu này.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Auto-commit theo mặc định của Kafka chạy ra sao?',
+      options: [
+        'Bật sẵn, commit mỗi 5000ms',
+        'Tắt sẵn, phải tự gọi',
+        'Bật sẵn, commit sau mỗi record',
+        'Bật sẵn, chỉ commit lúc đóng consumer',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chu kỳ đó không liên quan gì tới việc record đã xử lý xong hay chưa.',
+    },
+    {
+      question: 'Commit sau khi xử lý xong cho ngữ nghĩa nào?',
+      options: [
+        'At-least-once — không mất record, nhưng có thể xử lý lại',
+        'At-most-once',
+        'Exactly-once',
+        'Không bảo đảm gì cả',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Crash sau khi xử lý xong nhưng trước lúc commit sẽ khiến record đó chạy lại. Vì vậy khâu xử lý phải chịu được chạy lại.',
+    },
+    {
+      question: 'Fetch xong một record nghĩa là gì?',
+      options: [
+        'Record đã được đọc về, chưa chắc đã xử lý xong',
+        'Record đã xử lý xong',
+        'Record đã được commit',
+        'Record đã rời khỏi log',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Position nhảy ngay lúc fetch, còn `processingMs` mới quyết định lúc nào việc xử lý thật sự hoàn tất.',
+    },
+    {
+      question: 'Kafka thật lưu committed offset ở đâu?',
+      options: [
+        'Một topic nội bộ tên `__consumer_offsets`',
+        'Một file trên từng consumer',
+        'Chỉ trong bộ nhớ của coordinator',
+        'Trong ZooKeeper, ở mọi phiên bản',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhờ vậy nó có đủ cơ chế bền vững như mọi topic khác. Engine này chỉ mô phỏng ngữ nghĩa commit, không mô phỏng cơ chế lưu trữ đó.',
     },
   ],
 }

@@ -81,6 +81,18 @@ export const produceConsume: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 10_000,
+      question: 'Hai record vào chung một batch. Cái gì quyết định lúc batch rời producer?',
+      options: [
+        'Đồng hồ `lingerMs` đếm từ lúc mở batch, hoặc batch đầy `batchSize`',
+        'Mỗi record tự đặt hẹn giờ riêng của nó',
+        'Lượt poll kế tiếp của consumer',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Record thứ hai nhập vào batch đang mở, không làm đồng hồ chạy lại từ đầu. Vì vậy độ trễ tệ nhất của một record bằng đúng `lingerMs`.',
+    },
+    {
       at: 20_000,
       question: 'Ngay sau khi gọi `produce()`, record đi đâu trước tiên?',
       options: [
@@ -104,6 +116,56 @@ export const produceConsume: KafkaLesson = {
       answerIndex: 0,
       explanation:
         '`produce()` trả về ngay khi record vào buffer, đó là một lời gọi bất đồng bộ. Chỉ callback hoặc `Future` mới báo broker đã nhận thật. Đây chính là lý do phải chờ callback trước khi coi một lượt ghi là xong, và vì sao `lingerMs` lớn vừa tăng thông lượng vừa nới rộng lượng dữ liệu có thể mất.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`produce()` trả về nghĩa là gì?',
+      options: [
+        'Record đã vào buffer của producer, chưa chắc broker đã nhận',
+        'Broker đã ghi xong record',
+        'Consumer đã đọc được record',
+        'Record đã được cấp offset',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đây là một lời gọi bất đồng bộ. Chỉ callback hoặc `Future` mới báo broker đã nhận thật.',
+    },
+    {
+      question: 'Ai cấp offset cho một record?',
+      options: [
+        'Leader của partition, lúc append vào log',
+        'Producer, trước khi gửi',
+        'Controller',
+        'Consumer, lúc đọc',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Offset là vị trí trong log của leader, nên nó chỉ tồn tại sau bước append. Thứ tự các record trong batch được giữ nguyên khi append.',
+    },
+    {
+      question: 'High watermark là gì?',
+      options: [
+        'Ranh giới mà consumer được phép đọc tới',
+        'Offset lớn nhất producer đã gửi',
+        'Số record trong một batch',
+        'Vị trí commit của group',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chỉ một broker giữ partition thì high watermark bám sát ngay theo leader. Nhiều replica thì nó chỉ nhích khi ISR đã theo kịp.',
+    },
+    {
+      question: '`lingerMs` lớn hơn đem lại gì, mất gì?',
+      options: [
+        'Thông lượng cao hơn, đổi bằng độ trễ lớn hơn cùng lượng dữ liệu có thể mất rộng hơn',
+        'Độ trễ thấp hơn, đổi bằng thông lượng',
+        'Độ bền cao hơn, đổi bằng bộ nhớ',
+        'Không đổi gì, nó chỉ ảnh hưởng tới log',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Batch lớn hơn nghĩa là ít lượt gửi hơn cho cùng lượng dữ liệu, nhưng cũng nghĩa là nhiều record nằm chờ trong bộ nhớ producer lâu hơn.',
     },
   ],
 }

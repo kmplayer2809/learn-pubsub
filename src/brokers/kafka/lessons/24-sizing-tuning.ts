@@ -136,6 +136,18 @@ export const sizingTuning: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 12_000,
+      question: '`orders-1p` chỉ có một partition. Gắn ba consumer vào `g24-1p` đem lại gì?',
+      options: [
+        'Vẫn chỉ một consumer có việc tại mỗi thời điểm',
+        'Ba consumer chia nhau từng record',
+        'Mỗi consumer nhận một bản sao của record',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Số partition là trần song song, đặt ra ngay khi tạo topic. Kafka không cho giảm nó về sau, còn tăng lên là một thao tác một chiều.',
+    },
+    {
       at: 22_000,
       question: 'Vì sao tăng số partition của một topic đang chạy có thể phá vỡ thứ tự theo key, dù không có record nào bị mất?',
       options: [
@@ -159,6 +171,56 @@ export const sizingTuning: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Kafka chia việc theo partition, không theo từng record: không có ack lẻ, không có requeue, không có priority. Retry topic chỉ mô phỏng gần đúng và phải trả giá bằng thứ tự (bài 23). Chọn Kafka khi cần thông lượng, replay, nhiều consumer group độc lập trên cùng một dòng dữ liệu; chọn broker kiểu hàng đợi khi đơn vị công việc là từng message.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Số partition của một topic có giảm được không?',
+      options: [
+        'Không — chỉ tăng được, và đó là thao tác một chiều',
+        'Có, bất kỳ lúc nào',
+        'Có, nếu topic đang rỗng',
+        'Có, sau mỗi lần rebalance',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Vì vậy chọn số partition là một quyết định thiết kế, không phải một con số chỉnh tạm rồi chỉnh lại sau.',
+    },
+    {
+      question: 'Giữ thứ tự tuyệt đối theo key đổi lấy cái gì?',
+      options: [
+        'Phải chốt số partition ngay từ đầu, chấp nhận trần song song đó suốt vòng đời topic',
+        'Phải tắt `acks=all`',
+        'Phải dùng đúng một consumer group',
+        'Phải bật compaction',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Muốn linh hoạt tăng partition theo tải thì phải chấp nhận thứ tự theo key đứt đoạn ngay tại điểm tăng.',
+    },
+    {
+      question: 'Checklist đưa Kafka lên production gồm những gì?',
+      options: [
+        '`replicationFactor: 3`, `min.insync.replicas: 2`, `acks=all`, bật idempotent, assignor `cooperative-sticky`, giám sát lag',
+        '`replicationFactor: 1` cho nhẹ, `acks=0` cho nhanh',
+        'Một partition mỗi topic, một consumer mỗi group',
+        'Bật compaction cho mọi topic',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mỗi món trong danh sách đó chữa đúng một loại sự cố đã gặp ở các bài trước.',
+    },
+    {
+      question: 'Kafka chia việc theo đơn vị nào?',
+      options: [
+        'Partition — một khối record liên tục cho một consumer trong group',
+        'Từng record, kèm ack lẻ',
+        'Từng batch của producer',
+        'Từng segment log',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không có ack lẻ, không requeue, không priority. Bài toán cần những thứ đó là mô hình work queue, hợp với một broker kiểu hàng đợi hơn.',
     },
   ],
 }

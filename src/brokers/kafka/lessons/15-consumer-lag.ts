@@ -139,6 +139,18 @@ export const consumerLag: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 20_000,
+      question: '`c2` vừa nhận một partition từ tay `c1`. Lag của phần đó ra sao?',
+      options: [
+        'Tụt nhanh — `c2` đọc dồn chỗ tồn đọng rồi giữ nhịp kịp production',
+        'Vẫn tăng đều như cũ',
+        'Đặt lại về 0 ngay lúc rebalance',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thêm consumer không chữa được một consumer đang treo, nó chỉ lấy partition khỏi tay consumer đó. Phần `c1` còn giữ vẫn tiếp tục tăng.',
+    },
+    {
       at: 28_000,
       question: 'Một group ba consumer đọc một topic hai partition. Consumer thứ ba join group này ảnh hưởng gì tới lag?',
       options: [
@@ -162,6 +174,56 @@ export const consumerLag: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Lag lệch giữa các partition loại trừ ngay giả thuyết thiếu năng lực chung: thiếu consumer thì mọi partition đều tăng. Còn đúng một partition tăng thì hoặc dữ liệu đổ dồn vào đó (hot key, bài 08), hoặc consumer sở hữu nó đang kẹt. Vì vậy luôn phải giám sát lag theo từng partition — nhìn tổng sẽ pha loãng mất tín hiệu này.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Lag của một partition tính ra sao?',
+      options: [
+        'High watermark trừ committed offset của group cho đúng partition đó',
+        'Thời gian kể từ record cuối được đọc',
+        'Số record hiện có trong log',
+        'Số consumer đang đọc partition đó',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nó là một con số record còn tồn đọng, không phải thời gian đã trôi qua.',
+    },
+    {
+      question: 'Lag đi lên như một đường thẳng nói lên điều gì?',
+      options: [
+        'Consumer chậm hơn producer một cách đều đặn',
+        'Một broker vừa rớt',
+        'Mạng vừa đứt',
+        'Retention vừa xoá một segment',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một cú nhảy đột ngột mới là dấu hiệu sự cố mạng hay broker rớt. Dạng đồ thị chính là manh mối chẩn đoán.',
+    },
+    {
+      question: 'Vì sao nên giám sát lag theo từng partition chứ không chỉ nhìn tổng?',
+      options: [
+        'Lag lệch giữa các partition chỉ ra hot key hoặc một consumer kẹt; nhìn tổng thì pha loãng mất tín hiệu',
+        'Vì tổng lag luôn bằng 0',
+        'Vì mỗi partition có ngưỡng cảnh báo riêng do broker đặt',
+        'Vì tổng lag chỉ tính partition đang có chủ',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thiếu năng lực chung thì mọi partition đều tăng. Đúng một partition tăng là một bài toán khác hẳn.',
+    },
+    {
+      question: 'Consumer giữ một partition đang treo xử lý. Cách nào làm lag phần đó ngừng tăng?',
+      options: [
+        'Lấy partition đó khỏi tay nó — ví dụ để nó rời group rồi rebalance',
+        'Thêm một consumer nữa vào group',
+        'Tăng số partition của topic',
+        'Tăng `max.poll.records`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thêm member chỉ giúp khi còn partition chưa có chủ, hoặc khi partition được chuyển sang member khác. Bản thân consumer đang treo thì không tự khỏi.',
     },
   ],
 }

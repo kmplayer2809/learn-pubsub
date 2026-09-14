@@ -71,6 +71,18 @@ export const keyPartitioning: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 7000,
+      question: 'Ba record mang key `user-1` nằm ở đâu?',
+      options: [
+        'Cùng một partition, theo `murmur2(\'user-1\') % 4`',
+        'Rải đều qua bốn partition',
+        'Partition đang có ít dữ liệu nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Phép tính chỉ dựa vào chuỗi key nên nó cho cùng kết quả ở mọi lần gọi. Vì partition là log chỉ ghi thêm, ba record đó cũng giữ đúng thứ tự đã ghi.',
+    },
+    {
       at: 19_000,
       question: 'Nếu đổi topic `orders` từ 4 sang 8 partition, điều gì xảy ra với record cũ của key `user-1`?',
       options: [
@@ -94,6 +106,56 @@ export const keyPartitioning: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Đây là bài toán hot partition. Cùng key luôn về cùng partition, nên tải nghiêng hẳn về một chỗ và song song hoá tắc ngay tại đó — số consumer hữu ích trong một group bị chặn bởi số partition. Cách chữa là làm key mịn hơn, chẳng hạn ghép thêm hậu tố `customer-1#3`, đổi lại thì mất bảo đảm thứ tự trên toàn bộ khách hàng đó.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Producer chọn partition cho một record mang key theo cách nào?',
+      options: [
+        '`murmur2(key)` chia lấy dư cho số partition',
+        'Theo thứ tự vòng tròn',
+        'Theo partition ít tải nhất',
+        'Theo giá trị của record',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không dựa vào giá trị record, không dựa vào thời điểm ghi, chỉ dựa đúng vào chuỗi key.',
+    },
+    {
+      question: 'Record không mang key đi đâu?',
+      options: [
+        'Rải qua partition theo một bộ đếm riêng của producer, không đảm bảo gì',
+        'Luôn về partition 0',
+        'Về partition đang có offset nhỏ nhất',
+        'Bị broker từ chối',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không key nghĩa là không có đơn vị thứ tự nào. Ba record liên tiếp hoàn toàn có thể nằm ở ba partition khác nhau.',
+    },
+    {
+      question: 'Vì sao dữ liệu cũ không hề được di chuyển khi số partition đổi?',
+      options: [
+        'Record đã ghi nằm cố định trong log của partition cũ; phép chia lấy dư chỉ áp cho lượt ghi mới',
+        'Kafka có di chuyển, chỉ là chạy nền rất chậm',
+        'Vì mỗi key được lưu kèm số partition cũ',
+        'Vì mọi partition chia sẻ chung một log',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hệ quả là bảo đảm thứ tự cho một key đứt ngay tại ranh giới đổi số partition, dù không record nào mất.',
+    },
+    {
+      question: 'Ghép hậu tố vào key, ví dụ `customer-1#3`, đem lại gì, mất gì?',
+      options: [
+        'Tải rải ra nhiều partition, đổi lại mất bảo đảm thứ tự trên toàn bộ khách hàng đó',
+        'Tải rải ra mà thứ tự vẫn nguyên vẹn',
+        'Thứ tự chặt hơn, đổi lại tải nghiêng hơn',
+        'Không đổi gì, hậu tố bị bỏ qua lúc băm',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Key mịn hơn nghĩa là đơn vị thứ tự nhỏ hơn. Chọn key chính là chọn luôn đơn vị thứ tự của cả hệ thống.',
     },
   ],
 }

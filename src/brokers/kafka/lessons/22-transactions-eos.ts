@@ -122,6 +122,18 @@ export const transactionsEos: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 14_000,
+      question: 'Transaction thứ nhất vừa abort. `a1`, `a2`, `a3` có bị xoá khỏi log không?',
+      options: [
+        'Không — chúng nằm nguyên đó, consumer `read_committed` chỉ bỏ qua chúng',
+        'Có, broker xoá ngược phần đã ghi',
+        'Có, nhưng chỉ ở partition đầu tiên',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Broker không có khái niệm xoá ngược một record đã ghi. Việc lọc nằm ở phía đọc, dựa vào control record abort.',
+    },
+    {
       at: 26_000,
       question: 'Vì sao `c1` (`read_committed`) không thấy `b1` ngay lúc `b1` vừa được ghi xong (t=4500), dù `c2` (`read_uncommitted`) thấy ngay?',
       options: [
@@ -145,6 +157,51 @@ export const transactionsEos: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Last stable offset là một hàng rào cứng: nó đứng lại tại record đầu tiên của transaction chưa resolve, nên mọi thứ phía sau — kể cả transaction khác đã commit xong — đều bị chặn. Đây là lý do `transaction.timeout.ms` tồn tại: broker tự abort transaction quá hạn để hàng rào đó tiến lên, tránh một producer chết làm nghẽn cả topic.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Transaction mở rộng bảo đảm của idempotence theo hướng nào?',
+      options: [
+        'Ra nhiều partition cùng lúc',
+        'Ra nhiều cluster',
+        'Tới tận database bên ngoài',
+        'Tới mọi consumer group',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Idempotence một mình chỉ khử duplicate trong phạm vi một partition, một phiên `producerId`.',
+    },
+    {
+      question: '`transactional.id` đem lại gì?',
+      options: [
+        'Một `producerId` gắn liền với cái tên đó qua mọi lần khởi động, cộng một epoch tăng dần',
+        'Một partition riêng cho producer',
+        'Một topic nội bộ riêng',
+        'Một consumer group ẩn',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhờ epoch, một tiến trình zombie mang epoch cũ bị broker từ chối, nên nó không thể ghi đè lên công việc của phiên mới.',
+    },
+    {
+      question: '`read_committed` đọc tới đâu?',
+      options: ['Last stable offset', 'High watermark', 'LEO của leader', 'Committed offset của group'],
+      answerIndex: 0,
+      explanation:
+        'Last stable offset đứng lại tại record đầu tiên của một transaction chưa resolve, nên phần phía sau chưa đọc được dù đã nằm trong log.',
+    },
+    {
+      question: 'Exactly-once của Kafka có phạm vi tới đâu?',
+      options: [
+        'Read-process-write bên trong Kafka',
+        'Tới mọi hệ thống ứng dụng ghi ra',
+        'Tới database qua một connector bất kỳ',
+        'Tới cả lệnh gọi HTTP trong lúc xử lý',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một khi ứng dụng ghi ra ngoài, hệ thống bên ngoài cần cơ chế idempotent của riêng nó.',
     },
   ],
 }

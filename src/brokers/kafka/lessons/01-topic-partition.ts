@@ -64,6 +64,18 @@ export const topicPartition: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 5000,
+      question: 'Record vừa ghi rải qua ba partition. Offset 0 xuất hiện ở mấy chỗ?',
+      options: [
+        'Ở cả ba partition — mỗi partition đếm offset riêng',
+        'Chỉ một chỗ, vì offset là id duy nhất của cả topic',
+        'Không chỗ nào, offset bắt đầu từ 1',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Offset là vị trí trong một log, không phải định danh toàn cục. Hai record cùng mang offset 0 ở hai partition chẳng liên quan gì tới nhau.',
+    },
+    {
       at: 15_000,
       question: 'Sáu record ghi vào topic ba partition. Kafka bảo đảm gì về thứ tự?',
       options: [
@@ -87,6 +99,56 @@ export const topicPartition: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Log là nơi lưu trữ, không phải hàng đợi tiêu thụ. Record nằm đó cho tới khi retention xoá, còn mỗi group chỉ giữ thêm một con số đánh dấu đã đọc tới đâu. Chính điều này cho phép nhiều hệ thống độc lập cùng đọc một dòng dữ liệu — thứ một queue kiểu RabbitMQ không làm được nếu không nhân bản message.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Topic khác partition ở chỗ nào?',
+      options: [
+        'Topic là một cái tên; partition mới là log thật sự chứa dữ liệu',
+        'Topic là log; partition là bản sao của log đó',
+        'Topic là một file; partition là chỉ mục vào file đó',
+        'Hai khái niệm chỉ là hai tên gọi của một thứ',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`orders` ba partition nghĩa là ba log riêng biệt, mỗi log giữ một phần dữ liệu rồi đếm offset của riêng nó.',
+    },
+    {
+      question: 'Một partition cho phép thao tác nào?',
+      options: [
+        'Chỉ nối thêm vào đuôi log',
+        'Chèn vào giữa theo offset',
+        'Sửa tại chỗ một record đã ghi',
+        'Xoá lẻ một record',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chính ràng buộc chỉ ghi thêm khiến việc ghi nhanh tới vậy. Xoá là việc của retention, theo cả segment chứ không theo từng record.',
+    },
+    {
+      question: 'Vì sao nhiều hệ thống độc lập cùng đọc được một topic?',
+      options: [
+        'Mỗi group giữ offset riêng, còn record thì không mất đi vì bị đọc',
+        'Kafka nhân bản record cho từng group',
+        'Mỗi group nhận một partition riêng',
+        'Broker gửi một bản sao tới từng group',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Log là nơi lưu trữ chung, còn tiến độ đọc là trạng thái riêng của từng group. Một queue muốn làm điều tương tự phải nhân bản message.',
+    },
+    {
+      question: 'Muốn một nhóm record giữ đúng thứ tự thì phải làm gì?',
+      options: [
+        'Cho chúng rơi vào cùng một partition',
+        'Ghi chúng liên tiếp trong cùng một giây',
+        'Dùng đúng một producer',
+        'Đặt topic sang chế độ có thứ tự',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thứ tự chỉ tồn tại bên trong một partition. Bài sau chỉ ra cách ép điều đó bằng key.',
     },
   ],
 }

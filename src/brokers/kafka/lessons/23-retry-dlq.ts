@@ -112,6 +112,18 @@ export const retryDlq: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 14_000,
+      question: 'Record hỏng vừa được đẩy sang `orders.retry`. Partition gốc ra sao?',
+      options: [
+        'Commit offset rồi đi tiếp — `order-7` với `order-8` xử lý bình thường',
+        'Đứng khựng cho tới khi retry thành công',
+        'Bị đóng lại cho tới lượt rebalance kế tiếp',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Số phận của record hỏng được tách hẳn khỏi tiến độ của partition gốc. Đó là toàn bộ điểm của mô hình này.',
+    },
+    {
       at: 24_000,
       question: 'Vì sao đẩy record hỏng sang `orders.retry` rồi `orders.dlq` tốt hơn retry-tại-chỗ trên chính partition gốc?',
       options: [
@@ -135,6 +147,56 @@ export const retryDlq: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Retry topic đổi thứ tự lấy tiến độ. `order-6-loi` xử lý xong sau `order-7` và `order-8`, nên mô hình này chỉ dùng được khi các record độc lập nhau. Với chuỗi chuyển trạng thái theo key, xử lý sai thứ tự sinh ra dữ liệu hỏng — lúc đó phải chặn đứng partition, hoặc thiết kế lại để phần xử lý chịu được thứ tự bất kỳ.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Retry ngay tại chỗ gây hậu quả gì?',
+      options: [
+        'Vị trí đọc đứng yên tại record hỏng, chặn mọi record phía sau',
+        'Record hỏng bị bỏ qua',
+        'Partition tự chia đôi',
+        'Consumer bị đá khỏi group ngay lập tức',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Với một record hỏng vĩnh viễn — dữ liệu sai định dạng chẳng hạn — điều đó chặn đứng toàn bộ phần còn lại của partition.',
+    },
+    {
+      question: 'Vì sao retry topic thường xếp nhiều bậc trễ tăng dần?',
+      options: [
+        'Để không dội dồn dập vào một sự cố còn đang xảy ra',
+        'Để giữ đúng thứ tự record',
+        'Để giảm số partition cần dùng',
+        'Để tránh rebalance',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Ví dụ 5 giây, rồi 1 phút, rồi 10 phút. Thử lại liên tục chỉ làm sự cố nặng thêm.',
+    },
+    {
+      question: 'Header `cause` cùng `attempts` trên một record trong DLQ dùng để làm gì?',
+      options: [
+        'Ghi lại vì sao record thất bại, đã thử lại bao nhiêu lần',
+        'Xác định partition đích',
+        'Đặt hạn cho record',
+        'Chọn consumer group xử lý',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thiếu hai trường đó, một record nằm trong DLQ chỉ là một bí ẩn không ai lần ra nguồn gốc.',
+    },
+    {
+      question: 'DLQ không có ai đọc thì sao?',
+      options: [
+        'Vấn đề chuyển từ chặn partition sang âm thầm biến mất, còn nguy hiểm hơn',
+        'Broker tự đẩy record ngược về topic gốc',
+        'Record bị xoá sau một giờ',
+        'Không sao cả, DLQ vốn chỉ để lưu trữ',
+      ],
+      answerIndex: 0,
+      explanation:
+        'DLQ phải đi kèm quy trình xử lý cùng cảnh báo — dashboard, alert, hoặc một job định kỳ quét qua.',
     },
   ],
 }

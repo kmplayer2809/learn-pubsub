@@ -93,6 +93,18 @@ export const orderingRetries: KafkaLesson = {
   ],
   checkpoints: [
     {
+      at: 11_000,
+      question: '`p3` đặt `maxInFlight: 1`. Ba record của nó rời producer theo cách nào?',
+      options: [
+        'Nối đuôi nhau — record sau chỉ đi khi record trước xong',
+        'Bay song song rồi broker sắp lại theo sequence',
+        'Gộp lại thành một record duy nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cách này giữ thứ tự bằng cách chặn hẳn song song, nên suốt lúc `p3-rec-1` chờ gửi lại, `p3` không gửi thêm gì khác.',
+    },
+    {
       at: 20_000,
       question: 'Vì sao phần log của `p1` (không idempotent, `maxInFlight: 5`) kết thúc với thứ tự `p1-rec-2, p1-rec-3, p1-rec-1`?',
       options: [
@@ -116,6 +128,51 @@ export const orderingRetries: KafkaLesson = {
       answerIndex: 0,
       explanation:
         'Sequence trong idempotence phục vụ cả hai việc: khử trùng lặp lẫn giữ thứ tự, vì broker từ chối record đến sai lượt. Nhờ vậy `max.in.flight` giữ được tới 5 mà thứ tự vẫn đúng, trả giá bằng vài lần retry thay vì bằng thông lượng. `maxInFlight: 1` giữ thứ tự bằng cách chặn hẳn song song, tốn kém hơn nhiều.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`max.in.flight.requests.per.connection` là gì?',
+      options: [
+        'Số request cùng lúc đang trên đường tới broker',
+        'Số record tối đa mỗi batch',
+        'Số kết nối tối đa tới một broker',
+        'Số lần thử lại tối đa',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mặc định là 5. Chính nó cho phép một request gửi sau vượt mặt request đang phải gửi lại.',
+    },
+    {
+      question: 'Vì sao thứ tự lệch khi một request phải gửi lại?',
+      options: [
+        'Broker ghi theo thứ tự nó nhận, mà record không idempotent không mang thông tin vị trí đúng',
+        'Broker sắp lại theo kích thước record',
+        'Producer đảo thứ tự lúc gửi lại',
+        'Log tự sắp theo dấu thời gian',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không có sequence thì broker chẳng có căn cứ nào để biết record nào đáng lẽ đứng trước.',
+    },
+    {
+      question: 'Broker làm gì khi nhận một record có `sequence` nhảy cóc?',
+      options: [
+        'Từ chối, buộc producer gửi lại đúng lượt',
+        'Ghi vào log rồi sắp lại sau',
+        'Bỏ qua im lặng',
+        'Chuyển nó sang partition khác',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhờ vậy thứ tự đúng được giữ mà vẫn cho nhiều request bay song song — cái giá là vài lần retry.',
+    },
+    {
+      question: 'Bảo đảm thứ tự của Kafka có nghĩa ở phạm vi nào?',
+      options: ['Bên trong một partition', 'Toàn bộ topic', 'Toàn bộ cluster', 'Bên trong một batch'],
+      answerIndex: 0,
+      explanation:
+        'Hai partition khác nhau không có bảo đảm thứ tự nào, kể cả khi chúng thuộc cùng một topic.',
     },
   ],
 }
