@@ -149,10 +149,30 @@ lesson bằng cách chạy hai lần và so sánh journal.
 2. Export một object kiểu `Lesson` (định nghĩa ở
    `src/brokers/rabbitmq/lessons/types.ts`): `id`, `group`
    (`'basics' | 'reliability' | 'dlx' | 'patterns'`), `title`, `summary`,
-   `topology`, `script`, `failures?`, `narrative`, `checkpoints?`, `seed`,
-   `durationMs`.
+   `topology`, `script`, `failures?`, `narrative`, `checkpoints?`, `quiz?`,
+   `seed`, `durationMs`.
 3. Thêm lesson vào mảng `LESSONS` của broker đó (ví dụ
    `src/brokers/rabbitmq/lessons/registry.ts`, và import nó ở đầu file).
+
+Hai trường `checkpoints` và `quiz` tuy khai báo optional trong kiểu (để một
+lesson viết dở vẫn compile) nhưng đều bắt buộc trên thực tế, và test ở tầng
+shell lặp qua mọi broker trong `BROKERS` để ép điều đó:
+
+- `src/shell/lesson/checkpoints.test.ts` đòi **ba** checkpoint: hai nhịp hỏi
+  giữa lúc chạy, cộng một checkpoint tổng kết đặt đúng tại `durationMs` (đúng
+  mốc transport dừng lại, vì `CheckpointSection` chỉ hiện một card khi
+  `now >= at`). Hai checkpoint không được trùng `at`.
+- `src/shell/lesson/quiz.test.ts` đòi **bốn** câu `quiz`, mỗi câu ít nhất ba
+  option không trùng nhau, `answerIndex` nằm trong khoảng hợp lệ, có
+  `explanation`, không lặp câu hỏi trong cùng một lesson, và không chép lại
+  nguyên văn câu hỏi của checkpoint.
+
+Khác nhau ở chỗ: `checkpoint` gắn với một thời điểm trong lượt chạy nên được
+phép hỏi về thứ đang hiện trên canvas; `quiz` không có `at` vì ngoài dialog
+cuối bài nó còn được rút vào đề thi 20 câu của từng broker, nơi không có
+lượt chạy nào phía sau — câu hỏi phải tự đứng được một mình. Điểm tốt nhất
+của từng lesson và từng đề thi lưu trong `localStorage` dưới khoá
+`broker-visualizer:progress:v1` (xem `src/shell/quiz/progress.ts`).
 
 Chỉ cần vậy — mọi test trong `lessons.test.ts` của broker đó lặp qua
 `LESSONS` bằng `it.each`, nên lesson mới tự động được kiểm tra: topology hợp
@@ -166,7 +186,7 @@ như "the/and/with"), còn `title` được phép để nguyên tiếng Anh nế
 gọi thuần của khái niệm đang dạy (`Direct exchange`, `RPC`...) — đọc file đó
 trước khi viết copy cho lesson mới để bám đúng quy tắc.
 
-Toàn bộ copy hướng tới người đọc (title dạng câu, narrative, checkpoint) viết
+Toàn bộ copy hướng tới người đọc (title dạng câu, narrative, checkpoint, quiz) viết
 bằng tiếng Việt; các thuật ngữ của từng broker và của lập trình nói chung giữ
 nguyên tiếng Anh, không dịch — với RabbitMQ là exchange, queue, binding,
 routing key, publisher, consumer, ack/nack/requeue, prefetch, QoS, DLX, TTL,
@@ -202,7 +222,8 @@ ngay khi thư mục đó tồn tại.
 
 ```
 src/shell/kernel/   bộ máy thời gian dùng chung (rng, scheduler, run loop, guard)
-src/shell/lesson/   kiểu Lesson, narrative, checkpoint dùng chung
+src/shell/lesson/   kiểu Lesson, narrative, checkpoint, quiz dùng chung
+src/shell/quiz/     chấm điểm, xáo câu hỏi, dựng đề thi, lưu điểm localStorage
 src/shell/ui/       App, broker switcher, sidebar, canvas, inspector, transport
 src/brokers/        registry.ts + mỗi broker một thư mục
 src/brokers/rabbitmq/  engine, lessons, sandbox, ui của RabbitMQ

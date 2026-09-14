@@ -56,6 +56,16 @@ describe.each(BROKERS.map((b) => [b.id, b] as const))('%s: reader-facing copy is
       // Options are short and may legitimately be a bare term ("Fanout exchange"), so
       // they are held to the forbidden-word rule but not to the diacritic rule.
     }
+
+    for (const question of lesson.quiz ?? []) {
+      expect(question.question, `${lesson.id} quiz question`).toMatch(VIETNAMESE)
+      expect(question.explanation, `${lesson.id} quiz explanation`).toMatch(VIETNAMESE)
+      for (const text of [question.question, question.explanation, ...question.options]) {
+        expect(stripCode(text), `${lesson.id} quiz: ${text}`).not.toMatch(ENGLISH_FUNCTION_WORDS)
+      }
+      // Options stay exempt from the diacritic rule for the same reason checkpoint options
+      // are: an option may legitimately be a bare term ("Fanout exchange", "`acks=all`").
+    }
   })
 
   it('labels the lesson groups in Vietnamese', () => {

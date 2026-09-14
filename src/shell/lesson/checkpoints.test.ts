@@ -6,8 +6,8 @@ import { BROKERS } from '../../brokers/registry'
  * per-broker choice, so it is enforced here across `BROKERS` rather than in each broker's
  * own `lessons.test.ts`. A broker added later is covered the moment it is registered.
  *
- * Two checkpoints minimum: one comprehension beat while the run is still playing, and one
- * wrap-up at `durationMs`. The wrap-up sits exactly at `durationMs` because the transport
+ * Three checkpoints minimum: two comprehension beats while the run is still playing, and
+ * one wrap-up at `durationMs`. The wrap-up sits exactly at `durationMs` because the transport
  * halts there — `CheckpointSection` reveals a card once `now >= at`, so a later `at` would
  * be unreachable and a slightly earlier one would fire before the lesson finished.
  */
@@ -17,8 +17,8 @@ describe.each(BROKERS.map((b) => [b.id, b] as const))('%s: every lesson quizzes 
 ) => {
   it.each(broker.lessons.map((l) => [l.id, l] as const))('%s', (_id, lesson) => {
     const checkpoints = lesson.checkpoints ?? []
-    expect(checkpoints.length, `${lesson.id} needs a mid-run and a wrap-up checkpoint`)
-      .toBeGreaterThanOrEqual(2)
+    expect(checkpoints.length, `${lesson.id} needs two mid-run beats and a wrap-up checkpoint`)
+      .toBeGreaterThanOrEqual(3)
 
     const last = checkpoints[checkpoints.length - 1]!
     expect(last.at, `${lesson.id} wrap-up checkpoint must land on durationMs`).toBe(
