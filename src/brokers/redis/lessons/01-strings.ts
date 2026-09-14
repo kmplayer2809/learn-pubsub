@@ -50,6 +50,18 @@ export const strings: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 6000,
+      question: '`INCR page:views` vừa chạy lần thứ hai. Vì sao hai client gọi cùng lúc vẫn không mất lượt đếm?',
+      options: [
+        '`INCR` đọc rồi cộng trong một bước nguyên tử',
+        'Redis khoá `key` lại cho tới khi client ngắt kết nối',
+        'Client thứ hai phải chờ hết TTL',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không có khoảng hở đọc-ghi nào để hai bên giẫm lên nhau. Làm việc đó bằng `GET` rồi `SET` phía ứng dụng thì khoảng hở xuất hiện ngay.',
+    },
+    {
       at: 10_500,
       question: '`INCR` trên một key chưa tồn tại trả về gì?',
       options: ['(error)', '(integer) 1', '(nil)'],
@@ -65,6 +77,46 @@ export const strings: RedisLesson = {
       answerIndex: 0,
       explanation:
         '`SET` thay thế toàn bộ `key`, gồm cả phần metadata mang hạn, nên `key` trở thành vĩnh viễn. Muốn giữ hạn cũ thì phải gọi `SET ... KEEPTTL`. Đây là nguyên nhân rất thường gặp khiến cache tưởng có hạn mà thực ra nằm mãi.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Dữ liệu trong Redis được tổ chức theo cách nào?',
+      options: [
+        'Một bản đồ phẳng từ `key` sang `value`, chung một không gian tên',
+        'Nhiều bảng có schema riêng',
+        'Một cây thư mục phân cấp',
+        'Mỗi kiểu dữ liệu một không gian tên riêng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không bảng, không schema. `user:1` với `page:views` nằm chung một keyspace; dấu hai chấm chỉ là quy ước đặt tên của con người.',
+    },
+    {
+      question: '`GET` trên một `key` chưa tồn tại trả về gì?',
+      options: ['`(nil)` — một giá trị hợp lệ', '`(error)`', '`(integer) 0`', 'Một chuỗi rỗng'],
+      answerIndex: 0,
+      explanation:
+        'Miss là câu trả lời bình thường, không phải lỗi. Code phía ứng dụng vẫn phải phân biệt `(nil)` với một giá trị rỗng thật sự.',
+    },
+    {
+      question: 'Vì sao `INCR` an toàn hơn cặp `GET` rồi `SET` phía ứng dụng?',
+      options: [
+        '`INCR` là một bước nguyên tử, không có khoảng hở cho client khác chen vào',
+        '`INCR` chạy trên một luồng riêng',
+        '`INCR` tự khoá `key` trong một giây',
+        '`INCR` ghi thẳng xuống đĩa',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cặp `GET` rồi `SET` để lộ một khoảng hở đúng bằng thời gian giữa hai lượt round-trip; hai client cùng tăng bộ đếm sẽ mất một lượt. `INCR` khép hẳn khoảng hở đó.',
+    },
+    {
+      question: 'Muốn ghi giá trị mới mà giữ nguyên hạn cũ thì dùng gì?',
+      options: ['`SET ... KEEPTTL`', '`SET ... NX`', '`SET ... XX`', '`GETSET`'],
+      answerIndex: 0,
+      explanation:
+        '`SET` mặc định thay cả phần metadata mang hạn nên `key` trở thành vĩnh viễn. `NX` với `XX` chỉ điều kiện hoá việc ghi, không liên quan tới hạn.',
     },
   ],
 }

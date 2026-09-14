@@ -57,6 +57,18 @@ export const scan: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 6000,
+      question: 'Vì sao `KEYS user:*` nguy hiểm ngoài production?',
+      options: [
+        'Nó quét trọn keyspace trong một nhịp, giữ chân server suốt lượt quét',
+        'Nó xoá mọi `key` không khớp pattern',
+        'Nó chỉ chạy được trên replica',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Redis xử lý lệnh tuần tự, nên một lượt `KEYS` trên mười triệu `key` chặn mọi client khác cho tới lúc xong. `SCAN` chia việc đó thành nhiều trang nhỏ.',
+    },
+    {
       at: 13_000,
       question: '`SCAN` đảm bảo gì?',
       options: [
@@ -80,6 +92,56 @@ export const scan: RedisLesson = {
       answerIndex: 0,
       explanation:
         'Trùng lặp là đặc tính của `SCAN`, không phải lỗi. Thao tác idempotent như `DEL` hay `EXPIRE` chịu được điều đó mà không tốn gì. Bộ nhớ chống trùng phía client thì phình theo kích thước keyspace, đúng thứ `SCAN` sinh ra để tránh, còn `KEYS` thì đánh đổi bằng việc chặn cả server.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`SCAN` trả về gì?',
+      options: [
+        'Một cursor cùng một trang `key` giới hạn',
+        'Toàn bộ `key` khớp pattern',
+        'Số lượng `key` trong keyspace',
+        'Một snapshot của keyspace',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cursor dành cho lượt gọi kế tiếp, còn server rảnh tay giữa hai lượt gọi. `COUNT` chỉ là gợi ý kích thước trang, không phải cam kết.',
+    },
+    {
+      question: 'Một `key` được thêm vào giữa lượt quét có chắc chắn xuất hiện không?',
+      options: [
+        'Không — chỉ `key` sống suốt cả lượt quét mới chắc chắn xuất hiện ít nhất một lần',
+        'Có, cursor luôn bắt kịp `key` mới',
+        'Có, nếu `COUNT` đủ lớn',
+        'Không, `key` mới luôn bị bỏ qua',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cursor không phải một bản snapshot. `key` thêm hoặc xoá giữa chừng có thể bị bỏ sót, hoặc xuất hiện hai lần.',
+    },
+    {
+      question: 'Vì sao chống trùng bằng một `set` phía client lại phản tác dụng?',
+      options: [
+        'Bộ nhớ đó phình theo kích thước keyspace, đúng thứ `SCAN` sinh ra để tránh',
+        'Vì `set` phía client không so sánh được `key` nhị phân',
+        'Vì cursor đổi sau mỗi lượt gọi',
+        'Vì Redis từ chối lượt quét thứ hai',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Trùng lặp là đặc tính, không phải lỗi. Thao tác idempotent như `DEL` hay `EXPIRE` chịu được trùng mà chẳng tốn thêm gì.',
+    },
+    {
+      question: 'Cursor của `SCAN` nên được hiểu thế nào?',
+      options: [
+        'Một giá trị mờ, chỉ để truyền lại cho lượt gọi kế tiếp',
+        'Một chỉ số vào thứ tự chèn',
+        'Số `key` đã quét được',
+        'Một dấu thời gian',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Bộ mô phỏng này dùng chỉ số cho dễ hiểu, còn Redis thật dùng bucket nhị phân đảo ngược. Code không được dựa vào cách biểu diễn của bên nào.',
     },
   ],
 }

@@ -49,6 +49,18 @@ export const set: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 6500,
+      question: '`SINTER online:mon online:tue` được tính ở đâu?',
+      options: [
+        'Ngay trong Redis, mạng chỉ mang kết quả cuối',
+        'Phía client, sau khi tải cả hai `set` về',
+        'Trong một tiến trình nền, trả kết quả sau',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đưa phép tính tới chỗ dữ liệu là nguyên tắc chung. Kéo hai `set` về client rồi tự giao là cách tốn băng thông nhất.',
+    },
+    {
       at: 9000,
       question: '`SADD` một member đã có trả về gì?',
       options: ['(integer) 0', '(integer) 1', '(error)'],
@@ -68,6 +80,56 @@ export const set: RedisLesson = {
       answerIndex: 0,
       explanation:
         'Nguyên tắc chung là đưa phép tính tới chỗ dữ liệu. `SMEMBERS` kéo hai triệu phần tử qua mạng, còn vòng lặp `SISMEMBER` tốn một triệu lượt round-trip. `SINTERCARD` làm trọn việc ngay trong Redis rồi trả về mỗi con số đếm.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Vì sao `set` không cần một bước kiểm tra trước khi ghi?',
+      options: [
+        '`SADD` tự bỏ qua member đã có, việc khử trùng nằm trong chính thao tác ghi',
+        'Redis khoá `key` lại trong lúc ghi',
+        '`SADD` ghi đè member cũ',
+        '`set` cho phép trùng rồi lọc lúc đọc',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Giá trị trả về đếm số member mới thêm, nên một lượt `SADD` vừa ghi vừa cho biết member đã có hay chưa, chỉ tốn một round-trip.',
+    },
+    {
+      question: '`SISMEMBER` khác `SMEMBERS` ở chỗ nào?',
+      options: [
+        '`SISMEMBER` trả lời có hay không ngay tại server; `SMEMBERS` kéo cả `set` về',
+        '`SISMEMBER` chậm hơn vì phải quét',
+        'Hai lệnh giống hệt nhau',
+        '`SMEMBERS` chỉ trả về mười member đầu',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Với `set` lớn, khác biệt là một byte trả lời so với hàng triệu member đi qua mạng.',
+    },
+    {
+      question: 'Thứ tự của `SMEMBERS` có gì đảm bảo không?',
+      options: [
+        'Không — Redis thật không cam kết thứ tự nào',
+        'Có, theo thứ tự chèn',
+        'Có, theo thứ tự chữ cái',
+        'Có, theo thời điểm đọc gần nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Bộ mô phỏng này cố định theo thứ tự chèn để một lượt chạy luôn phát lại giống hệt, nhưng code thật tuyệt đối không được dựa vào điều đó.',
+    },
+    {
+      question: 'Vì sao vòng lặp `SISMEMBER` qua từng member là cách tệ để đếm phần giao?',
+      options: [
+        'Tốn một triệu lượt round-trip, trong khi Redis làm trọn việc trong một lệnh',
+        'Vì `SISMEMBER` thiếu chính xác trên `set` lớn',
+        'Vì `SISMEMBER` đòi hai `set` cùng kích thước',
+        'Vì mỗi lượt gọi làm hỏng cursor',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chi phí nằm ở số lượt đi về mạng, không ở phép so khớp. `SINTERCARD` gộp tất cả thành một lượt rồi trả về đúng một con số đếm.',
     },
   ],
 }

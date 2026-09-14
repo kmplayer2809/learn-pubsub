@@ -54,6 +54,18 @@ export const writeThrough: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 10_000,
+      question: 'Khoảng thời gian `redis` đã có giá trị mà `database` chưa thấy nói lên điều gì?',
+      options: [
+        'Đúng lượng dữ liệu một lần crash có thể xoá sạch',
+        'Độ trễ mạng giữa hai kho dữ liệu',
+        'Thời gian chờ trước khi cache hết hạn',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chấp nhận khoảng lệch đó rộng tới đâu là quyết định sản phẩm, không phải một giới hạn kỹ thuật.',
+    },
+    {
       at: 16_000,
       question: 'Write-behind mất dữ liệu khi nào?',
       options: ['Không bao giờ, Redis bền', 'Khi Redis hoặc worker chết trước lúc flush', 'Chỉ khi TTL hết hạn'],
@@ -73,6 +85,56 @@ export const writeThrough: RedisLesson = {
       answerIndex: 0,
       explanation:
         'Write-behind luôn có một cửa sổ dữ liệu chỉ tồn tại trong Redis. Với tiền bạc, cửa sổ đó là mất mát không thể chấp nhận, dù ngắn tới đâu. Write-through trả giá bằng độ trễ ghi bằng tổng hai kho — đúng cái giá phải trả cho dữ liệu không được phép mất. Queue dài hơn chỉ làm cửa sổ rộng thêm.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Write-through hoạt động ra sao?',
+      options: [
+        'Ghi cả hai kho rồi mới coi request là xong',
+        'Ghi Redis rồi trả lời ngay, `database` ghi sau',
+        'Ghi `database` rồi để Redis tự đồng bộ',
+        'Chỉ ghi Redis, `database` đọc ngược lên',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cache không bao giờ đi trước `database`, đổi lại độ trễ ghi bằng tổng của cả hai kho.',
+    },
+    {
+      question: 'Vì sao queue `writeback` không cứu được dữ liệu khi worker chết?',
+      options: [
+        'Phần tử đã `RPOP` không còn bản sao nào ở server, nó chỉ nằm trong bộ nhớ worker',
+        'Vì queue tự xoá sau mỗi lượt đọc',
+        'Vì `list` không lưu nổi nhiều phần tử',
+        'Vì Redis xoá queue lúc worker ngắt kết nối',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cảnh báo ở bài `list` áp dụng nguyên vẹn: pop là chuyển giao dứt điểm, không có ack nào phía sau.',
+    },
+    {
+      question: 'Vì sao write-behind không hợp với dữ liệu tuyệt đối không được mất?',
+      options: [
+        'Luôn tồn tại một cửa sổ dữ liệu chỉ có mặt trong Redis',
+        'Vì nó ghi chậm hơn write-through',
+        'Vì nó cần thêm một `key` cho mỗi bản ghi',
+        'Vì nó không dùng được với `hash`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cửa sổ đó ngắn tới đâu cũng là mất mát khi crash. Kéo dài queue chỉ làm cửa sổ rộng thêm.',
+    },
+    {
+      question: 'Write-behind đổi cái gì lấy cái gì?',
+      options: [
+        'Độ trễ ghi thấp, đổi bằng một khoảng hai kho dữ liệu không khớp',
+        'Độ bền cao hơn, đổi bằng bộ nhớ',
+        'Ít round-trip hơn, đổi bằng độ chính xác của `TTL`',
+        'Thông lượng đọc cao hơn, đổi bằng thông lượng ghi',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Người gọi nhận phản hồi ngay khi Redis nhận, còn `database` bắt kịp sau. Toàn bộ rủi ro nằm trong khoảng bắt kịp đó.',
     },
   ],
 }

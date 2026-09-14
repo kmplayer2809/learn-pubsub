@@ -41,6 +41,18 @@ export const rateLimit: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 1800,
+      question: 'Tại t=1200, `ZREMRANGEBYSCORE ratelimit:ip1 -inf 200` cắt phần nào?',
+      options: [
+        'Request có score nhỏ hơn 200, tức cũ hơn cửa sổ 1000ms',
+        'Toàn bộ request trong `key`',
+        'Request mới nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cửa sổ trượt luôn tính ngược từ hiện tại, nên biên dưới đổi theo từng lượt kiểm tra thay vì nhảy khối theo giây cố định.',
+    },
+    {
       at: 2600,
       question: 'ZREMRANGEBYSCORE chạy trước ZCARD trong mỗi lượt kiểm tra rate limit. Vì sao thứ tự này quan trọng?',
       options: [
@@ -63,6 +75,56 @@ export const rateLimit: RedisLesson = {
       answerIndex: 0,
       explanation:
         'Trạng thái nằm chung trong Redis nên nhiều máy chủ dùng chung được, đó là điểm mạnh. Vấn đề là `ZREMRANGEBYSCORE`, `ZCARD`, `ZADD` là ba lượt round-trip riêng biệt: nhiều máy chủ đọc `ZCARD` cùng lúc rồi đều thấy còn hạn mức, nên tổng số request lọt qua vượt trần. Gói cả ba vào một Lua script thì phần kiểm tra cộng ghi trở thành một bước duy nhất.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Sliding window log lưu mỗi request theo cách nào?',
+      options: [
+        'Một member trong `zset`, score là thời điểm request tới',
+        'Một lượt `INCR` trên một bộ đếm',
+        'Một phần tử trong `list`',
+        'Một field trong `hash`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhờ score chính là thời gian, phần rơi khỏi cửa sổ cắt được bằng đúng một lệnh range.',
+    },
+    {
+      question: 'Gọi `ZCARD` trước khi cắt phần cũ dẫn tới chuyện gì?',
+      options: [
+        'Request đã rơi khỏi cửa sổ vẫn bị tính, limiter từ chối oan',
+        'Con số trả về luôn bằng 0',
+        '`ZREMRANGEBYSCORE` sau đó không chạy được',
+        'Cửa sổ bị kéo dài gấp đôi',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`ZCARD` chỉ đếm những gì đang có tại thời điểm gọi, nên thứ tự hai lệnh quyết định con số đem so với hạn mức.',
+    },
+    {
+      question: 'Sliding window khác fixed window ở điểm nào?',
+      options: [
+        'Fixed window nhảy khối theo mốc cố định; sliding window trượt liên tục',
+        'Sliding window chỉ đếm được một client',
+        'Fixed window cần `zset`, sliding window cần `list`',
+        'Hai cách cho kết quả giống hệt nhau',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mốc cố định cho phép dồn gần gấp đôi hạn mức quanh ranh giới giữa hai khối. Cửa sổ trượt không có ranh giới đó.',
+    },
+    {
+      question: 'Vì sao nên gói ba lệnh của limiter vào một Lua script?',
+      options: [
+        'Ba lượt round-trip riêng để lộ khoảng hở: nhiều máy chủ cùng thấy còn hạn mức rồi cùng cho qua',
+        'Vì Lua chạy nhanh hơn ba lệnh rời',
+        'Vì `zset` chỉ dùng được bên trong script',
+        'Vì script tự chia hạn mức theo từng máy chủ',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Trạng thái nằm chung trong Redis nên nhiều máy chủ chia sẻ được, đó là điểm mạnh. Phần kiểm tra cộng ghi mới là chỗ cần gộp thành một bước.',
     },
   ],
 }

@@ -62,6 +62,18 @@ export const ttl: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 10_000,
+      question: 'Chu kỳ active expire quét theo cách nào?',
+      options: [
+        'Quét một lượng `key` giới hạn ở mỗi lần thức dậy',
+        'Quét trọn keyspace trong một lần',
+        'Chỉ quét khi bộ nhớ chạm `maxmemory`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Quét trọn keyspace trong một nhịp sẽ chặn server. Vì vậy một keyspace lớn cần nhiều đợt mới rút cạn hết `key` đã hết hạn.',
+    },
+    {
       at: 16_000,
       question: 'Key hết hạn lúc t=3000 nhưng không ai đọc. Lúc t=3500 memory đã được giải phóng chưa?',
       options: ['Rồi, Redis xoá đúng lúc hết hạn', 'Chưa chắc — chờ lazy read hoặc active cycle', 'Không bao giờ, phải DEL tay'],
@@ -80,6 +92,56 @@ export const ttl: RedisLesson = {
       answerIndex: 0,
       explanation:
         '`-1` nghĩa là có `key`, không có hạn. `-2` mới là `key` đã biến mất. Nhầm hai giá trị này thường dẫn tới lỗi kiểu coi mọi số âm đều là cache miss, trong khi `-1` lại chính là một `key` sống mãi mà lẽ ra phải mang TTL.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Redis xoá một `key` đã hết hạn vào lúc nào?',
+      options: [
+        'Khi có lượt đọc chạm vào nó, hoặc khi active cycle quét tới',
+        'Đúng khoảnh khắc hạn chót tới',
+        'Khi client gọi `DEL`',
+        'Khi bộ nhớ đầy',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không có lịch hẹn giờ riêng cho từng `key`. Vùng nhớ vẫn bị giữ cho tới khi một trong hai cơ chế kia chạm tới.',
+    },
+    {
+      question: 'Phân biệt `-1` với `-2` trong kết quả của `TTL` ra sao?',
+      options: [
+        '`-1`: `key` còn sống, không mang hạn. `-2`: `key` không còn tồn tại',
+        '`-1`: `key` đã hết hạn. `-2`: `key` sống mãi',
+        'Hai giá trị đều nghĩa là `key` không tồn tại',
+        '`-1`: lỗi cú pháp. `-2`: lỗi kiểu dữ liệu',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Gộp mọi số âm thành một trường hợp là lỗi rất thường gặp: `-1` chính là một `key` sống mãi mà lẽ ra phải mang hạn.',
+    },
+    {
+      question: '`PERSIST` làm gì?',
+      options: [
+        'Gỡ hạn của `key`, biến nó thành vĩnh viễn',
+        'Ghi `key` xuống đĩa ngay',
+        'Gia hạn thêm một chu kỳ',
+        'Đặt hạn mặc định cho `key`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Sau `PERSIST`, `TTL` trả về `-1`. Đây là cách gỡ hạn mà khỏi phải ghi lại giá trị.',
+    },
+    {
+      question: 'Lệnh `GET` chạm vào một `key` đã quá hạn đem lại hai kết quả nào?',
+      options: [
+        'Trả về `(nil)`, đồng thời xoá luôn `key` để giải phóng vùng nhớ',
+        'Trả về giá trị cũ, rồi mới xoá `key`',
+        'Trả về lỗi, `key` vẫn nằm đó',
+        'Gia hạn `key` thêm một chu kỳ rồi trả giá trị',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đó chính là xoá lazy: lượt đọc đầu tiên vừa báo miss vừa dọn dẹp. `DBSIZE` sau đó mới phản ánh đúng số `key` còn sống.',
     },
   ],
 }

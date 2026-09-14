@@ -47,6 +47,18 @@ export const distributedLock: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 1300,
+      question: '`worker` gọi `SET lock:job token-worker NX PX 5000` lúc `app` đang giữ khoá. Kết quả?',
+      options: [
+        'Trả về nil, không ghi gì cả',
+        'Ghi đè khoá của `app`',
+        'Xếp hàng chờ tới khi khoá được mở',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`NX` chỉ ghi khi `key` chưa tồn tại, nên đúng một client thắng cuộc đua. Bên thua phải tự quyết định chờ rồi thử lại hay bỏ qua.',
+    },
+    {
       at: 2000,
       question: 'Vì sao mở khoá dùng EVAL (GET rồi DEL trong một script) thay vì gọi GET và DEL là hai lệnh riêng?',
       options: [
@@ -69,6 +81,56 @@ export const distributedLock: RedisLesson = {
       answerIndex: 0,
       explanation:
         'TTL của khoá là phỏng đoán về thời gian công việc, mà phỏng đoán thì sai được. Vượt hạn thì mất quyền loại trừ lẫn nhau, đúng thứ khoá sinh ra để bảo vệ. Cách chữa là một watchdog gia hạn khoá theo chu kỳ khi việc còn chạy, cộng thêm thiết kế idempotent để hai lượt chạy chồng nhau vẫn không gây hại.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Vai trò của `NX` với `PX` trong `SET lock:job token NX PX 5000` là gì?',
+      options: [
+        '`NX` đảm bảo chỉ một client giành được; `PX` đặt hạn tự huỷ',
+        '`NX` đặt hạn; `PX` đảm bảo tính duy nhất',
+        'Cả hai đều chỉ đặt hạn',
+        'Cả hai đều chỉ kiểm tra sự tồn tại',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thiếu `PX`, một client chết lúc đang giữ khoá sẽ chặn mọi người mãi mãi.',
+    },
+    {
+      question: 'Vì sao mở khoá không thể chỉ là `DEL lock:job`?',
+      options: [
+        'Bất kỳ ai gọi cũng xoá được, kể cả khoá của người khác',
+        'Vì `DEL` không xoá được `key` mang `PX`',
+        'Vì `DEL` trả về nil khi `key` đang bị giữ',
+        'Vì `DEL` làm mất token',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Token nằm trong giá trị của `key` là bằng chứng quyền sở hữu. Mở khoá phải kiểm tra token trước khi xoá.',
+    },
+    {
+      question: 'Khoảng hở giữa `GET` với `DEL` lúc mở khoá dẫn tới chuyện gì?',
+      options: [
+        'Khoá hết hạn rồi client khác giành được ngay trong khoảng đó, `DEL` xoá nhầm khoá của họ',
+        '`GET` trả về giá trị cũ',
+        'Token bị Redis ghi đè',
+        'Khoá không bao giờ mở được',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Khoảng hở đúng bằng thời gian giữa hai lượt round-trip. Gói cả hai vào một script thì nó biến mất.',
+    },
+    {
+      question: 'Công việc kéo dài hơn `PX` của khoá. Cách xử lý đúng?',
+      options: [
+        'Một watchdog gia hạn khoá theo chu kỳ, cộng thiết kế idempotent',
+        'Đặt `PX` thật lớn rồi thôi',
+        'Bỏ `PX` để khoá khỏi hết hạn',
+        'Giành lại khoá sau mỗi bước công việc',
+      ],
+      answerIndex: 0,
+      explanation:
+        'TTL của khoá là phỏng đoán về thời gian công việc, mà phỏng đoán thì sai được. Bỏ `PX` thì quay lại đúng bài toán client chết giữ khoá vĩnh viễn.',
     },
   ],
 }

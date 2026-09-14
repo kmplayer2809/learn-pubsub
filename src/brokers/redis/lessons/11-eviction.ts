@@ -72,6 +72,18 @@ export const eviction: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 13_000,
+      question: 'Một `key` bị eviction khác một `key` hết hạn ở điểm nào?',
+      options: [
+        '`key` bị eviction vẫn đang sống, nó bị xoá chỉ để nhường chỗ',
+        'Hai trường hợp giống hệt nhau',
+        '`key` bị eviction luôn mang `TTL` đã hết',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Vì vậy `metrics.evicted` với `metrics.expired` là hai bộ đếm tách biệt: một cái đo áp lực bộ nhớ, cái kia đo vòng đời dữ liệu.',
+    },
+    {
       at: 19_000,
       question: '`volatile-lru` với keyspace không key nào có TTL thì sao?',
       options: ['Xoá key cũ nhất', 'Hoạt động như noeviction — write trả OOM', 'Xoá ngẫu nhiên một key'],
@@ -91,6 +103,56 @@ export const eviction: RedisLesson = {
       answerIndex: 0,
       explanation:
         '`allkeys-lru` coi mọi key là ứng viên, nên nó xoá cả dữ liệu bắt buộc phải còn. `volatile-lru` biến `TTL` thành lời tuyên bố "key này bỏ được", nên chỉ phần cache bị xoá. Bẫy duy nhất là quên đặt `TTL`: lúc đó danh sách ứng viên rỗng và mọi lệnh ghi trả `OOM`. Tách hẳn hai instance vẫn là phương án sạch sẽ nhất.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`maxmemory` là gì?',
+      options: [
+        'Trần cứng: chạm trần thì Redis phải xoá bớt hoặc từ chối ghi',
+        'Một gợi ý để Redis tự cân đối',
+        'Giới hạn kích thước mỗi `key`',
+        'Ngưỡng bắt đầu ghi xuống đĩa',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chính sách eviction quyết định Redis chọn nhánh nào khi chạm trần.',
+    },
+    {
+      question: '`allkeys-lru` chọn `key` nào để xoá?',
+      options: [
+        '`key` lâu nhất chưa được đọc hay ghi, trong toàn bộ keyspace',
+        'Chỉ `key` mang `TTL`',
+        '`key` lớn nhất',
+        '`key` mới ghi gần đây nhất',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hợp lý cho một cache thuần tuý, nhưng nó coi cả dữ liệu bắt buộc phải còn là ứng viên.',
+    },
+    {
+      question: 'Vì sao `volatile-lru` vẫn có thể trả `OOM` dù chính sách đã bật?',
+      options: [
+        'Danh sách ứng viên rỗng khi không `key` nào mang `TTL`',
+        'Vì `volatile-lru` chỉ chạy lúc khởi động',
+        'Vì nó đòi `maxmemory` lớn hơn một gigabyte',
+        'Vì nó xung đột với RDB',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chính sách chỉ nhìn vào `key` mang hạn. Không có ứng viên thì nó hành xử y hệt `noeviction`.',
+    },
+    {
+      question: 'Một instance vừa làm cache vừa giữ dữ liệu bắt buộc phải còn. Hướng nào sạch nhất?',
+      options: [
+        'Tách hẳn thành hai instance',
+        '`allkeys-lru` cho cả hai loại dữ liệu',
+        '`noeviction` rồi nâng `maxmemory` dần',
+        'Bỏ `TTL` để không `key` nào bị xoá',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`volatile-lru` cộng `TTL` cho riêng phần cache là phương án chấp nhận được, nhưng nó phụ thuộc vào việc không ai quên đặt hạn. Hai instance tách biệt không mang cái bẫy đó.',
     },
   ],
 }

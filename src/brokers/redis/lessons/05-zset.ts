@@ -49,6 +49,18 @@ export const zset: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 7000,
+      question: '`ZREVRANGE board 0 2 WITHSCORES` phải chạm vào bao nhiêu member?',
+      options: [
+        'Chỉ ba member đầu bảng',
+        'Toàn bộ `sorted set`, rồi sắp xếp lại',
+        'Một nửa `sorted set`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Trật tự đã có sẵn từ lúc ghi, nên đọc top N chỉ là đi N bước từ một đầu. Chi phí không phụ thuộc kích thước tập.',
+    },
+    {
       at: 11_000,
       question: 'Sau `ZINCRBY board 200 ann`, ai đứng đầu?',
       options: ['bob (250)', 'ann (300)', 'cat (175)'],
@@ -68,6 +80,56 @@ export const zset: RedisLesson = {
       answerIndex: 0,
       explanation:
         '`sorted set` giữ trật tự sẵn trong skiplist ngay lúc ghi, nên không có bước sắp xếp nào lúc đọc. Lấy top N chỉ là đi mười bước từ một đầu, chi phí không phụ thuộc kích thước tập. Chỗ tốn kém là những truy vấn cần thứ hạng của một member ở giữa bảng.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Thứ tự trong một `sorted set` được lập vào lúc nào?',
+      options: [
+        'Lúc ghi, theo score của member',
+        'Lúc đọc, bằng một bước sort',
+        'Theo thứ tự chèn',
+        'Theo thứ tự chữ cái của member',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Redis giữ member trong skiplist theo score ngay khi ghi, nên đọc bảng xếp hạng chỉ còn là một range query.',
+    },
+    {
+      question: '`ZINCRBY board 200 ann` làm gì?',
+      options: [
+        'Cộng 200 vào score của `ann`, vị trí đổi theo ngay',
+        'Đặt score của `ann` thành 200',
+        'Thêm một member mới tên `200`',
+        'Ghi lại toàn bộ bảng xếp hạng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cập nhật tại chỗ nên ứng dụng khỏi phải đọc rồi ghi lại, cũng không có khoảng hở cho client khác chen vào.',
+    },
+    {
+      question: 'Hai member trùng score thì xếp thế nào?',
+      options: [
+        'Cần một tie-break cố định, ở đây là theo tên',
+        'Member mới hơn luôn đứng trước',
+        'Redis xếp ngẫu nhiên ở mỗi lượt đọc',
+        'Redis từ chối hai member cùng score',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Thiếu tie-break thì cùng một dữ liệu lại cho hai thứ tự khác nhau giữa hai lượt chạy — bảng xếp hạng mất tính lặp lại.',
+    },
+    {
+      question: 'Truy vấn nào trên `sorted set` đắt hơn hẳn việc lấy top N?',
+      options: [
+        'Tìm thứ hạng của một member nằm giữa bảng',
+        'Lấy mười member đầu',
+        'Cộng thêm score cho một member',
+        'Đếm tổng số member bằng `ZCARD`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Top N đi N bước từ một đầu, `ZCARD` đọc một con số có sẵn. Còn thứ hạng của một member giữa bảng đòi đếm qua phần đứng trước nó.',
     },
   ],
 }

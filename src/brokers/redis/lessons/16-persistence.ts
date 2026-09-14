@@ -50,6 +50,18 @@ export const persistence: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 2400,
+      question: 'Sau restart, server phục hồi từ đâu?',
+      options: [
+        'Bản chụp RDB gần nhất nó có',
+        'Trạng thái ngay trước lúc crash',
+        'Một bản sao nằm trên replica',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mọi lệnh ghi sau bản chụp cuối rơi vào khoảng hở. Ở đây `b` được ghi sau bản chụp t=1000 nên nó không quay lại.',
+    },
+    {
       at: 2800,
       question: 'Nếu server này dùng aof: "always" thay vì RDB, sau cùng một cú crash thì b có còn sống không?',
       options: ['Vẫn mất, always không khác gì RDB', 'Còn sống — always fsync mỗi lệnh ghi, không có khoảng hở nào để mất', 'Tuỳ vào tốc độ đĩa'],
@@ -68,6 +80,56 @@ export const persistence: RedisLesson = {
       answerIndex: 0,
       explanation:
         'Hai cơ chế này bù cho nhau chứ không loại trừ nhau: RDB là file nhị phân gọn, nạp lại rất nhanh, còn AOF `everysec` giữ phần ghi phát sinh sau bản chụp gần nhất trong phạm vi mất mát một giây. `always` thì chậm hơn mức cần thiết, còn RDB chụp mỗi giây gây tốn kém vì mỗi lần chụp là một lượt `fork` toàn bộ tiến trình.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'RDB lưu cái gì?',
+      options: [
+        'Bản chụp toàn bộ `key` tại một thời điểm',
+        'Log từng lệnh ghi',
+        'Chỉ `key` mang `TTL`',
+        'Danh sách `key` đã bị eviction',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Nhờ là file nhị phân gọn, RDB nạp lại rất nhanh. Cái giá là mọi lệnh ghi giữa hai bản chụp có thể mất.',
+    },
+    {
+      question: '`aof: always` khác RDB ra sao?',
+      options: [
+        'fsync sau mỗi lệnh ghi nên không còn khoảng hở, đổi lại chậm hơn hẳn',
+        'Chụp toàn bộ keyspace mỗi giây',
+        'Chỉ ghi `key` mới, bỏ qua `key` cũ',
+        'Ghi bất đồng bộ nên nhanh hơn RDB',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một lần fsync cho mỗi lệnh ghi là cái giá của việc không mất gì. `everysec` là điểm cân bằng thường dùng.',
+    },
+    {
+      question: 'Vì sao RDB chụp mỗi giây lại tốn kém?',
+      options: [
+        'Mỗi lần chụp là một lượt `fork` toàn bộ tiến trình',
+        'Vì file RDB không nén được',
+        'Vì Redis phải khoá keyspace suốt lượt chụp',
+        'Vì chu kỳ ngắn làm hỏng bản chụp trước',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`fork` sao chép bảng trang của cả tiến trình; keyspace lớn thì chi phí đó lặp lại mỗi giây. AOF `everysec` cho cùng mức mất mát mà rẻ hơn.',
+    },
+    {
+      question: 'Vì sao bật đồng thời RDB với AOF lại hợp lý?',
+      options: [
+        'RDB nạp nhanh phần thân, AOF vá phần đuôi phát sinh sau bản chụp',
+        'Hai cơ chế kiểm tra chéo lỗi của nhau',
+        'AOF thay RDB khi đĩa đầy',
+        'RDB chỉ chạy khi AOF tắt',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hai cơ chế bù cho nhau chứ không loại trừ nhau: một bên lo tốc độ nạp, một bên lo phần mất mát gần nhất.',
     },
   ],
 }

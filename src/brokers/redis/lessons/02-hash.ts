@@ -49,6 +49,14 @@ export const hash: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 3000,
+      question: '`HGETALL user:1` vừa trả về đủ hai field. Lệnh nào nên dùng khi chỉ cần đúng một field?',
+      options: ['`HGET user:1 name`', '`GET user:1`', '`HGETALL` rồi lọc phía ứng dụng'],
+      answerIndex: 0,
+      explanation:
+        '`HGET` đọc đúng phần cần, không kéo phần còn lại qua mạng. Đó là lợi thế chính của `hash` so với một chuỗi JSON.',
+    },
+    {
       at: 9000,
       question: 'Đặt TTL cho một field trong hash bằng cách nào?',
       options: ['HEXPIRE user:1 name 60', 'Không được — TTL chỉ gắn với key', 'EXPIRE user:1 name 60'],
@@ -68,6 +76,56 @@ export const hash: RedisLesson = {
       answerIndex: 0,
       explanation:
         'JSON buộc mỗi lượt đọc phải kéo trọn 50 field qua mạng rồi parse lại. Tách thành 50 `key` rời thì mất khả năng thao tác cả object cùng lúc, lại tốn thêm bộ nhớ metadata cho mỗi `key`. `hash` giữ được cả hai: `HGET` lấy từng phần, `HGETALL` lấy trọn khi cần.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Một `hash` lưu dữ liệu theo cách nào?',
+      options: [
+        'Nhiều field dưới một `key` duy nhất',
+        'Nhiều `key` dưới một field',
+        'Một chuỗi JSON đã nén',
+        'Một danh sách cặp giá trị có thứ tự',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một lượt round-trip lấy trọn cả object bằng `HGETALL`, hoặc lấy đúng một phần bằng `HGET`.',
+    },
+    {
+      question: '`HINCRBY` khác `INCR` ở điểm nào?',
+      options: [
+        'Bộ đếm nằm bên trong một field của `hash`, vẫn nguyên tử y hệt',
+        '`HINCRBY` không nguyên tử',
+        '`HINCRBY` chỉ cộng được số âm',
+        '`HINCRBY` tạo `key` mới sau mỗi lượt gọi',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cùng một tính chất nguyên tử, chỉ khác chỗ chứa. Nhờ vậy một object gom được cả dữ liệu lẫn bộ đếm dưới một `key`.',
+    },
+    {
+      question: 'Muốn một field trong `hash` tự hết hạn thì làm thế nào?',
+      options: [
+        'Không có cách trực tiếp — tách field đó ra thành `key` riêng mang TTL',
+        'Gọi `HEXPIRE user:1 name 60`',
+        'Gọi `EXPIRE user:1 name 60`',
+        'Đặt giá trị field thành rỗng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'TTL luôn gắn với cả `key`. Cần hạn riêng cho một phần dữ liệu thì phần đó phải là `key` của chính nó.',
+    },
+    {
+      question: 'Object 50 field, mỗi lượt chỉ đọc một field. Vì sao chuỗi JSON là lựa chọn tệ?',
+      options: [
+        'Mỗi lượt đọc phải kéo trọn 50 field qua mạng rồi parse lại',
+        'Redis không lưu nổi chuỗi dài như vậy',
+        'JSON mất tính nguyên tử lúc ghi',
+        'JSON tốn nhiều metadata hơn `hash`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chi phí nằm ở băng thông cộng công parse cho phần dữ liệu không ai cần. `HGET` cắt hẳn phần lãng phí đó.',
     },
   ],
 }

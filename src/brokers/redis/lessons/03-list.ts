@@ -66,6 +66,18 @@ export const list: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 9500,
+      question: 'Worker gọi `BLPOP jobs 10` lúc `jobs` đang rỗng. Chuyện gì xảy ra?',
+      options: [
+        'Client đứng đợi ngay tại server, tối đa mười giây',
+        'Lệnh trả `(nil)` ngay lập tức',
+        'Redis tạo `jobs` rỗng rồi trả về một phần tử giả',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`BLPOP` thay cho vòng polling: client chờ tại chỗ, một lượt `LPUSH` mới sẽ đánh thức đúng một client đợi lâu nhất.',
+    },
+    {
       at: 14_000,
       question: 'Worker `BLPOP` xong rồi crash trước khi xử lý xong. Message đi đâu?',
       options: ['Redis requeue tự động', 'Mất — list không có ack', 'Vào dead-letter list'],
@@ -85,6 +97,51 @@ export const list: RedisLesson = {
       answerIndex: 0,
       explanation:
         'Không cấu trúc nào trong ba cái này tự sinh ra ack ngoài Stream. Consumer group của Stream giữ message đã giao trong danh sách pending cho tới khi có `XACK`, nên `XAUTOCLAIM` có thể chuyển phần việc mồ côi sang worker khác. Thêm worker cho `list` chỉ tăng thông lượng, không hề cứu được job đã pop.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`LPUSH` cộng `RPOP` tạo ra cấu trúc gì?',
+      options: ['Hàng đợi FIFO', 'Ngăn xếp LIFO', 'Tập hợp không trùng', 'Bảng xếp hạng theo score'],
+      answerIndex: 0,
+      explanation:
+        'Đẩy một đầu, lấy đầu kia là FIFO. Đẩy rồi lấy cùng một đầu (`LPUSH` cộng `LPOP`) mới là LIFO — vẫn trên cùng một `key`.',
+    },
+    {
+      question: 'Phần tử cuối cùng của một `list` vừa bị lấy ra. `key` ra sao?',
+      options: [
+        'Biến mất khỏi keyspace ngay lập tức',
+        'Còn lại với độ dài 0',
+        'Chuyển sang kiểu `string`',
+        'Redis giữ thêm sáu mươi giây',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Redis không giữ container rỗng. Vì vậy `EXISTS jobs` trả 0 sau lượt pop cuối, còn `LLEN` trên một `key` không tồn tại cũng trả 0.',
+    },
+    {
+      question: 'Vì sao `list` không hợp làm hàng đợi job cần độ bền?',
+      options: [
+        'Không có ack — phần tử đã pop không còn bản sao nào ở server',
+        'Nó không giữ được thứ tự',
+        'Mỗi `key` chỉ cho đúng một consumer',
+        'Nó không dùng được với nhiều client',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Pop là chuyển giao dứt điểm. Stream cùng consumer group mới giữ message đã giao trong danh sách pending cho tới khi có `XACK`.',
+    },
+    {
+      question: 'Một lượt `LPUSH` đánh thức bao nhiêu client đang `BLPOP` trên cùng `key`?',
+      options: [
+        'Đúng một, client đợi lâu nhất',
+        'Tất cả, rồi chúng tranh nhau',
+        'Không client nào, phải gọi lại',
+        'Hai, để dự phòng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Một phần tử chỉ về được một nơi, nên đánh thức nhiều client là vô nghĩa. Đây cũng là lý do `list` phân phát việc chứ không phát tán bản sao.',
     },
   ],
 }

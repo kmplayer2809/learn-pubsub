@@ -56,6 +56,18 @@ export const transactions: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 2600,
+      question: '`WATCH balance:1` có chặn `worker` ghi đè `key` đó không?',
+      options: [
+        'Không — `WATCH` chỉ ghi nhớ phiên bản để `EXEC` so lại',
+        'Có, `key` bị khoá cho tới khi `EXEC` chạy',
+        'Có, nhưng chỉ trong năm giây',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đây là kiểm soát lạc quan: không ai bị chặn, chỉ bên đang theo dõi phải làm lại khi phát hiện dữ liệu đã đổi.',
+    },
+    {
       at: 3200,
       question: 'worker ghi đè balance:1 trong lúc app đang WATCH nó. EXEC của app sau đó làm gì?',
       options: ['Chạy bình thường, đè lên giá trị của worker', 'Từ chối chạy, trả về nil', 'Báo lỗi và crash'],
@@ -74,6 +86,56 @@ export const transactions: RedisLesson = {
       answerIndex: 0,
       explanation:
         '`MULTI`/`EXEC` cho tính cô lập chứ không cho tính nguyên tử kiểu rollback. Lỗi cú pháp bị bắt lúc xếp hàng nên cả khối bị từ chối, nhưng lỗi runtime — ví dụ `INCR` trên một chuỗi — chỉ làm hỏng đúng lệnh đó, phần còn lại vẫn chạy tiếp. Cần rollback thật thì phải viết Lua script.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Lệnh gửi lên giữa `MULTI` với `EXEC` làm gì?',
+      options: [
+        'Chỉ xếp hàng, nhận `QUEUED`, chưa chạm `key` nào',
+        'Chạy ngay rồi có thể rollback sau',
+        'Chạy trên một bản sao tạm của keyspace',
+        'Bị từ chối cho tới khi `EXEC` tới',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`EXEC` mới là lúc cả khối chạy liền một mạch, không client nào chen được vào giữa.',
+    },
+    {
+      question: '`WATCH` phát hiện điều gì?',
+      options: [
+        '`key` theo dõi đã đổi kể từ lúc `WATCH`',
+        'Client khác đang đọc `key`',
+        'Kết nối tới `key` bị rớt',
+        '`key` sắp hết hạn',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Lệch phiên bản thì `EXEC` trả nil, không chạy gì cả — ứng dụng phải đọc lại rồi thử lại từ đầu.',
+    },
+    {
+      question: '`MULTI`/`EXEC` cho tính chất nào, không cho tính chất nào?',
+      options: [
+        'Cho tính cô lập, không cho rollback',
+        'Cho rollback, không cho tính cô lập',
+        'Cho cả hai',
+        'Không cho cả hai',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Lỗi cú pháp bị bắt lúc xếp hàng nên cả khối bị từ chối, nhưng lỗi runtime chỉ hỏng đúng lệnh đó, phần sau vẫn chạy tiếp. Cần rollback thật thì phải viết Lua script.',
+    },
+    {
+      question: 'Mẫu `WATCH` rồi `MULTI` rồi `EXEC` cần gì ở phía ứng dụng?',
+      options: [
+        'Một vòng thử lại khi `EXEC` trả nil',
+        'Một khoá phân tán bao ngoài',
+        'Một `TTL` cho từng `key` theo dõi',
+        'Một bản sao dữ liệu phía client',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Kiểm soát lạc quan giả định xung đột hiếm. `EXEC` trả nil là tín hiệu đọc lại giá trị mới rồi dựng lại khối lệnh, không phải một lỗi.',
     },
   ],
 }

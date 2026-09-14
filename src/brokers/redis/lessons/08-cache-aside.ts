@@ -63,6 +63,18 @@ export const cacheAside: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 9000,
+      question: 'Một lượt đọc miss tốn những round-trip nào?',
+      options: [
+        'Một lượt đọc Redis, một lượt đọc `database`, một lượt ghi lại Redis',
+        'Chỉ một lượt đọc `database`',
+        'Chỉ một lượt đọc Redis',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Ba lượt cho một lần miss. Hit rate thấp khiến cache thành gánh nặng, bởi phần lớn request tốn nhiều bước hơn hẳn so với bỏ qua cache.',
+    },
+    {
       at: 16_000,
       question: 'Hit rate 20% thì cache-aside có đáng dùng không?',
       options: ['Có, cache luôn nhanh hơn', 'Không chắc — 80% request trả thêm 2 round trip Redis', 'Có, miễn là TTL đủ dài'],
@@ -82,6 +94,56 @@ export const cacheAside: RedisLesson = {
       answerIndex: 0,
       explanation:
         '`DEL` an toàn hơn vì nó không khẳng định giá trị nào cả. Với `SET` đè, hai lượt cập nhật chạy song song có thể về đích lệch thứ tự, để lại giá trị cũ nằm trong cache vô thời hạn. `DEL` chỉ đánh đổi bằng đúng một lần miss của reader tiếp theo.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Trong cache-aside, ai chịu trách nhiệm nạp dữ liệu vào cache?',
+      options: [
+        'Ứng dụng, sau một lần đọc trượt cache',
+        'Redis tự nạp khi key hết hạn',
+        'Database đẩy sang Redis mỗi lần ghi',
+        'Một tiến trình nền của Redis quét bảng',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cache-aside đặt cache ra bên cạnh: ứng dụng đọc cache, trượt thì đọc database rồi tự ghi ngược lại bằng `SET`.',
+    },
+    {
+      question: '`TTL` đóng vai trò gì trong cache-aside?',
+      options: [
+        'Ngân sách cho độ trễ dữ liệu — mức cũ tối đa một reader có thể gặp',
+        'Hạn mức bộ nhớ cho mỗi `key`',
+        'Số lượt đọc trước khi cache tự nạp lại',
+        'Thời gian chờ tối đa của `database`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Không có gì chủ động xoá `key` thì `TTL` chính là cận trên của độ lệch giữa cache với nguồn thật.',
+    },
+    {
+      question: 'Vì sao `SET` đè cache sau mỗi lượt ghi lại rủi ro hơn `DEL`?',
+      options: [
+        'Hai lượt cập nhật song song có thể về đích lệch thứ tự, để lại giá trị cũ nằm mãi',
+        '`SET` không xoá được `TTL` cũ',
+        '`SET` tốn nhiều bộ nhớ hơn `DEL`',
+        '`SET` khiến lượt đọc kế tiếp luôn miss',
+      ],
+      answerIndex: 0,
+      explanation:
+        '`DEL` không khẳng định giá trị nào cả nên nó không thể ghi nhầm. Cái giá là đúng một lần miss cho reader tiếp theo.',
+    },
+    {
+      question: 'Con số nào nói lên cache có đáng giữ hay không?',
+      options: [
+        'Hit rate, tính từ `metrics.hits` cùng `metrics.misses`',
+        'Tổng số `key` trong keyspace',
+        'Độ dài trung bình của giá trị',
+        'Số lượt `DEL` mỗi giây',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Hit rate thấp nghĩa là phần lớn request phải trả thêm hai round-trip Redis mà không nhận lại gì.',
     },
   ],
 }

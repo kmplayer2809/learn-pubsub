@@ -52,6 +52,18 @@ export const replication: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 1800,
+      question: 'Ghi `a` hoàn tất trên primary ở t=120. Replica thấy nó lúc nào?',
+      options: [
+        't=520, trễ đúng `lagMs` đã khai báo',
+        'Cùng lúc t=120',
+        'Chỉ sau khi có một lượt đọc trên replica',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Replication ở đây là bất đồng bộ: primary trả lời client trước, replica bắt kịp sau. Khoảng trễ đó chính là phần dữ liệu có thể mất khi primary chết.',
+    },
+    {
       at: 3100,
       question: 'lagMs của replica trong lesson này là 400ms. Điều gì quyết định replica có bị mất ghi khi primary crash hay không?',
       options: [
@@ -74,6 +86,56 @@ export const replication: RedisLesson = {
       answerIndex: 0,
       explanation:
         'Khi tên `key` chứa `{...}`, CRC16 chỉ băm phần bên trong ngoặc, nên mọi `key` chung hash tag rơi vào cùng một slot, tức cùng một node — điều kiện bắt buộc để chạy `MULTI` hay Lua trên nhiều `key` trong cluster. Dò tên cho trùng slot bằng tay thì vừa mong manh vừa không cần thiết.',
+    },
+  ],
+  quiz: [
+    {
+      question: 'Sentinel làm gì khi primary biến mất?',
+      options: [
+        'Đẩy replica đang có dữ liệu mới nhất lên làm primary',
+        'Khôi phục primary từ RDB',
+        'Chặn mọi lượt ghi cho tới khi con người can thiệp',
+        'Gộp dữ liệu của mọi replica lại',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Failover tự động, không cần con người. Phần dữ liệu chưa kịp tới replica được promote thì mất luôn.',
+    },
+    {
+      question: 'Replication bất đồng bộ đánh đổi cái gì?',
+      options: [
+        'Độ trễ ghi thấp, đổi bằng rủi ro mất phần ghi còn trên đường lúc crash',
+        'Độ bền cao hơn, đổi bằng thông lượng đọc',
+        'Tính nhất quán, đổi bằng bộ nhớ',
+        'Tốc độ đọc, đổi bằng dung lượng đĩa',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Primary trả lời ngay khi ghi xong phía nó, không chờ replica xác nhận. Ghi đã có đủ thời gian tới replica thì vẫn còn sau failover.',
+    },
+    {
+      question: '`CLUSTER KEYSLOT` tính ra cái gì?',
+      options: [
+        'Slot của `key` theo CRC16 mod 16384',
+        'Node đang giữ `key`',
+        'Kích thước của `key`',
+        'Số replica đang giữ `key`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Bộ mô phỏng này chưa chia dữ liệu theo slot, nhưng công thức thì đúng như Redis Cluster thật dùng.',
+    },
+    {
+      question: 'Hash tag `{u1}` trong tên `key` có tác dụng gì?',
+      options: [
+        'CRC16 chỉ băm phần trong ngoặc, nên mọi `key` chung tag rơi vào một slot',
+        'Nó đánh dấu `key` là dữ liệu tạm',
+        'Nó nhân bản `key` sang mọi node',
+        'Nó bỏ qua bước băm, `key` nằm ở node đầu tiên',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Cùng slot nghĩa là cùng node — điều kiện bắt buộc để chạy `MULTI` hay Lua trên nhiều `key` trong cluster.',
     },
   ],
 }

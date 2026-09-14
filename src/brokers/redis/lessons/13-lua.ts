@@ -32,6 +32,18 @@ export const lua: RedisLesson = {
   ],
   checkpoints: [
     {
+      at: 1200,
+      question: 'Hai `redis.call` liên tiếp trong một script có thể bị lệnh của client khác chen vào giữa không?',
+      options: [
+        'Không — cả script tính là một bước',
+        'Có, nếu script chạy quá lâu',
+        'Có, khi nhiều client cùng gọi `EVAL`',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Đó chính là lý do gói cặp kiểm tra rồi hành động vào một `EVAL`: khoảng hở giữa hai lệnh rời biến mất hoàn toàn.',
+    },
+    {
       at: 1800,
       question: 'Vì sao gói "GET rồi DEL" vào một EVAL an toàn hơn gọi hai lệnh GET và DEL rời nhau?',
       options: [
@@ -53,6 +65,56 @@ export const lua: RedisLesson = {
       answerIndex: 0,
       explanation:
         'Chính tính atomicity gây ra điều này: không lệnh nào chen được vào giữa nghĩa là không lệnh nào chạy được, chấm hết. Script Lua phải ngắn gọn. `busy-reply-threshold` chỉ khiến Redis bắt đầu trả lỗi `BUSY` cho client khác, chứ không dừng script — trừ khi bị `SCRIPT KILL`.',
+    },
+  ],
+  quiz: [
+    {
+      question: '`EVAL` đem lại tính chất gì?',
+      options: [
+        'Cả script chạy như một bước không chia cắt',
+        'Mỗi `redis.call` chạy song song',
+        'Script chạy trên một luồng riêng',
+        'Script được rollback khi gặp lỗi',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Mỗi `redis.call` vẫn đi qua đúng bộ xử lý lệnh thông thường, nhưng engine không xen sự kiện nào vào giữa chúng.',
+    },
+    {
+      question: 'Vì sao script Lua phải viết ngắn gọn?',
+      options: [
+        'Redis đơn luồng, script giữ trọn server suốt thời gian chạy',
+        'Redis giới hạn script ở một trăm dòng',
+        'Script dài tốn nhiều bộ nhớ cache',
+        'Script dài mất tính nguyên tử',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chính tính nguyên tử gây ra điều này: không lệnh nào chen được vào nghĩa là không lệnh nào chạy được.',
+    },
+    {
+      question: '`busy-reply-threshold` làm gì khi một script chạy quá lâu?',
+      options: [
+        'Bắt đầu trả `BUSY` cho client khác, script vẫn chạy tiếp',
+        'Dừng script ngay lập tức',
+        'Chuyển script sang một luồng nền',
+        'Hạ mức ưu tiên của script',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Chỉ `SCRIPT KILL` mới dừng được script, còn script đã ghi dữ liệu thì phải `SHUTDOWN NOSAVE` — thêm một lý do để giữ script ngắn.',
+    },
+    {
+      question: 'Cặp `GET` rồi `DEL` viết rời nhau gặp vấn đề gì?',
+      options: [
+        'Giữa hai lệnh có khoảng hở cho client khác đổi giá trị',
+        '`DEL` không xoá được `key` vừa đọc',
+        '`GET` làm `key` mất `TTL`',
+        'Hai lệnh rời tốn gấp đôi bộ nhớ',
+      ],
+      answerIndex: 0,
+      explanation:
+        'Kiểm tra rồi hành động chỉ an toàn khi cả hai nằm trong cùng một bước. Đây đúng là nền của phần mở khoá phân tán ở bài sau.',
     },
   ],
 }
